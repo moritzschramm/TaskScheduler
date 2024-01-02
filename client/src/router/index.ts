@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import NotFound from '@/views/NotFound.vue'
 
-const isAuthenticated = false      // TODO fix this
+const isAuthenticated = false // TODO fix this
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -25,22 +25,17 @@ const router = createRouter({
     {
       path: '/register',
       name: 'register',
-      component: () => import('@/views/auth/RegisterView.vue')    
-    },
+      component: () => import('@/views/auth/RegisterView.vue')
+    }
   ]
 })
 
 // * Authentication Guard
 router.beforeEach(async (to) => {
-
   // no access to any page other than login and register when user is unauthenticated
   // access to login and register is always allowed
-  if (
-    to.name !== 'register' &&
-    to.name !== 'login' &&
-    !isAuthenticated
-  ) {
-    return { name: 'login' }  // redirect to login page
+  if (to.name !== 'register' && to.name !== 'login' && !isAuthenticated) {
+    return { name: 'login' } // redirect to login page
   }
 })
 
