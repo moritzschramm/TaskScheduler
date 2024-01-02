@@ -10,28 +10,28 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: () => import('@/views/Home.vue')
+      component: () => import('@/views/HomeView.vue')
     },
     {
       path: '/profile',
       name: 'profile',
-      component: () => import('@/views/Profile.vue')
+      component: () => import('@/views/ProfileView.vue')
     },
     {
       path: '/login',
       name: 'login',
-      component: () => import('@/views/auth/Login.vue')
+      component: () => import('@/views/auth/LoginView.vue')
     },
     {
       path: '/register',
       name: 'register',
-      component: () => import('@/views/auth/Register.vue')    
+      component: () => import('@/views/auth/RegisterView.vue')    
     },
   ]
 })
 
 // * Authentication Guard
-router.beforeEach(async (to, from) => {
+router.beforeEach(async (to) => {
 
   // no access to any page other than login and register when user is unauthenticated
   // access to login and register is always allowed

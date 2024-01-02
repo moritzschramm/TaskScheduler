@@ -11,7 +11,7 @@ const http = inject(HttpClient)
 const registerStore = useRegisterStore()
 const sessionStore = useSessionStore()
 
-const EMAIL_REGEX = /^.+\@.+\..+$/
+const EMAIL_REGEX = /^.+@.+\..+$/
 
 enum FormState { EMAIL = 1, USER_DATA = 2, VERIFY = 3 }
 

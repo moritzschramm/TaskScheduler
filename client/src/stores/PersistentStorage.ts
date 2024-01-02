@@ -7,7 +7,7 @@ export interface StoreConfig {
     storageInterface: Storage
 }
 
-const registerStateSubscriber = (store: Store, config: StoreConfig, tabOnly: boolean = false) => {
+const registerStateSubscriber = (store: Store, config: StoreConfig) => {
     store.$subscribe((_, state) => {
         config.storageInterface.setItem(config.name, JSON.stringify(state))
     }, { detached: true })
