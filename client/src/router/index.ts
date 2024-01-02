@@ -1,23 +1,47 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import NotFound from '@/views/NotFound.vue'
+
+const isAuthenticated = false      // TODO fix this
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    { path: '/:pathMatch(.*)*', name: 'NotFound', component: NotFound },
     {
       path: '/',
       name: 'home',
-      component: HomeView
+      component: () => import('@/views/Home.vue')
     },
     {
-      path: '/about',
-      name: 'about',
-      // route level code-splitting
-      // this generates a separate chunk (About.[hash].js) for this route
-      // which is lazy-loaded when the route is visited.
-      component: () => import('../views/AboutView.vue')
-    }
+      path: '/profile',
+      name: 'profile',
+      component: () => import('@/views/Profile.vue')
+    },
+    {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/auth/Login.vue')
+    },
+    {
+      path: '/register',
+      name: 'register',
+      component: () => import('@/views/auth/Register.vue')    
+    },
   ]
+})
+
+// * Authentication Guard
+router.beforeEach(async (to, from) => {
+
+  // no access to any page other than login and register when user is unauthenticated
+  // access to login and register is always allowed
+  if (
+    to.name !== 'register' &&
+    to.name !== 'login' &&
+    !isAuthenticated
+  ) {
+    return { name: 'login' }  // redirect to login page
+  }
 })
 
 export default router
