@@ -9,10 +9,11 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	//"github.com/gofiber/fiber/v2/middleware/csrf" // TODO enable CSRF protection
 	"github.com/gofiber/fiber/v2/middleware/limiter"
-	"github.com/gofiber/fiber/v2/middleware/logger"
 	//"github.com/gofiber/fiber/v2/middleware/session"
 	//"github.com/go-playground/validator/v10"	// * check out validator package for incoming data
 )
@@ -29,12 +30,17 @@ func main() {
 
 	// * register standard middleware: Logging, recover, limiter, cors, csrf, session?
 	app.Use(logger.New())
-	//app.Use(recover.New())
-	app.Use(limiter.New()) // TODO check if KeyGenerator works when behind reverse proxy // TODO checkout sliding window approach
+	app.Use(recover.New())
+	app.Use(limiter.New(limiter.Config{
+		// TODO check if KeyGenerator works when behind reverse proxy
+		// TODO checkout sliding window approach
+		SkipSuccessfulRequests: true,
+	}))
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:5173",
-		AllowHeaders: "Origin, Content-Type, Accept",
-		MaxAge:       3600, // 1 hour caching
+		AllowOrigins:     "http://localhost:5173",
+		AllowHeaders:     "Origin, Content-Type, Accept",
+		AllowCredentials: true,
+		MaxAge:           3600, // 1 hour caching
 	}))
 
 	// * create routes that are exposed from this API

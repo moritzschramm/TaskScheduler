@@ -74,16 +74,15 @@ const next = (state: FormState) => {
 
 const submit = () => {
   if (form.state === FormState.EMAIL) {
-    /*http?.post('/auth/register-email', { email: form.data.email })
-    .then(() => {
-      registerStore.setEmail(form.data.email)
-      next(FormState.USER_DATA)
-    })
-    .catch((error) => {
-      form.error = error
-    })*/
-    registerStore.setEmail(form.data.email)
-    next(FormState.USER_DATA)
+    http
+      ?.post('/auth/register-email', { email: form.data.email })
+      .then(() => {
+        registerStore.setEmail(form.data.email)
+        next(FormState.USER_DATA)
+      })
+      .catch((error) => {
+        form.error = error
+      })
   } else if (form.state === FormState.USER_DATA) {
     if (form.data.password.length < 10) {
       form.error = 'Password needs to have at least 10 characters'
@@ -95,42 +94,36 @@ const submit = () => {
       return
     }
 
-    /*http?.post('/auth/register-user-data', { 
-      firstname: form.data.firstname, 
-      lastname: form.data.lastname, 
-      password: form.data.password,
-    })
-    .then(() => {
-      registerStore.setName(form.data.firstname, form.data.lastname)
-      next(FormState.VERIFY)
-    })
-    .catch((error) => {
-      form.error = error
-    })*/
-    registerStore.setName(form.data.firstname, form.data.lastname)
-    next(FormState.VERIFY)
-  } else if (form.state === FormState.VERIFY) {
-    /*http?.post('/auth/verify-email', { code: form.data.verificationCode })
-    .then(() => {
-      if (registerStore.email) sessionStore.setEmail(registerStore.email)
-      if (registerStore.firstname && registerStore.lastname) sessionStore.setName(registerStore.firstname, registerStore.lastname)
-      router.replace({
-        name: 'login',
-        query: { 'created': 'now' }
+    http
+      ?.post('/auth/register-user-data', {
+        firstname: form.data.firstname,
+        lastname: form.data.lastname,
+        password: form.data.password
       })
-    })
-    .catch((error) => {
-      form.error = error
-    })*/
-
-    if (registerStore.email) sessionStore.setEmail(registerStore.email)
-    if (registerStore.firstname && registerStore.lastname)
-      sessionStore.setName(registerStore.firstname, registerStore.lastname)
-    registerStore.$reset()
-    router.replace({
-      name: 'login',
-      query: { created: 'now' }
-    })
+      .then(() => {
+        registerStore.setName(form.data.firstname, form.data.lastname)
+        next(FormState.VERIFY)
+      })
+      .catch((error) => {
+        form.error = error
+      })
+  } else if (form.state === FormState.VERIFY) {
+    http
+      ?.post('/auth/verify-email', { code: form.data.verificationCode })
+      .then(() => {
+        if (registerStore.email && registerStore.firstname && registerStore.lastname) {
+          sessionStore.setEmail(registerStore.email)
+          sessionStore.setName(registerStore.firstname, registerStore.lastname)
+          registerStore.$reset()
+        }
+        router.replace({
+          name: 'login',
+          query: { created: 'now' }
+        })
+      })
+      .catch((error) => {
+        form.error = error
+      })
   }
 }
 </script>

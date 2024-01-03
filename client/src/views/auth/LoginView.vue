@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
-import { onMounted, ref } from 'vue'
+import { inject, onMounted, ref } from 'vue'
+import { HttpClient } from '@/injectable/http'
 
+const http = inject(HttpClient)
 const route = useRoute()
 const sessionStore = useSessionStore()
 
+const error = ref('')
 const emailInput = ref<HTMLInputElement | null>(null)
 const passwordInput = ref<HTMLInputElement | null>(null)
+const email = ref(sessionStore.user.email ?? '')
+const password = ref('')
 
 onMounted(() => {
   route.query.created || sessionStore.user.email
@@ -16,7 +21,18 @@ onMounted(() => {
 })
 
 const submit = () => {
-  alert('Not implemented')
+  http
+    ?.post('/auth/login', {
+      email: email.value,
+      password: password.value
+    })
+    .then(() => {
+      alert('login success')
+    })
+    .catch(() => {
+      password.value = ''
+      error.value = 'Email address and password do not match'
+    })
 }
 </script>
 
@@ -37,10 +53,10 @@ const submit = () => {
           <label for="email" class="block text-gray-600 text-sm font-medium mb-2">Email</label>
           <input
             ref="emailInput"
+            v-model="email"
             type="email"
             id="email"
             name="email"
-            :value="sessionStore.user.email ?? ''"
             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
             required
           />
@@ -52,6 +68,7 @@ const submit = () => {
           >
           <input
             ref="passwordInput"
+            v-model="password"
             type="password"
             id="password"
             name="password"
@@ -59,6 +76,10 @@ const submit = () => {
             required
           />
         </div>
+
+        <p v-show="error" class="text-red-600 text-sm mb-4">
+          {{ error }}
+        </p>
 
         <button
           @click="submit"

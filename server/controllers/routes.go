@@ -8,11 +8,13 @@ func SetupRoutes(router *fiber.Router) {
 
 	api := *router
 
-	auth_group := api.Group("/auth")
-
 	api.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Hello, World!")
+		return c.SendString("API version 0.1")
 	})
 
-	auth_group.Get("/login", Login)
+	auth := api.Group("/auth")
+	auth.Post("/login", Login)
+	auth.Post("/register-email", RegisterEmail)
+	auth.Post("/register-user-data", RegisterUser)
+	auth.Post("/verify-email", VerifyEmail)
 }
