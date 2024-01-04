@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
-import { inject, onMounted, ref } from 'vue'
+import { inject, onMounted, ref, watch } from 'vue'
 import { HttpClient } from '@/injectable/http'
 
 const http = inject(HttpClient)
@@ -9,6 +9,7 @@ const route = useRoute()
 const sessionStore = useSessionStore()
 
 const error = ref('')
+const invalidForm = ref(true)
 const emailInput = ref<HTMLInputElement | null>(null)
 const passwordInput = ref<HTMLInputElement | null>(null)
 const email = ref(sessionStore.user.email ?? '')
@@ -20,6 +21,10 @@ onMounted(() => {
     : emailInput.value?.focus()
 })
 
+watch(password, (newPassword) => {
+  invalidForm.value = newPassword.length === 0
+})
+
 const submit = () => {
   http
     ?.post('/auth/login', {
@@ -27,7 +32,7 @@ const submit = () => {
       password: password.value
     })
     .then(() => {
-      alert('login success')
+      alert('login successful')
     })
     .catch(() => {
       password.value = ''
@@ -83,8 +88,9 @@ const submit = () => {
 
         <button
           @click="submit"
+          :disabled="invalidForm"
           type="button"
-          class="mb-4 w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:bg-blue-600"
+          class="mb-4 w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:bg-blue-600 disabled:bg-blue-400"
         >
           Login
         </button>

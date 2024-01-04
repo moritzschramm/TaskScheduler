@@ -2,8 +2,8 @@ package main
 
 import (
 	"os"
-	"task-scheduler/controllers"
-	"task-scheduler/models"
+	"task-scheduler/controller"
+	"task-scheduler/infrastructure"
 
 	"github.com/joho/godotenv"
 
@@ -20,15 +20,17 @@ import (
 
 func main() {
 
-	godotenv.Load("../.env")
+	// * load env vars
+	godotenv.Load(".env")
 
+	// * create new server
 	app := fiber.New(fiber.Config{
 		Prefork:       true,
 		CaseSensitive: true,
 		StrictRouting: true,
 	})
 
-	// * register standard middleware: Logging, recover, limiter, cors, csrf, session?
+	// * register middleware
 	app.Use(logger.New())
 	app.Use(recover.New())
 	app.Use(limiter.New(limiter.Config{
@@ -43,13 +45,13 @@ func main() {
 		MaxAge:           3600, // 1 hour caching
 	}))
 
-	// * create routes that are exposed from this API
+	// * register routes for API
 	api := app.Group("/v").Group("/0") // prefix all routes with /v/0 "version 0"
-	controllers.SetupRoutes(&api)
+	controller.SetupRoutes(&api)
 
 	// * connect database pool
-	models.OpenDatabaseConnection()
-	defer models.CloseDatabaseConnection()
+	infrastructure.OpenDatabaseConn()
+	defer infrastructure.CloseDatabaseConn()
 
 	// * start listening on port defined in .env
 	app.Listen(os.Getenv("SERVER_ADDR"))

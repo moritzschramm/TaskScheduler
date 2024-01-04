@@ -1,5 +1,5 @@
 # TaskScheduler
-Mischung aus Todo- und Kalender-App. Nimmt sich Todos und versucht diese automatisch in einen Kalendertermin zu umzuwandeln, ohne, dass dabei Konflikte entstehen.
+Mischung aus Todo- und Kalender-App. Nimmt sich Todos und versucht diese automatisch in einen Kalendertermin umzuwandeln, ohne, dass dabei Konflikte entstehen.
 
 ## Funktionen
 - Mehrere Todo Listen (z.B. Arbeit, Privat, sonstiges...) / dynamische, tägliche Todo Listen
@@ -17,28 +17,17 @@ Mischung aus Todo- und Kalender-App. Nimmt sich Todos und versucht diese automat
 ## Dev Setup
 ### Requirements
 - [Docker](https://www.docker.com/products/docker-desktop/)
+
+optionally (though everything is run in docker containers):
 - [Go](https://go.dev/dl/)
 - [Nodejs via NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating), install then run `nvm use latest` and test node installation with `node -v && npm -v`
 - IDE of your choice, [VS Code](https://code.visualstudio.com/) recommended (nice extensions)
 
-### Project setup
+### Setup
+Make sure Docker Desktop is running, then start docker compose:
 ```sh
-cd client
-npm i # downloads vuejs dependencies
+docker-compose up
 ```
+This will expose the frontend to http://localhost:5173 and the API to http://localhost:3000/v/0/. Also, a Postgres service is started in the background and exposed on port 5432. 
 
-### Run API server locally
-```sh
-cd server
-go run main.go
-```
-Server runs at http://127.0.0.1:3000
-
-### Run client locally
-```sh
-cd client
-npm run dev
-```
-
-### Start docker containers
-#TODO
+If there are any file changes (in client or server), the node and go service will automatically recompile the project and the changes will be live (even with HMR in client!).

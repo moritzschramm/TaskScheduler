@@ -1,6 +1,22 @@
 # ! ONLY FOR DEV; NOT FOR PRODUCTION
 
 services:
+  frontend:
+    image: node:21
+    working_dir: /usr/src/app
+    volumes:
+      - ./client:/usr/src/app
+    command: bash -c "npm i && npm run docker-dev"
+    ports:
+      - "5173:5173"
+  api:
+    image: golang:1.21
+    working_dir: /usr/src/app
+    volumes:
+      - ./server:/usr/src/app
+    command: bash -c "go install github.com/mitranim/gow@latest && go mod download && gow -v run ."
+    ports:
+      - "3000:3000"
   db:
     image: postgres:16
     env_file: .env
