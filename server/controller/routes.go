@@ -8,13 +8,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type controllerContainer struct {
-	authController AuthController
-}
+func SetupRoutes(router *fiber.Router, db infrastructure.Database) {
 
-func SetupRoutes(router *fiber.Router) {
-
-	cc := newControllerContainer()
+	cc := newControllerContainer(db)
 
 	api := *router
 
@@ -29,9 +25,13 @@ func SetupRoutes(router *fiber.Router) {
 	auth.Post("/verify-email", cc.authController.VerifyEmail)
 }
 
-func newControllerContainer() *controllerContainer {
+type controllerContainer struct {
+	authController AuthController
+}
+
+func newControllerContainer(db infrastructure.Database) *controllerContainer {
 
 	return &controllerContainer{
-		authController: NewAuthController(service.NewUserService(repository.NewUserRepository(infrastructure.DB))),
+		authController: NewAuthController(service.NewUserService(repository.NewUserRepository(db))),
 	}
 }

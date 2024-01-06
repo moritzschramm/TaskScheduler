@@ -6,25 +6,62 @@ import (
 )
 
 type userRepository struct {
-	DB *infrastructure.Database
+	db infrastructure.Database
 }
 
-func NewUserRepository(db *infrastructure.Database) domain.UserRepository {
+func NewUserRepository(db infrastructure.Database) domain.UserRepository {
 	return &userRepository{
-		DB: db,
+		db: db,
 	}
 }
 
-func (ur *userRepository) Create() {
+func (ur *userRepository) StoreRegisterEmail(email string) error {
 
+	panic("Unimplemented")
 }
 
-func (ur *userRepository) GetHash() {
+func (ur *userRepository) StoreRegisterUserData(tmpId, firstname, lastname, hash string) error {
 
+	panic("Unimplemented")
 }
 
-func (ur *userRepository) Delete() {
+func (ur *userRepository) GetVerificationCode(tmpId string) (string, error) {
 
+	panic("Unimplemented")
+}
+
+func (ur *userRepository) GetHash(email string) (string, error) {
+
+	var hash string
+
+	err := ur.db.QueryRow(
+		"select u.hash from users as u where u.email=$1",
+		email,
+	).Scan(&hash)
+	if err != nil {
+		return "", err
+	}
+
+	return hash, nil
+}
+
+func (ur *userRepository) CreateUser(user domain.User) error {
+
+	return ur.db.Exec(
+		"insert into users (email, firstname, lastname, hash) values ($1,$2, $3, $4)",
+		user.Email,
+		user.Firstname,
+		user.Lastname,
+		user.Hash,
+	)
+}
+
+func (ur *userRepository) DeleteUser(id string) error {
+
+	return ur.db.Exec(
+		"delete from users where id=$1",
+		id,
+	)
 }
 
 /*func QueryUser() User {

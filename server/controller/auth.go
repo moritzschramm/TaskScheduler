@@ -34,6 +34,7 @@ type verificationCodeReqMsg struct {
 	Code string `json:"code"`
 }
 
+// constructor
 func NewAuthController(us domain.UserService) AuthController {
 	return &authController{
 		userService: us,

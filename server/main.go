@@ -32,7 +32,9 @@ func main() {
 
 	// * register middleware
 	app.Use(logger.New())
-	app.Use(recover.New())
+	app.Use(recover.New(recover.Config{
+		EnableStackTrace: true, // ! only for dev; NOT FOR PROD -> TODO change
+	}))
 	app.Use(limiter.New(limiter.Config{
 		// TODO check if KeyGenerator works when behind reverse proxy
 		// TODO checkout sliding window approach
@@ -45,13 +47,14 @@ func main() {
 		MaxAge:           3600, // 1 hour caching
 	}))
 
+	// * connect database pool
+	db := infrastructure.NewDatabaseConnection()
+	db.Open(os.Getenv("POSTGRES_DSN"))
+	defer db.Close()
+
 	// * register routes for API
 	api := app.Group("/v").Group("/0") // prefix all routes with /v/0 "version 0"
-	controller.SetupRoutes(&api)
-
-	// * connect database pool
-	infrastructure.OpenDatabaseConn()
-	defer infrastructure.CloseDatabaseConn()
+	controller.SetupRoutes(&api, db)
 
 	// * start listening on port defined in .env
 	app.Listen(os.Getenv("SERVER_ADDR"))

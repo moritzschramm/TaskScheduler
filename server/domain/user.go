@@ -16,7 +16,10 @@ type UserService interface {
 }
 
 type UserRepository interface {
-	Create()
-	GetHash()
-	Delete()
+	StoreRegisterEmail(email string) error
+	StoreRegisterUserData(tmpId, firstname, lastname, hash string) error
+	GetVerificationCode(tmpId string) (string, error)
+	GetHash(email string) (string, error)
+	CreateUser(user User) error
+	DeleteUser(id string) error
 }

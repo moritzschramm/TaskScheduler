@@ -1,7 +1,7 @@
 package service
 
 import (
-	"fmt"
+	"log"
 	"task-scheduler/domain"
 
 	"github.com/alexedwards/argon2id"
@@ -29,25 +29,41 @@ func (us *userService) RegisterUserData(firstname, lastname, password string) er
 		return err
 	}
 
-	fmt.Println(hash)
+	us.userRepository.StoreRegisterUserData("", firstname, lastname, hash)
 
 	return nil
 }
 
 func (us *userService) VerifyEmail(code string) bool {
 
-	return true
+	storeCodeHash, err := us.userRepository.GetVerificationCode("todo") // TODO
+	if err != nil {
+		log.Fatalf("Error getting code hash: %v\n", err)
+		return false
+	}
+
+	match, err := argon2id.ComparePasswordAndHash(code, storeCodeHash)
+	if err != nil {
+		log.Fatalf("Error comparing code hash: %v\n", err)
+		return false
+	}
+
+	return match
 }
 
 func (us *userService) CheckLogin(email, password string) bool {
 	// TODO save IP to block after 3 attempts -> in service
 
-	// TODO look up hash with email
-	hash := "$argon2id$v=19$m=65536,t=1,p=8$cqlY0j49t2vjCN+gyeAY5Q$ACqRjZLFgM99b5Z6HG750lzjgQl3RYUCZjSENgMHXhg"
+	hash, err := us.userRepository.GetHash(email)
+	if err != nil {
+		log.Fatalf("Error getting password hash: %v\n", err)
+		return false
+	}
 
 	match, err := argon2id.ComparePasswordAndHash(password, hash)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Error comparing password hash: %v\n", err)
+		return false
 	}
 
 	return match
