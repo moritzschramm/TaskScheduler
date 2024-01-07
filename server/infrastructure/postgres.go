@@ -8,12 +8,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewDatabaseConnection() Database {
-	return new(PostgresDB)
-}
-
 type PostgresDB struct {
 	Conn *pgxpool.Pool
+}
+
+func NewDatabaseConnection() Database {
+	return new(PostgresDB)
 }
 
 func (db *PostgresDB) Open(postgresDSN string) {

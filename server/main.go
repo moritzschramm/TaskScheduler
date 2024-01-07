@@ -52,9 +52,14 @@ func main() {
 	db.Open(os.Getenv("POSTGRES_DSN"))
 	defer db.Close()
 
+	// * connect to key value store
+	store := infrastructure.NewKeyValueStore()
+	store.Open(os.Getenv("REDIS_ADDR"))
+	defer store.Close()
+
 	// * register routes for API
 	api := app.Group("/v").Group("/0") // prefix all routes with /v/0 "version 0"
-	controller.SetupRoutes(&api, db)
+	controller.SetupRoutes(&api, db, store)
 
 	// * start listening on port defined in .env
 	app.Listen(os.Getenv("SERVER_ADDR"))

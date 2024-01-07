@@ -8,9 +8,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func SetupRoutes(router *fiber.Router, db infrastructure.Database) {
+func SetupRoutes(router *fiber.Router, db infrastructure.Database, store infrastructure.Store) {
 
-	cc := newControllerContainer(db)
+	cc := newControllerContainer(db, store)
 
 	api := *router
 
@@ -29,9 +29,9 @@ type controllerContainer struct {
 	authController AuthController
 }
 
-func newControllerContainer(db infrastructure.Database) *controllerContainer {
+func newControllerContainer(db infrastructure.Database, store infrastructure.Store) *controllerContainer {
 
 	return &controllerContainer{
-		authController: NewAuthController(service.NewUserService(repository.NewUserRepository(db))),
+		authController: NewAuthController(service.NewUserService(repository.NewUserRepository(db, store))),
 	}
 }

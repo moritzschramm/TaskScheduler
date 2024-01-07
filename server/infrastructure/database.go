@@ -2,12 +2,11 @@ package infrastructure
 
 import "time"
 
-// TODO implement Begin() for database transactions
-// TODO implement CollectRows, ForEachRow etc from pgx (these are more efficient helpers for reading ops)
-// TODO implement Copy helpers (for faster write ops)
-
 // generic relational database
 type Database interface {
+	// TODO implement Begin() for database transactions
+	// TODO implement CollectRows, ForEachRow etc from pgx (these are more efficient helpers for reading ops)
+	// TODO implement Copy helpers (for faster write ops)
 	Open(postgresDSN string)
 	Close()
 	Exec(sql string, args ...any) error

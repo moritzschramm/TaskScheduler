@@ -6,12 +6,14 @@ import (
 )
 
 type userRepository struct {
-	db infrastructure.Database
+	db    infrastructure.Database
+	store infrastructure.Store
 }
 
-func NewUserRepository(db infrastructure.Database) domain.UserRepository {
+func NewUserRepository(db infrastructure.Database, store infrastructure.Store) domain.UserRepository {
 	return &userRepository{
-		db: db,
+		db:    db,
+		store: store,
 	}
 }
 
