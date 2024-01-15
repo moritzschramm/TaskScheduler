@@ -37,7 +37,7 @@ func (ur *userRepository) GetHash(email string) (string, error) {
 	var hash string
 
 	err := ur.db.QueryRow(
-		"select u.hash from users as u where u.email=$1",
+		"select u.passwordhash from users as u where u.email=$1",
 		email,
 	).Scan(&hash)
 	if err != nil {
@@ -50,7 +50,7 @@ func (ur *userRepository) GetHash(email string) (string, error) {
 func (ur *userRepository) CreateUser(user domain.User) error {
 
 	return ur.db.Exec(
-		"insert into users (email, firstname, lastname, hash) values ($1,$2, $3, $4)",
+		"insert into users (email, firstname, lastname, passwordhash) values ($1,$2, $3, $4)",
 		user.Email,
 		user.Firstname,
 		user.Lastname,

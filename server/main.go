@@ -58,7 +58,7 @@ func main() {
 	defer store.Close()
 
 	// * register routes for API
-	api := app.Group("/v").Group("/0") // prefix all routes with /v/0 "version 0"
+	api := app.Group("/api") // prefix all routes with /api
 	controller.SetupRoutes(&api, db, store)
 
 	// * start listening on port defined in .env
