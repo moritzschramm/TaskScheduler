@@ -20,14 +20,28 @@ Mischung aus Todo- und Kalender-App. Nimmt sich Todos und versucht diese automat
 
 optionally (though everything is run in docker containers):
 - [Go](https://go.dev/dl/)
-- [Nodejs via NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating), install then run `nvm use latest` and test node installation with `node -v && npm -v`
+- [Nodejs via fnm](https://github.com/Schniz/fnm?tab=readme-ov-file#installation)
 - IDE of your choice, [VS Code](https://code.visualstudio.com/) recommended (nice extensions)
 
 ### Setup
+Create a data directory, copy and edit the .env file to provide all services with the neccessary configuration variables:
+```sh
+mkdir database/data
+cp .example.env .env
+```
+**Set a database user password in the .env file that was just copied.**
+
 Make sure Docker Desktop is running, then start docker compose:
 ```sh
 docker-compose up
 ```
-This will expose the frontend to http://localhost:5173 and the API to http://localhost:3000/v/0/. Also, a Postgres service is started in the background and exposed on port 5432. 
+Then, migrate to the database schema:
+```sh
+cd database
+./migrate.sh
+```
+
+
+This will expose the frontend to http://localhost:5173 and the API to http://localhost:3000/api/. Also, a Postgres service is started in the background and exposed on port 5432. 
 
 If there are any file changes (in client or server), the node and go service will automatically recompile the project and the changes will be live (even with HMR in client!).

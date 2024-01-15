@@ -6,6 +6,7 @@ services:
     working_dir: /usr/src/app
     volumes:
       - ./client:/usr/src/app
+      - .env:/usr/src/app/.env
     command: bash -c "npm i && npm run docker-dev"
     ports:
       - "5173:5173"
@@ -18,6 +19,7 @@ services:
     working_dir: /usr/src/app
     volumes:
       - ./server:/usr/src/app
+      - .env:/usr/src/app/.env
     command: bash -c "go install github.com/mitranim/gow@latest && go mod download && gow -v run ."
     ports:
       - "3000:3000"
