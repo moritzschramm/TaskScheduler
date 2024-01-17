@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { type StoreConfig } from '@/stores/PersistentStorage'
+import { type StoreConfig, loadOldState } from '@/stores/PersistentStorage'
 
 export const registerStoreConfig: StoreConfig = {
   name: 'registerStore',
@@ -8,17 +8,15 @@ export const registerStoreConfig: StoreConfig = {
 }
 
 export const useRegisterStore = defineStore(registerStoreConfig.name, () => {
-  const oldState = JSON.parse(
-    registerStoreConfig.storageInterface.getItem(registerStoreConfig.name) ?? '{}'
-  )
+  const oldState = loadOldState(registerStoreConfig)
 
-  console.log(oldState)
-
+  const registerId = ref<string | undefined>(oldState.registerId ?? undefined)
   const email = ref<string | undefined>(oldState.email ?? undefined)
   const firstname = ref<string | undefined>(oldState.firstname ?? undefined)
   const lastname = ref<string | undefined>(oldState.lastname ?? undefined)
 
-  function setEmail(emailAddr: string) {
+  function setEmail(registerIdStr: string, emailAddr: string) {
+    registerId.value = registerIdStr
     email.value = emailAddr
   }
   function setName(first: string, last: string) {
@@ -32,5 +30,5 @@ export const useRegisterStore = defineStore(registerStoreConfig.name, () => {
     lastname.value = undefined
   }
 
-  return { email, firstname, lastname, setEmail, setName, $reset }
+  return { registerId, email, firstname, lastname, setEmail, setName, $reset }
 })

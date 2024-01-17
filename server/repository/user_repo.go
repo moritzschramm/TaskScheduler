@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"task-scheduler/domain"
 	"task-scheduler/infrastructure"
 )
@@ -17,19 +19,34 @@ func NewUserRepository(db infrastructure.Database, store infrastructure.Store) d
 	}
 }
 
-func (ur *userRepository) StoreRegisterEmail(email string) error {
+func (ur *userRepository) StoreRegisterEmail(registerId, email, code string) error {
 
-	panic("Unimplemented")
+	// TODO use messagepack or something to (de)serialize value of stored item
+	ur.store.Set(registerId, []byte(code), time.Hour)
+
+	return nil
 }
 
-func (ur *userRepository) StoreRegisterUserData(tmpId, firstname, lastname, hash string) error {
+func (ur *userRepository) StoreRegisterUserData(registerId, firstname, lastname, hash string) error {
 
-	panic("Unimplemented")
+	// TODO
+	_, err := ur.store.Get(registerId)
+	if err != nil {
+		return err
+	}
+
+	return ur.store.Set(registerId, []byte(firstname), time.Hour)
 }
 
-func (ur *userRepository) GetVerificationCode(tmpId string) (string, error) {
+func (ur *userRepository) GetVerificationCode(registerId string) (string, error) {
 
-	panic("Unimplemented")
+	_, err := ur.store.Get(registerId)
+	if err != nil {
+		return "", err
+	}
+
+	// TODO
+	return "$argon2id$v=19$m=65536,t=1,p=8$cqlY0j49t2vjCN+gyeAY5Q$ACqRjZLFgM99b5Z6HG750lzjgQl3RYUCZjSENgMHXhg", nil
 }
 
 func (ur *userRepository) GetHash(email string) (string, error) {

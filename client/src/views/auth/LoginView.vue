@@ -25,6 +25,7 @@ watch(password, (newPassword) => {
   invalidForm.value = newPassword.length === 0
 })
 
+// TODO watch for key event 'enter' to submit login
 const submit = () => {
   http
     ?.post('/auth/login', {

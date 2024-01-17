@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"log"
 	"task-scheduler/domain"
 
 	"github.com/gofiber/fiber/v2"
@@ -26,12 +27,14 @@ type registerEmailReqMsg struct {
 	Email string `json:"email"`
 }
 type registerUserReqMsg struct {
-	Firstname string `json:"firstname"`
-	Lastname  string `json:"lastname"`
-	Password  string `json:"password"`
+	RegisterId string `json:"registerId"`
+	Firstname  string `json:"firstname"`
+	Lastname   string `json:"lastname"`
+	Password   string `json:"password"`
 }
 type verificationCodeReqMsg struct {
-	Code string `json:"code"`
+	RegisterId string `json:"registerId"`
+	Code       string `json:"code"`
 }
 
 // constructor
@@ -46,7 +49,8 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 	req := new(loginReqMsg)
 
 	if err := c.BodyParser(req); err != nil {
-		return err
+		log.Fatalf("Login: error parsing body: %v\n", err)
+		return c.SendStatus(400)
 	}
 
 	if !ac.userService.CheckLogin(req.Email, req.Password) {
@@ -61,14 +65,19 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 	req := new(registerEmailReqMsg)
 
 	if err := c.BodyParser(req); err != nil {
-		return err
+		log.Fatalf("RegisterEmail: error parsing body: %v\n", err)
+		return c.SendStatus(400)
 	}
 
-	if err := ac.userService.RegisterEmail(req.Email); err != nil {
-		return err
+	registerId, err := ac.userService.RegisterEmail(req.Email)
+	if err != nil {
+		log.Fatalf("RegisterEmail: error storing email: %v\n", err)
+		return c.SendStatus(400)
 	}
 
-	return c.SendStatus(201)
+	return c.Status(201).JSON(&fiber.Map{
+		"registerId": registerId,
+	})
 }
 
 func (ac *authController) RegisterUser(c *fiber.Ctx) error {
@@ -76,11 +85,13 @@ func (ac *authController) RegisterUser(c *fiber.Ctx) error {
 	req := new(registerUserReqMsg)
 
 	if err := c.BodyParser(req); err != nil {
-		return err
+		log.Fatalf("RegisterUser: error parsing body: %v\n", err)
+		return c.SendStatus(400)
 	}
 
-	if err := ac.userService.RegisterUserData(req.Firstname, req.Lastname, req.Password); err != nil {
-		return err
+	if err := ac.userService.RegisterUserData(req.RegisterId, req.Firstname, req.Lastname, req.Password); err != nil {
+		log.Fatalf("RegisterUser: error parsing body: %v\n", err)
+		return c.SendStatus(400)
 	}
 
 	return c.SendStatus(201)
@@ -91,10 +102,11 @@ func (ac *authController) VerifyEmail(c *fiber.Ctx) error {
 	req := new(verificationCodeReqMsg)
 
 	if err := c.BodyParser(req); err != nil {
-		return err
+		log.Fatalf("VerifyEmail: error parsing body: %v\n", err)
+		return c.SendStatus(400)
 	}
 
-	if !ac.userService.VerifyEmail(req.Code) {
+	if !ac.userService.VerifyEmail(req.RegisterId, req.Code) {
 		return c.SendStatus(401)
 	}
 

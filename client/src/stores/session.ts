@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { type StoreConfig } from './PersistentStorage'
+import { type StoreConfig, loadOldState } from './PersistentStorage'
 
 export interface User {
   id?: string
@@ -15,9 +15,7 @@ export const sessionStoreConfig: StoreConfig = {
 }
 
 export const useSessionStore = defineStore(sessionStoreConfig.name, () => {
-  const oldState = JSON.parse(
-    sessionStoreConfig.storageInterface.getItem(sessionStoreConfig.name) ?? '{}'
-  )
+  const oldState = loadOldState(sessionStoreConfig)
 
   const user = ref<User>(oldState.user ?? {})
 

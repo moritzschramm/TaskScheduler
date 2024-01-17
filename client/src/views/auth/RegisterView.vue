@@ -47,9 +47,8 @@ onBeforeMount(() => {
 })
 
 // check if current form is in valid state so next step button is enabled
-// only watch for changes in the data object in form
 watch(
-  () => form.data,
+  () => form.data,  // only watch for changes in the data object in form
   (data) => {
     if (form.state === FormState.EMAIL) {
       form.invalid = data.email.length === 0 || !EMAIL_REGEX.test(data.email)
@@ -72,12 +71,13 @@ const next = (state: FormState) => {
   form.state = state
 }
 
+// TODO watch for key event 'enter' to submit login
 const submit = () => {
   if (form.state === FormState.EMAIL) {
     http
       ?.post('/auth/register-email', { email: form.data.email })
-      .then(() => {
-        registerStore.setEmail(form.data.email)
+      .then((res) => {
+        registerStore.setEmail(res.data.registerId, form.data.email)
         next(FormState.USER_DATA)
       })
       .catch((error) => {
@@ -96,6 +96,7 @@ const submit = () => {
 
     http
       ?.post('/auth/register-user-data', {
+        registerId: registerStore.registerId,
         firstname: form.data.firstname,
         lastname: form.data.lastname,
         password: form.data.password
@@ -109,7 +110,10 @@ const submit = () => {
       })
   } else if (form.state === FormState.VERIFY) {
     http
-      ?.post('/auth/verify-email', { code: form.data.verificationCode })
+      ?.post('/auth/verify-email', { 
+        registerId: registerStore.registerId,
+        code: form.data.verificationCode 
+      })
       .then(() => {
         if (registerStore.email && registerStore.firstname && registerStore.lastname) {
           sessionStore.setEmail(registerStore.email)
@@ -122,7 +126,11 @@ const submit = () => {
         })
       })
       .catch((error) => {
-        form.error = error
+        if (error.response.status === 401) {
+          form.error = 'Verification code is not correct'
+        } else {
+          form.error = 'Error while processing request'
+        }
       })
   }
 }
