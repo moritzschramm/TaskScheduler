@@ -22,7 +22,7 @@ func SetupRoutes(router *fiber.Router, db infrastructure.Database, store infrast
 	auth.Post("/login", cc.authController.Login)
 	auth.Post("/register-email", cc.authController.RegisterEmail)
 	auth.Post("/register-user-data", cc.authController.RegisterUser)
-	auth.Post("/verify-email", cc.authController.VerifyEmail)
+	auth.Post("/verify-email", cc.authController.VerifyEmailAndCreateUser)
 }
 
 type controllerContainer struct {

@@ -59,6 +59,7 @@ const submit = () => {
           <label for="email" class="block text-gray-600 text-sm font-medium mb-2">Email</label>
           <input
             ref="emailInput"
+            @keyup.enter="submit"
             v-model="email"
             type="email"
             id="email"
@@ -74,6 +75,7 @@ const submit = () => {
           >
           <input
             ref="passwordInput"
+            @keyup.enter="submit"
             v-model="password"
             type="password"
             id="password"

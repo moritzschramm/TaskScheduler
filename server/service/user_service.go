@@ -21,9 +21,12 @@ func NewUserService(ur domain.UserRepository) domain.UserService {
 	}
 }
 
-func (us *userService) RegisterEmail(email string) (string, error) {
+func (us *userService) CheckEmailExists(email string) (bool, error) {
 
-	// TODO check if email already exists in database
+	return us.userRepository.ExistsEmail(email)
+}
+
+func (us *userService) RegisterEmail(email string) (string, error) {
 
 	registerId := uuid.New().String()
 
@@ -34,13 +37,19 @@ func (us *userService) RegisterEmail(email string) (string, error) {
 
 	// ! TODO remove in prod
 	log.Printf("Email code is %v\n", code)
+	// TODO send email
 
 	hashedCode, err := argon2id.CreateHash(code, argon2id.DefaultParams)
 	if err != nil {
 		return "", err
 	}
 
-	err = us.userRepository.StoreRegisterEmail(registerId, email, hashedCode)
+	regData := &domain.RegistrationData{
+		Email:                email,
+		VerificationCodeHash: hashedCode,
+	}
+
+	err = us.userRepository.StoreRegistrationData(registerId, regData)
 	if err != nil {
 		return "", err
 	}
@@ -55,44 +64,57 @@ func (us *userService) RegisterUserData(registerId, firstname, lastname, passwor
 		return err
 	}
 
-	return us.userRepository.StoreRegisterUserData(registerId, firstname, lastname, hashedPassword)
-}
-
-func (us *userService) VerifyEmail(registerId, code string) bool {
-
-	// TODO get whole struct from repository, save user data in database if email verifies
-
-	storedCodeHash, err := us.userRepository.GetVerificationCode(registerId)
+	regData, err := us.userRepository.GetRegistrationData(registerId)
 	if err != nil {
-		log.Fatalf("Error getting code hash: %v\n", err)
-		return false
+		return err
 	}
 
-	match, err := argon2id.ComparePasswordAndHash(code, storedCodeHash)
-	if err != nil {
-		log.Fatalf("Error comparing code hash: %v\n", err)
-		return false
-	}
+	regData.Firstname = firstname
+	regData.Lastname = lastname
+	regData.PasswordHash = hashedPassword
 
-	return match
+	return us.userRepository.StoreRegistrationData(registerId, regData)
 }
 
-func (us *userService) CheckLogin(email, password string) bool {
+func (us *userService) VerifyEmailAndGetRegistrationData(registerId, code string) (bool, *domain.RegistrationData, error) {
 	// TODO save IP to block after 3 attempts -> in service
 
-	hash, err := us.userRepository.GetHash(email)
+	regData, err := us.userRepository.GetRegistrationData(registerId)
 	if err != nil {
-		log.Fatalf("Error getting password hash: %v\n", err)
-		return false
+		return false, nil, err
+	}
+
+	match, err := argon2id.ComparePasswordAndHash(code, regData.VerificationCodeHash)
+	if err != nil {
+		return false, nil, err
+	}
+
+	if !match {
+		return false, nil, nil
+	}
+
+	return true, regData, nil
+}
+
+func (us *userService) CreateUser(user *domain.User) error {
+
+	return us.userRepository.CreateUser(user)
+}
+
+func (us *userService) CheckLogin(email, password string) (bool, error) {
+	// TODO save IP to block after 3 attempts -> in service
+
+	hash, err := us.userRepository.GetPasswordHash(email)
+	if err != nil {
+		return false, err
 	}
 
 	match, err := argon2id.ComparePasswordAndHash(password, hash)
 	if err != nil {
-		log.Fatalf("Error comparing password hash: %v\n", err)
-		return false
+		return false, err
 	}
 
-	return match
+	return match, nil
 }
 
 func GenerateVerificationCode() (string, error) {

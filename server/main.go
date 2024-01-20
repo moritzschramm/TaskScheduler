@@ -33,7 +33,7 @@ func main() {
 	// * register middleware
 	app.Use(logger.New())
 	app.Use(recover.New(recover.Config{
-		EnableStackTrace: true, // ! only for dev; NOT FOR PROD -> TODO change
+		EnableStackTrace: os.Getenv("DEV_ENV") == "true",
 	}))
 	app.Use(limiter.New(limiter.Config{
 		// TODO check if KeyGenerator works when behind reverse proxy

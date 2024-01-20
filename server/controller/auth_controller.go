@@ -11,7 +11,7 @@ type AuthController interface {
 	Login(c *fiber.Ctx) error
 	RegisterEmail(c *fiber.Ctx) error
 	RegisterUser(c *fiber.Ctx) error
-	VerifyEmail(c *fiber.Ctx) error
+	VerifyEmailAndCreateUser(c *fiber.Ctx) error
 }
 
 type authController struct {
@@ -46,6 +46,8 @@ func NewAuthController(us domain.UserService) AuthController {
 
 func (ac *authController) Login(c *fiber.Ctx) error {
 
+	// TODO create session
+
 	req := new(loginReqMsg)
 
 	if err := c.BodyParser(req); err != nil {
@@ -53,7 +55,13 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 		return c.SendStatus(400)
 	}
 
-	if !ac.userService.CheckLogin(req.Email, req.Password) {
+	match, err := ac.userService.CheckLogin(req.Email, req.Password)
+	if err != nil {
+		log.Fatalf("Login: error checking login: %v\n", err)
+		return c.SendStatus(400)
+	}
+
+	if !match {
 		return c.SendStatus(401)
 	}
 
@@ -67,6 +75,16 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 	if err := c.BodyParser(req); err != nil {
 		log.Fatalf("RegisterEmail: error parsing body: %v\n", err)
 		return c.SendStatus(400)
+	}
+
+	emailExists, err := ac.userService.CheckEmailExists(req.Email)
+	if err != nil {
+		log.Fatalf("RegisterEmail: error checking if email exists: %v\n", err)
+		return c.SendStatus(404)
+	}
+
+	if emailExists {
+		return c.SendStatus(401)
 	}
 
 	registerId, err := ac.userService.RegisterEmail(req.Email)
@@ -97,7 +115,7 @@ func (ac *authController) RegisterUser(c *fiber.Ctx) error {
 	return c.SendStatus(201)
 }
 
-func (ac *authController) VerifyEmail(c *fiber.Ctx) error {
+func (ac *authController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 
 	req := new(verificationCodeReqMsg)
 
@@ -106,11 +124,28 @@ func (ac *authController) VerifyEmail(c *fiber.Ctx) error {
 		return c.SendStatus(400)
 	}
 
-	if !ac.userService.VerifyEmail(req.RegisterId, req.Code) {
+	verified, regData, err := ac.userService.VerifyEmailAndGetRegistrationData(req.RegisterId, req.Code)
+	if err != nil {
+		log.Fatalf("VerifyEmail: error verifying email: %v\n", err)
+		return c.SendStatus(400)
+	}
+
+	if !verified {
 		return c.SendStatus(401)
 	}
 
-	// TODO create user in database
+	user := &domain.User{
+		Email:        regData.Email,
+		Firstname:    regData.Firstname,
+		Lastname:     regData.Lastname,
+		PasswordHash: regData.PasswordHash,
+	}
+
+	err = ac.userService.CreateUser(user)
+	if err != nil {
+		log.Fatalf("VerifyEmail: error creating user: %v\n", err)
+		return c.SendStatus(400)
+	}
 
 	return c.SendStatus(200)
 }

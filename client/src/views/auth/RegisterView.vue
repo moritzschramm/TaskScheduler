@@ -81,7 +81,11 @@ const submit = () => {
         next(FormState.USER_DATA)
       })
       .catch((error) => {
-        form.error = error
+        if (error.response.status === 401) {
+          form.error = 'Email already exists'
+        } else {
+          form.error = 'Error while processing request'
+        }
       })
   } else if (form.state === FormState.USER_DATA) {
     if (form.data.password.length < 10) {
@@ -160,6 +164,7 @@ const submit = () => {
             <label for="email" class="block text-gray-600 text-sm font-medium mb-2">Email</label>
             <input
               v-model.trim="form.data.email"
+              @keyup.enter="submit"
               type="email"
               id="email"
               name="email"
@@ -182,6 +187,7 @@ const submit = () => {
             >
             <input
               v-model.trim="form.data.firstname"
+              @keyup.enter="submit"
               type="text"
               id="firstname"
               name="firstname"
@@ -196,6 +202,7 @@ const submit = () => {
             >
             <input
               v-model.trim="form.data.lastname"
+              @keyup.enter="submit"
               type="text"
               id="lastname"
               name="lastname"
@@ -214,6 +221,7 @@ const submit = () => {
             >
             <input
               v-model="form.data.password"
+              @keyup.enter="submit"
               type="password"
               id="password"
               name="password"
@@ -228,6 +236,7 @@ const submit = () => {
             >
             <input
               v-model="form.data.confirm"
+              @keyup.enter="submit"
               type="password"
               id="confirm"
               name="confirm"
@@ -248,6 +257,7 @@ const submit = () => {
             >
             <input
               v-model.trim="form.data.verificationCode"
+              @keyup.enter="submit"
               type="text"
               id="verificationCode"
               name="verificationCode"

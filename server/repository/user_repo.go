@@ -21,45 +21,20 @@ func NewUserRepository(db infrastructure.Database, store infrastructure.Store) d
 	}
 }
 
-type RegistrationData struct {
-	Email                string
-	VerificationCodeHash string
-	Firstname            string
-	Lastname             string
-	PasswordHash         string
+func (ur *userRepository) ExistsEmail(email string) (bool, error) {
+
+	var exists bool
+	err := ur.db.QueryRow("select count(*) > 0 from users as u where u.email=$1", email).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
-func (ur *userRepository) StoreRegisterEmail(registerId, email, hashedCode string) error {
+func (ur *userRepository) StoreRegistrationData(registerId string, regData *domain.RegistrationData) error {
 
-	regData, err := msgpack.Marshal(&RegistrationData{
-		Email:                email,
-		VerificationCodeHash: hashedCode,
-	})
-	if err != nil {
-		return err
-	}
-
-	return ur.store.Set(registerId, regData, time.Hour)
-}
-
-func (ur *userRepository) StoreRegisterUserData(registerId, firstname, lastname, hashedPassword string) error {
-
-	b, err := ur.store.Get(registerId)
-	if err != nil {
-		return err
-	}
-
-	var regData RegistrationData
-	err = msgpack.Unmarshal(b, &regData)
-	if err != nil {
-		return err
-	}
-
-	regData.Firstname = firstname
-	regData.Lastname = lastname
-	regData.PasswordHash = hashedPassword
-
-	b, err = msgpack.Marshal(regData)
+	b, err := msgpack.Marshal(regData)
 	if err != nil {
 		return err
 	}
@@ -67,23 +42,23 @@ func (ur *userRepository) StoreRegisterUserData(registerId, firstname, lastname,
 	return ur.store.Set(registerId, b, time.Hour)
 }
 
-func (ur *userRepository) GetVerificationCode(registerId string) (string, error) {
+func (ur *userRepository) GetRegistrationData(registerId string) (*domain.RegistrationData, error) {
 
 	b, err := ur.store.Get(registerId)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var regData RegistrationData
+	var regData domain.RegistrationData
 	err = msgpack.Unmarshal(b, &regData)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return regData.VerificationCodeHash, nil
+	return &regData, nil
 }
 
-func (ur *userRepository) GetHash(email string) (string, error) {
+func (ur *userRepository) GetPasswordHash(email string) (string, error) {
 
 	var hash string
 
@@ -98,14 +73,14 @@ func (ur *userRepository) GetHash(email string) (string, error) {
 	return hash, nil
 }
 
-func (ur *userRepository) CreateUser(user domain.User) error {
+func (ur *userRepository) CreateUser(user *domain.User) error {
 
 	return ur.db.Exec(
 		"insert into users (email, firstname, lastname, passwordhash) values ($1,$2, $3, $4)",
 		user.Email,
 		user.Firstname,
 		user.Lastname,
-		user.Hash,
+		user.PasswordHash,
 	)
 }
 
