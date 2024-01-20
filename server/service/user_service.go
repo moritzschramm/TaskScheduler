@@ -26,7 +26,7 @@ func (us *userService) CheckEmailExists(email string) (bool, error) {
 	return us.userRepository.ExistsEmail(email)
 }
 
-func (us *userService) RegisterEmail(email string) (string, error) {
+func (us *userService) SetRegisterEmail(email string) (string, error) {
 
 	registerId := uuid.New().String()
 
@@ -44,12 +44,12 @@ func (us *userService) RegisterEmail(email string) (string, error) {
 		return "", err
 	}
 
-	regData := &domain.RegistrationData{
+	user := &domain.User{
 		Email:                email,
 		VerificationCodeHash: hashedCode,
 	}
 
-	err = us.userRepository.StoreRegistrationData(registerId, regData)
+	err = us.userRepository.SetTempUser(registerId, user)
 	if err != nil {
 		return "", err
 	}
@@ -57,34 +57,34 @@ func (us *userService) RegisterEmail(email string) (string, error) {
 	return registerId, nil
 }
 
-func (us *userService) RegisterUserData(registerId, firstname, lastname, password string) error {
+func (us *userService) SetRegisterUserData(registerId, firstname, lastname, password string) error {
 
 	hashedPassword, err := argon2id.CreateHash(password, argon2id.DefaultParams)
 	if err != nil {
 		return err
 	}
 
-	regData, err := us.userRepository.GetRegistrationData(registerId)
+	user, err := us.userRepository.GetTempUser(registerId)
 	if err != nil {
 		return err
 	}
 
-	regData.Firstname = firstname
-	regData.Lastname = lastname
-	regData.PasswordHash = hashedPassword
+	user.Firstname = firstname
+	user.Lastname = lastname
+	user.PasswordHash = hashedPassword
 
-	return us.userRepository.StoreRegistrationData(registerId, regData)
+	return us.userRepository.SetTempUser(registerId, user)
 }
 
-func (us *userService) VerifyEmailAndGetRegistrationData(registerId, code string) (bool, *domain.RegistrationData, error) {
+func (us *userService) VerifyEmailAndGetTempUser(registerId, code string) (bool, *domain.User, error) {
 	// TODO save IP to block after 3 attempts -> in service
 
-	regData, err := us.userRepository.GetRegistrationData(registerId)
+	user, err := us.userRepository.GetTempUser(registerId)
 	if err != nil {
 		return false, nil, err
 	}
 
-	match, err := argon2id.ComparePasswordAndHash(code, regData.VerificationCodeHash)
+	match, err := argon2id.ComparePasswordAndHash(code, user.VerificationCodeHash)
 	if err != nil {
 		return false, nil, err
 	}
@@ -93,7 +93,7 @@ func (us *userService) VerifyEmailAndGetRegistrationData(registerId, code string
 		return false, nil, nil
 	}
 
-	return true, regData, nil
+	return true, user, nil
 }
 
 func (us *userService) CreateUser(user *domain.User) error {

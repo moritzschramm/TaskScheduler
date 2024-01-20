@@ -32,7 +32,7 @@ func (ur *userRepository) ExistsEmail(email string) (bool, error) {
 	return exists, nil
 }
 
-func (ur *userRepository) StoreRegistrationData(registerId string, regData *domain.RegistrationData) error {
+func (ur *userRepository) SetTempUser(registerId string, regData *domain.User) error {
 
 	b, err := msgpack.Marshal(regData)
 	if err != nil {
@@ -42,20 +42,20 @@ func (ur *userRepository) StoreRegistrationData(registerId string, regData *doma
 	return ur.store.Set(registerId, b, time.Hour)
 }
 
-func (ur *userRepository) GetRegistrationData(registerId string) (*domain.RegistrationData, error) {
+func (ur *userRepository) GetTempUser(registerId string) (*domain.User, error) {
 
 	b, err := ur.store.Get(registerId)
 	if err != nil {
 		return nil, err
 	}
 
-	var regData domain.RegistrationData
-	err = msgpack.Unmarshal(b, &regData)
+	var user domain.User
+	err = msgpack.Unmarshal(b, &user)
 	if err != nil {
 		return nil, err
 	}
 
-	return &regData, nil
+	return &user, nil
 }
 
 func (ur *userRepository) GetPasswordHash(email string) (string, error) {

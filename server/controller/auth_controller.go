@@ -87,7 +87,7 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 		return c.SendStatus(401)
 	}
 
-	registerId, err := ac.userService.RegisterEmail(req.Email)
+	registerId, err := ac.userService.SetRegisterEmail(req.Email)
 	if err != nil {
 		log.Fatalf("RegisterEmail: error storing email: %v\n", err)
 		return c.SendStatus(400)
@@ -107,7 +107,8 @@ func (ac *authController) RegisterUser(c *fiber.Ctx) error {
 		return c.SendStatus(400)
 	}
 
-	if err := ac.userService.RegisterUserData(req.RegisterId, req.Firstname, req.Lastname, req.Password); err != nil {
+	err := ac.userService.SetRegisterUserData(req.RegisterId, req.Firstname, req.Lastname, req.Password)
+	if err != nil {
 		log.Fatalf("RegisterUser: error parsing body: %v\n", err)
 		return c.SendStatus(400)
 	}
@@ -124,7 +125,7 @@ func (ac *authController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 		return c.SendStatus(400)
 	}
 
-	verified, regData, err := ac.userService.VerifyEmailAndGetRegistrationData(req.RegisterId, req.Code)
+	verified, user, err := ac.userService.VerifyEmailAndGetTempUser(req.RegisterId, req.Code)
 	if err != nil {
 		log.Fatalf("VerifyEmail: error verifying email: %v\n", err)
 		return c.SendStatus(400)
@@ -132,13 +133,6 @@ func (ac *authController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 
 	if !verified {
 		return c.SendStatus(401)
-	}
-
-	user := &domain.User{
-		Email:        regData.Email,
-		Firstname:    regData.Firstname,
-		Lastname:     regData.Lastname,
-		PasswordHash: regData.PasswordHash,
 	}
 
 	err = ac.userService.CreateUser(user)
