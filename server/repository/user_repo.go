@@ -5,6 +5,8 @@ import (
 
 	"task-scheduler/domain"
 	"task-scheduler/infrastructure"
+
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 type userRepository struct {
@@ -19,34 +21,66 @@ func NewUserRepository(db infrastructure.Database, store infrastructure.Store) d
 	}
 }
 
-func (ur *userRepository) StoreRegisterEmail(registerId, email, code string) error {
-
-	// TODO use messagepack or something to (de)serialize value of stored item
-	ur.store.Set(registerId, []byte(code), time.Hour)
-
-	return nil
+type RegistrationData struct {
+	Email                string
+	VerificationCodeHash string
+	Firstname            string
+	Lastname             string
+	PasswordHash         string
 }
 
-func (ur *userRepository) StoreRegisterUserData(registerId, firstname, lastname, hash string) error {
+func (ur *userRepository) StoreRegisterEmail(registerId, email, hashedCode string) error {
 
-	// TODO
-	_, err := ur.store.Get(registerId)
+	regData, err := msgpack.Marshal(&RegistrationData{
+		Email:                email,
+		VerificationCodeHash: hashedCode,
+	})
 	if err != nil {
 		return err
 	}
 
-	return ur.store.Set(registerId, []byte(firstname), time.Hour)
+	return ur.store.Set(registerId, regData, time.Hour)
+}
+
+func (ur *userRepository) StoreRegisterUserData(registerId, firstname, lastname, hashedPassword string) error {
+
+	b, err := ur.store.Get(registerId)
+	if err != nil {
+		return err
+	}
+
+	var regData RegistrationData
+	err = msgpack.Unmarshal(b, &regData)
+	if err != nil {
+		return err
+	}
+
+	regData.Firstname = firstname
+	regData.Lastname = lastname
+	regData.PasswordHash = hashedPassword
+
+	b, err = msgpack.Marshal(regData)
+	if err != nil {
+		return err
+	}
+
+	return ur.store.Set(registerId, b, time.Hour)
 }
 
 func (ur *userRepository) GetVerificationCode(registerId string) (string, error) {
 
-	_, err := ur.store.Get(registerId)
+	b, err := ur.store.Get(registerId)
 	if err != nil {
 		return "", err
 	}
 
-	// TODO
-	return "$argon2id$v=19$m=65536,t=1,p=8$cqlY0j49t2vjCN+gyeAY5Q$ACqRjZLFgM99b5Z6HG750lzjgQl3RYUCZjSENgMHXhg", nil
+	var regData RegistrationData
+	err = msgpack.Unmarshal(b, &regData)
+	if err != nil {
+		return "", err
+	}
+
+	return regData.VerificationCodeHash, nil
 }
 
 func (ur *userRepository) GetHash(email string) (string, error) {

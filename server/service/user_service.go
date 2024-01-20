@@ -23,12 +23,17 @@ func NewUserService(ur domain.UserRepository) domain.UserService {
 
 func (us *userService) RegisterEmail(email string) (string, error) {
 
+	// TODO check if email already exists in database
+
 	registerId := uuid.New().String()
 
 	code, err := GenerateVerificationCode()
 	if err != nil {
 		return "", err
 	}
+
+	// ! TODO remove in prod
+	log.Printf("Email code is %v\n", code)
 
 	hashedCode, err := argon2id.CreateHash(code, argon2id.DefaultParams)
 	if err != nil {
@@ -45,15 +50,17 @@ func (us *userService) RegisterEmail(email string) (string, error) {
 
 func (us *userService) RegisterUserData(registerId, firstname, lastname, password string) error {
 
-	hash, err := argon2id.CreateHash(password, argon2id.DefaultParams)
+	hashedPassword, err := argon2id.CreateHash(password, argon2id.DefaultParams)
 	if err != nil {
 		return err
 	}
 
-	return us.userRepository.StoreRegisterUserData(registerId, firstname, lastname, hash)
+	return us.userRepository.StoreRegisterUserData(registerId, firstname, lastname, hashedPassword)
 }
 
 func (us *userService) VerifyEmail(registerId, code string) bool {
+
+	// TODO get whole struct from repository, save user data in database if email verifies
 
 	storedCodeHash, err := us.userRepository.GetVerificationCode(registerId)
 	if err != nil {
@@ -90,7 +97,7 @@ func (us *userService) CheckLogin(email, password string) bool {
 
 func GenerateVerificationCode() (string, error) {
 	const letters = "123456789ABCDEFGHIJKLMNPQRSTUVWXYZ"
-	const length = 6
+	const length = 10
 	ret := make([]byte, length)
 	for i := 0; i < length; i++ {
 		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))

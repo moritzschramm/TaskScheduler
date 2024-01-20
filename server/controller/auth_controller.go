@@ -110,5 +110,7 @@ func (ac *authController) VerifyEmail(c *fiber.Ctx) error {
 		return c.SendStatus(401)
 	}
 
+	// TODO create user in database
+
 	return c.SendStatus(200)
 }

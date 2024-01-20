@@ -16,8 +16,8 @@ type UserService interface {
 }
 
 type UserRepository interface {
-	StoreRegisterEmail(registerId, email, code string) error
-	StoreRegisterUserData(registerId, firstname, lastname, hash string) error
+	StoreRegisterEmail(registerId, email, hashedCode string) error
+	StoreRegisterUserData(registerId, firstname, lastname, hashedPassword string) error
 	GetVerificationCode(registerId string) (string, error)
 	GetHash(email string) (string, error)
 	CreateUser(user User) error

@@ -91,6 +91,7 @@ const submit = () => {
 
     if (form.data.password !== form.data.confirm) {
       form.error = 'Passwords do not match'
+      form.data.confirm = ''
       return
     }
 
@@ -131,6 +132,7 @@ const submit = () => {
         } else {
           form.error = 'Error while processing request'
         }
+        form.data.verificationCode = ''
       })
   }
 }
