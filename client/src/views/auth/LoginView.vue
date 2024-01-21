@@ -12,15 +12,18 @@ const sessionStore = useSessionStore()
 const form = reactive({
   data: {
     email: sessionStore.user.email ?? '',
-    password: '',
+    password: ''
   },
   invalid: true,
   error: ''
 })
 
-watch(() => form.data, (data) => {
-  form.invalid = data.email.length === 0 || data.password.length === 0
-})
+watch(
+  () => form.data,
+  (data) => {
+    form.invalid = data.email.length === 0 || data.password.length === 0
+  }
+)
 
 const submit = () => {
   if (!form.invalid) {
@@ -38,7 +41,6 @@ const submit = () => {
       form.data.password = ''
       form.error = 'Email address and password do not match'
     })
-
 }
 </script>
 
