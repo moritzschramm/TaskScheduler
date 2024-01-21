@@ -4,16 +4,21 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type PostgresDB struct {
-	Conn *pgxpool.Pool
+	Conn            *pgxpool.Pool
+	syncOnConnected *sync.WaitGroup
 }
 
-func NewDatabaseConnection() Database {
-	return new(PostgresDB)
+func NewDatabaseConnection(syncOnConnected *sync.WaitGroup) Database {
+	syncOnConnected.Add(1)
+	return &PostgresDB{
+		syncOnConnected: syncOnConnected,
+	}
 }
 
 func (db *PostgresDB) Open(postgresDSN string) {
@@ -29,6 +34,7 @@ func (db *PostgresDB) Open(postgresDSN string) {
 	err = db.Conn.Ping(context.Background())
 	if err == nil {
 		log.Printf("Database connection established with %v\n", postgresDSN)
+		db.syncOnConnected.Done()
 	} else {
 		log.Fatalf("Failed to establish database connection: %v\n", err)
 	}

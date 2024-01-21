@@ -1,44 +1,44 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
-import { inject, onMounted, ref, watch } from 'vue'
+import { inject, reactive, watch } from 'vue'
 import { HttpClient } from '@/injectable/http'
+import InputText from '@/components/InputText.vue'
 
 const http = inject(HttpClient)
 const route = useRoute()
 const sessionStore = useSessionStore()
 
-const error = ref('')
-const invalidForm = ref(true)
-const emailInput = ref<HTMLInputElement | null>(null)
-const passwordInput = ref<HTMLInputElement | null>(null)
-const email = ref(sessionStore.user.email ?? '')
-const password = ref('')
-
-onMounted(() => {
-  route.query.created || sessionStore.user.email
-    ? passwordInput.value?.focus()
-    : emailInput.value?.focus()
+const form = reactive({
+  data: {
+    email: sessionStore.user.email ?? '',
+    password: '',
+  },
+  invalid: true,
+  error: ''
 })
 
-watch(password, (newPassword) => {
-  invalidForm.value = newPassword.length === 0
+watch(() => form.data, (data) => {
+  form.invalid = data.email.length === 0 || data.password.length === 0
 })
 
-// TODO watch for key event 'enter' to submit login
 const submit = () => {
+  if (!form.invalid) {
+    return
+  }
   http
     ?.post('/auth/login', {
-      email: email.value,
-      password: password.value
+      email: form.data.email,
+      password: form.data.password
     })
     .then(() => {
       alert('login successful')
     })
     .catch(() => {
-      password.value = ''
-      error.value = 'Email address and password do not match'
+      form.data.password = ''
+      form.error = 'Email address and password do not match'
     })
+
 }
 </script>
 
@@ -55,45 +55,29 @@ const submit = () => {
       </div>
 
       <form>
-        <div class="mb-4">
-          <label for="email" class="block text-gray-600 text-sm font-medium mb-2">Email</label>
-          <input
-            ref="emailInput"
-            @keyup.enter="submit"
-            v-model="email"
-            type="email"
-            id="email"
-            name="email"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-            required
-          />
-        </div>
+        <InputText
+          label="Email"
+          name="email"
+          type="email"
+          :focused="!!sessionStore.user.email"
+          v-model="form.data.email"
+          @enterPressed="submit"
+        />
 
-        <div class="mb-4">
-          <label for="password" class="block text-gray-600 text-sm font-medium mb-2"
-            >Password</label
-          >
-          <input
-            ref="passwordInput"
-            @keyup.enter="submit"
-            v-model="password"
-            type="password"
-            id="password"
-            name="password"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-            required
-          />
-        </div>
-
-        <p v-show="error" class="text-red-600 text-sm mb-4">
-          {{ error }}
-        </p>
+        <InputText
+          label="Password"
+          name="password"
+          type="password"
+          :focused="!!sessionStore.user.email"
+          v-model="form.data.password"
+          @enterPressed="submit"
+        />
 
         <button
           @click="submit"
-          :disabled="invalidForm"
+          :disabled="form.invalid"
           type="button"
-          class="mb-4 w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:bg-blue-600 disabled:bg-blue-400"
+          class="my-2 w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:bg-blue-600 disabled:bg-blue-400"
         >
           Login
         </button>

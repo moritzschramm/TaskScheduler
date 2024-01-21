@@ -17,9 +17,7 @@ const registerStateSubscriber = (store: Store, config: StoreConfig) => {
 }
 
 export const loadOldState = (storeConfig: StoreConfig): any => {
-  return JSON.parse(
-    storeConfig.storageInterface.getItem(storeConfig.name) ?? '{}'
-  )
+  return JSON.parse(storeConfig.storageInterface.getItem(storeConfig.name) ?? '{}')
 }
 
 // make state persistent with localStorage

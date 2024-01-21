@@ -5,42 +5,50 @@ import (
 	"task-scheduler/domain"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/session"
+	//"github.com/go-playground/validator/v10"	// TODO implement validator to check structs for correctness
 )
 
-type AuthController interface {
-	Login(c *fiber.Ctx) error
-	RegisterEmail(c *fiber.Ctx) error
-	RegisterUser(c *fiber.Ctx) error
-	VerifyEmailAndCreateUser(c *fiber.Ctx) error
-}
+type (
+	AuthController interface {
+		Login(c *fiber.Ctx) error
+		RegisterEmail(c *fiber.Ctx) error
+		RegisterUser(c *fiber.Ctx) error
+		VerifyEmailAndCreateUser(c *fiber.Ctx) error
+	}
 
-type authController struct {
-	userService domain.UserService
-}
+	authController struct {
+		userService domain.UserService
+		session     *session.Store
+	}
 
-// * accepted JSON format for each request
-type loginReqMsg struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-type registerEmailReqMsg struct {
-	Email string `json:"email"`
-}
-type registerUserReqMsg struct {
-	RegisterId string `json:"registerId"`
-	Firstname  string `json:"firstname"`
-	Lastname   string `json:"lastname"`
-	Password   string `json:"password"`
-}
-type verificationCodeReqMsg struct {
-	RegisterId string `json:"registerId"`
-	Code       string `json:"code"`
-}
+	loginReq struct {
+		Email    string `json:"email" validate:"required,email,max=512"`
+		Password string `json:"password" validate:"required"`
+	}
+
+	registerEmailReq struct {
+		Email string `json:"email" validate:"required,email,max=512"`
+	}
+
+	registerUserReq struct {
+		RegisterId string `json:"registerId" validate:"required,uuid4"`
+		Password   string `json:"password" validate:"required,min=10"`
+		Firstname  string `json:"firstname" validate:"required,max=256"`
+		Lastname   string `json:"lastname" validate:"required,max=256"`
+	}
+
+	verifyEmailAndCreateUserReq struct {
+		RegisterId string `json:"registerId" validate:"required,uuid4"`
+		Code       string `json:"password" validate:"required,len=10"`
+	}
+)
 
 // constructor
-func NewAuthController(us domain.UserService) AuthController {
+func NewAuthController(us domain.UserService, session *session.Store) AuthController {
 	return &authController{
 		userService: us,
+		session:     session,
 	}
 }
 
@@ -48,16 +56,16 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 
 	// TODO create session
 
-	req := new(loginReqMsg)
+	req := new(loginReq)
 
 	if err := c.BodyParser(req); err != nil {
-		log.Fatalf("Login: error parsing body: %v\n", err)
+		log.Printf("Login: error parsing body: %v\n", err)
 		return c.SendStatus(400)
 	}
 
 	match, err := ac.userService.CheckLogin(req.Email, req.Password)
 	if err != nil {
-		log.Fatalf("Login: error checking login: %v\n", err)
+		log.Printf("Login: error checking login: %v\n", err)
 		return c.SendStatus(400)
 	}
 
@@ -70,16 +78,16 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 
 func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 
-	req := new(registerEmailReqMsg)
+	req := new(registerEmailReq)
 
 	if err := c.BodyParser(req); err != nil {
-		log.Fatalf("RegisterEmail: error parsing body: %v\n", err)
+		log.Printf("RegisterEmail: error parsing body: %v\n", err)
 		return c.SendStatus(400)
 	}
 
 	emailExists, err := ac.userService.CheckEmailExists(req.Email)
 	if err != nil {
-		log.Fatalf("RegisterEmail: error checking if email exists: %v\n", err)
+		log.Printf("RegisterEmail: error checking if email exists: %v\n", err)
 		return c.SendStatus(404)
 	}
 
@@ -89,7 +97,7 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 
 	registerId, err := ac.userService.SetRegisterEmail(req.Email)
 	if err != nil {
-		log.Fatalf("RegisterEmail: error storing email: %v\n", err)
+		log.Printf("RegisterEmail: error storing email: %v\n", err)
 		return c.SendStatus(400)
 	}
 
@@ -100,16 +108,18 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 
 func (ac *authController) RegisterUser(c *fiber.Ctx) error {
 
-	req := new(registerUserReqMsg)
+	req := new(registerUserReq)
 
 	if err := c.BodyParser(req); err != nil {
-		log.Fatalf("RegisterUser: error parsing body: %v\n", err)
+		log.Printf("RegisterUser: error parsing body: %v\n", err)
 		return c.SendStatus(400)
 	}
 
+	log.Printf("RegisterUser: %v\n", req)
+
 	err := ac.userService.SetRegisterUserData(req.RegisterId, req.Firstname, req.Lastname, req.Password)
 	if err != nil {
-		log.Fatalf("RegisterUser: error parsing body: %v\n", err)
+		log.Printf("RegisterUser: error parsing body: %v\n", err)
 		return c.SendStatus(400)
 	}
 
@@ -118,16 +128,16 @@ func (ac *authController) RegisterUser(c *fiber.Ctx) error {
 
 func (ac *authController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 
-	req := new(verificationCodeReqMsg)
+	req := new(verifyEmailAndCreateUserReq)
 
 	if err := c.BodyParser(req); err != nil {
-		log.Fatalf("VerifyEmail: error parsing body: %v\n", err)
+		log.Printf("VerifyEmail: error parsing body: %v\n", err)
 		return c.SendStatus(400)
 	}
 
 	verified, user, err := ac.userService.VerifyEmailAndGetTempUser(req.RegisterId, req.Code)
 	if err != nil {
-		log.Fatalf("VerifyEmail: error verifying email: %v\n", err)
+		log.Printf("VerifyEmail: error verifying email: %v\n", err)
 		return c.SendStatus(400)
 	}
 
@@ -137,7 +147,7 @@ func (ac *authController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 
 	err = ac.userService.CreateUser(user)
 	if err != nil {
-		log.Fatalf("VerifyEmail: error creating user: %v\n", err)
+		log.Printf("VerifyEmail: error creating user: %v\n", err)
 		return c.SendStatus(400)
 	}
 

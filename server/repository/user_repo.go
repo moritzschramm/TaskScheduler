@@ -32,19 +32,19 @@ func (ur *userRepository) ExistsEmail(email string) (bool, error) {
 	return exists, nil
 }
 
-func (ur *userRepository) SetTempUser(registerId string, regData *domain.User) error {
+func (ur *userRepository) SetTempUser(key string, regData *domain.User) error {
 
 	b, err := msgpack.Marshal(regData)
 	if err != nil {
 		return err
 	}
 
-	return ur.store.Set(registerId, b, time.Hour)
+	return ur.store.Set(key, b, time.Hour)
 }
 
-func (ur *userRepository) GetTempUser(registerId string) (*domain.User, error) {
+func (ur *userRepository) GetTempUser(key string) (*domain.User, error) {
 
-	b, err := ur.store.Get(registerId)
+	b, err := ur.store.Get(key)
 	if err != nil {
 		return nil, err
 	}

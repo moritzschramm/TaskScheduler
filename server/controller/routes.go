@@ -6,11 +6,16 @@ import (
 	"task-scheduler/service"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/session"
 )
 
-func SetupRoutes(router *fiber.Router, db infrastructure.Database, store infrastructure.Store) {
+type controllerContainer struct {
+	authController AuthController
+}
 
-	cc := newControllerContainer(db, store)
+func SetupRoutes(router *fiber.Router, db infrastructure.Database, store infrastructure.Store, session *session.Store) {
+
+	cc := newControllerContainer(db, store, session)
 
 	api := *router
 
@@ -25,13 +30,9 @@ func SetupRoutes(router *fiber.Router, db infrastructure.Database, store infrast
 	auth.Post("/verify-email", cc.authController.VerifyEmailAndCreateUser)
 }
 
-type controllerContainer struct {
-	authController AuthController
-}
-
-func newControllerContainer(db infrastructure.Database, store infrastructure.Store) *controllerContainer {
+func newControllerContainer(db infrastructure.Database, store infrastructure.Store, session *session.Store) *controllerContainer {
 
 	return &controllerContainer{
-		authController: NewAuthController(service.NewUserService(repository.NewUserRepository(db, store))),
+		authController: NewAuthController(service.NewUserService(repository.NewUserRepository(db, store)), session),
 	}
 }

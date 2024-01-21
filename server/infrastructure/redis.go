@@ -4,17 +4,22 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
 type RedisStore struct {
-	db redis.UniversalClient
+	db              redis.UniversalClient
+	syncOnConnected *sync.WaitGroup
 }
 
-func NewKeyValueStore() Store {
-	return new(RedisStore)
+func NewKeyValueStore(syncOnConnected *sync.WaitGroup) Store {
+	syncOnConnected.Add(1)
+	return &RedisStore{
+		syncOnConnected: syncOnConnected,
+	}
 }
 
 func (r *RedisStore) Open(addr string) {
@@ -30,6 +35,7 @@ func (r *RedisStore) Open(addr string) {
 		os.Exit(1)
 	} else {
 		log.Println("Redis connection successful")
+		r.syncOnConnected.Done()
 	}
 }
 
@@ -63,8 +69,8 @@ func (r *RedisStore) Reset() error {
 	return r.db.FlushDB(context.Background()).Err()
 }
 
-func (r *RedisStore) Close() {
-	r.db.Close()
+func (r *RedisStore) Close() error {
+	return r.db.Close()
 }
 
 func (r *RedisStore) Keys() ([][]byte, error) {

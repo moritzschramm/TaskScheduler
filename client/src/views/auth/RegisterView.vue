@@ -5,6 +5,7 @@ import { HttpClient } from '@/injectable/http'
 import { useRegisterStore } from '@/stores/register'
 import { useSessionStore } from '@/stores/session'
 import StepBar from '@/components/StepBar.vue'
+import InputText from '@/components/InputText.vue'
 
 const router = useRouter()
 const http = inject(HttpClient)
@@ -48,7 +49,7 @@ onBeforeMount(() => {
 
 // check if current form is in valid state so next step button is enabled
 watch(
-  () => form.data,  // only watch for changes in the data object in form
+  () => form.data, // only watch for changes in the data object in form
   (data) => {
     if (form.state === FormState.EMAIL) {
       form.invalid = data.email.length === 0 || !EMAIL_REGEX.test(data.email)
@@ -71,8 +72,10 @@ const next = (state: FormState) => {
   form.state = state
 }
 
-// TODO watch for key event 'enter' to submit login
 const submit = () => {
+  if (form.invalid) {
+    return
+  }
   if (form.state === FormState.EMAIL) {
     http
       ?.post('/auth/register-email', { email: form.data.email })
@@ -115,9 +118,9 @@ const submit = () => {
       })
   } else if (form.state === FormState.VERIFY) {
     http
-      ?.post('/auth/verify-email', { 
+      ?.post('/auth/verify-email', {
         registerId: registerStore.registerId,
-        code: form.data.verificationCode 
+        code: form.data.verificationCode
       })
       .then(() => {
         if (registerStore.email && registerStore.firstname && registerStore.lastname) {
@@ -160,18 +163,14 @@ const submit = () => {
       <form>
         <div v-show="form.state === FormState.EMAIL">
           <p class="mb-6">Enter your email address to register a new account.</p>
-          <div class="mb-4">
-            <label for="email" class="block text-gray-600 text-sm font-medium mb-2">Email</label>
-            <input
-              v-model.trim="form.data.email"
-              @keyup.enter="submit"
-              type="email"
-              id="email"
-              name="email"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-              required
-            />
-          </div>
+          <InputText
+            label="Email"
+            name="email"
+            type="email"
+            :focused="true"
+            v-model.trim="form.data.email"
+            @enterPressed="submit"
+          />
         </div>
 
         <div v-show="form.state === FormState.USER_DATA">
@@ -181,69 +180,42 @@ const submit = () => {
             In the meantime, please enter the fields below.
           </p>
 
-          <div class="mb-4">
-            <label for="firstname" class="block text-gray-600 text-sm font-medium mb-2"
-              >Firstname</label
-            >
-            <input
-              v-model.trim="form.data.firstname"
-              @keyup.enter="submit"
-              type="text"
-              id="firstname"
-              name="firstname"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-              required
-            />
-          </div>
+          <InputText
+            label="Firstname"
+            name="firstname"
+            type="text"
+            :focused="true"
+            v-model.trim="form.data.firstname"
+            @enterPressed="submit"
+          />
 
-          <div class="mb-8">
-            <label for="lastname" class="block text-gray-600 text-sm font-medium mb-2"
-              >Lastname</label
-            >
-            <input
-              v-model.trim="form.data.lastname"
-              @keyup.enter="submit"
-              type="text"
-              id="lastname"
-              name="lastname"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-              required
-            />
-          </div>
+          <InputText
+            label="Lastname"
+            name="lastname"
+            type="text"
+            v-model.trim="form.data.lastname"
+            @enterPressed="submit"
+          />
 
-          <p class="mb-2 text-sm">
+          <p class="my-2 text-sm">
             Make sure to choose a strong password of at least 10 characters
           </p>
 
-          <div class="mb-4">
-            <label for="password" class="block text-gray-600 text-sm font-medium mb-2"
-              >Password</label
-            >
-            <input
-              v-model="form.data.password"
-              @keyup.enter="submit"
-              type="password"
-              id="password"
-              name="password"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-              required
-            />
-          </div>
+          <InputText
+            label="Password"
+            name="password"
+            type="password"
+            v-model="form.data.password"
+            @enterPressed="submit"
+          />
 
-          <div class="mb-4">
-            <label for="confirm" class="block text-gray-600 text-sm font-medium mb-2"
-              >Confirm password</label
-            >
-            <input
-              v-model="form.data.confirm"
-              @keyup.enter="submit"
-              type="password"
-              id="confirm"
-              name="confirm"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-              required
-            />
-          </div>
+          <InputText
+            label="Confirm Password"
+            name="configm"
+            type="password"
+            v-model="form.data.confirm"
+            @enterPressed="submit"
+          />
         </div>
 
         <div v-show="form.state === FormState.VERIFY">
@@ -251,20 +223,14 @@ const submit = () => {
             Please enter the verification code send to <strong>{{ form.data.email }}</strong>
           </p>
 
-          <div class="mb-4">
-            <label for="verificationCode" class="block text-gray-600 text-sm font-medium mb-2"
-              >Verification Code</label
-            >
-            <input
-              v-model.trim="form.data.verificationCode"
-              @keyup.enter="submit"
-              type="text"
-              id="verificationCode"
-              name="verificationCode"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-              required
-            />
-          </div>
+          <InputText
+            label="Verification Code"
+            name="verificationCode"
+            type="text"
+            :focused="true"
+            v-model.trim="form.data.verificationCode"
+            @enterPressed="submit"
+          />
 
           <p class="mb-4 text-sm">
             Wrong email address?
