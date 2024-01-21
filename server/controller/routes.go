@@ -2,22 +2,17 @@ package controller
 
 import (
 	"task-scheduler/infrastructure"
-	"task-scheduler/repository"
-	"task-scheduler/service"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
 )
 
-type controllerContainer struct {
-	authController AuthController
-}
+func SetupRoutes(api fiber.Router,
+	db infrastructure.Database,
+	store infrastructure.Store,
+	session *session.Store) {
 
-func SetupRoutes(router *fiber.Router, db infrastructure.Database, store infrastructure.Store, session *session.Store) {
-
-	cc := newControllerContainer(db, store, session)
-
-	api := *router
+	cc := createControllers(db, store, session)
 
 	api.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("API version 0.1")
@@ -28,11 +23,4 @@ func SetupRoutes(router *fiber.Router, db infrastructure.Database, store infrast
 	auth.Post("/register-email", cc.authController.RegisterEmail)
 	auth.Post("/register-user-data", cc.authController.RegisterUser)
 	auth.Post("/verify-email", cc.authController.VerifyEmailAndCreateUser)
-}
-
-func newControllerContainer(db infrastructure.Database, store infrastructure.Store, session *session.Store) *controllerContainer {
-
-	return &controllerContainer{
-		authController: NewAuthController(service.NewUserService(repository.NewUserRepository(db, store)), session),
-	}
 }

@@ -78,7 +78,7 @@ func main() {
 
 	// * register routes for API
 	api := app.Group("/api") // prefix all routes with /api
-	controller.SetupRoutes(&api, db, store, session)
+	controller.SetupRoutes(api, db, store, session)
 
 	// * start listening on port defined in .env
 	wg.Wait()

@@ -6,7 +6,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
-	//"github.com/go-playground/validator/v10"	// TODO implement validator to check structs for correctness
 )
 
 type (
@@ -56,100 +55,92 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 
 	// TODO create session
 
-	req := new(loginReq)
-
-	if err := c.BodyParser(req); err != nil {
-		log.Printf("Login: error parsing body: %v\n", err)
-		return c.SendStatus(400)
+	req, err := ParseAndValidate[loginReq](c)
+	if err != nil {
+		return err
 	}
 
 	match, err := ac.userService.CheckLogin(req.Email, req.Password)
 	if err != nil {
 		log.Printf("Login: error checking login: %v\n", err)
-		return c.SendStatus(400)
+		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
 	if !match {
-		return c.SendStatus(401)
+		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
-	return c.SendStatus(200)
+	return c.SendStatus(fiber.StatusOK)
 }
 
 func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 
-	req := new(registerEmailReq)
-
-	if err := c.BodyParser(req); err != nil {
-		log.Printf("RegisterEmail: error parsing body: %v\n", err)
-		return c.SendStatus(400)
+	req, err := ParseAndValidate[registerEmailReq](c)
+	if err != nil {
+		return err
 	}
 
 	emailExists, err := ac.userService.CheckEmailExists(req.Email)
 	if err != nil {
 		log.Printf("RegisterEmail: error checking if email exists: %v\n", err)
-		return c.SendStatus(404)
+		return c.SendStatus(fiber.StatusNotFound)
 	}
 
 	if emailExists {
-		return c.SendStatus(401)
+		return c.SendStatus(fiber.StatusForbidden)
 	}
 
 	registerId, err := ac.userService.SetRegisterEmail(req.Email)
 	if err != nil {
 		log.Printf("RegisterEmail: error storing email: %v\n", err)
-		return c.SendStatus(400)
+		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	return c.Status(201).JSON(&fiber.Map{
+	return c.Status(fiber.StatusCreated).JSON(&fiber.Map{
 		"registerId": registerId,
 	})
 }
 
 func (ac *authController) RegisterUser(c *fiber.Ctx) error {
 
-	req := new(registerUserReq)
-
-	if err := c.BodyParser(req); err != nil {
-		log.Printf("RegisterUser: error parsing body: %v\n", err)
-		return c.SendStatus(400)
+	req, err := ParseAndValidate[registerUserReq](c)
+	if err != nil {
+		return err
 	}
 
 	log.Printf("RegisterUser: %v\n", req)
 
-	err := ac.userService.SetRegisterUserData(req.RegisterId, req.Firstname, req.Lastname, req.Password)
+	err = ac.userService.SetRegisterUserData(req.RegisterId, req.Firstname, req.Lastname, req.Password)
 	if err != nil {
 		log.Printf("RegisterUser: error parsing body: %v\n", err)
-		return c.SendStatus(400)
+		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	return c.SendStatus(201)
+	return c.SendStatus(fiber.StatusCreated)
 }
 
 func (ac *authController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 
-	req := new(verifyEmailAndCreateUserReq)
-
-	if err := c.BodyParser(req); err != nil {
-		log.Printf("VerifyEmail: error parsing body: %v\n", err)
-		return c.SendStatus(400)
+	req, err := ParseAndValidate[verifyEmailAndCreateUserReq](c)
+	if err != nil {
+		return err
 	}
 
 	verified, user, err := ac.userService.VerifyEmailAndGetTempUser(req.RegisterId, req.Code)
 	if err != nil {
 		log.Printf("VerifyEmail: error verifying email: %v\n", err)
-		return c.SendStatus(400)
+		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
 	if !verified {
-		return c.SendStatus(401)
+		return c.SendStatus(fiber.StatusForbidden)
 	}
 
 	err = ac.userService.CreateUser(user)
 	if err != nil {
 		log.Printf("VerifyEmail: error creating user: %v\n", err)
-		return c.SendStatus(400)
+		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	return c.SendStatus(200)
+	return c.SendStatus(fiber.StatusOK)
 }

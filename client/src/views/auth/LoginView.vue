@@ -22,11 +22,12 @@ watch(
   () => form.data,
   (data) => {
     form.invalid = data.email.length === 0 || data.password.length === 0
-  }
+  },
+  { deep: true }
 )
 
 const submit = () => {
-  if (!form.invalid) {
+  if (form.invalid) {
     return
   }
   http
