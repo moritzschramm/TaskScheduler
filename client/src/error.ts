@@ -1,3 +1,5 @@
+export const emptyError: Error = {}
+
 export interface Error {
-  // TODO
+  [key: string]: string
 }

@@ -4,8 +4,10 @@ import { inject, reactive, watch, onBeforeMount } from 'vue'
 import { HttpClient } from '@/injectable/http'
 import { useRegisterStore } from '@/stores/register'
 import { useSessionStore } from '@/stores/session'
+import { emptyError } from '@/error'
 import StepBar from '@/components/StepBar.vue'
 import InputText from '@/components/InputText.vue'
+import GenericError from '@/components/GenericError.vue'
 
 const router = useRouter()
 const http = inject(HttpClient)
@@ -31,7 +33,7 @@ const form = reactive({
   },
   invalid: true,
   state: FormState.EMAIL,
-  error: ''
+  error: emptyError
 })
 
 // check if page was reloaded and restore state
@@ -63,15 +65,17 @@ watch(
       form.invalid = data.verificationCode.length === 0
     }
   },
-  { deep: true }
+  { deep: true } // important
 )
 
+// go to next form state
 const next = (state: FormState) => {
   form.invalid = true
-  form.error = ''
+  form.error = emptyError
   form.state = state
 }
 
+// submit form at current state and go to next state
 const submit = () => {
   if (form.invalid) {
     return
@@ -84,20 +88,16 @@ const submit = () => {
         next(FormState.USER_DATA)
       })
       .catch((error) => {
-        if (error.response.status === 401) {
-          form.error = 'Email already exists'
-        } else {
-          form.error = 'Error while processing request'
-        }
+        form.error = error.response
       })
   } else if (form.state === FormState.USER_DATA) {
     if (form.data.password.length < 10) {
-      form.error = 'Password needs to have at least 10 characters'
+      form.error = { confirm: 'Password needs to have at least 10 characters' }
       return
     }
 
     if (form.data.password !== form.data.confirm) {
-      form.error = 'Passwords do not match'
+      form.error = { confirm: 'Passwords do not match' }
       form.data.confirm = ''
       return
     }
@@ -114,13 +114,13 @@ const submit = () => {
         next(FormState.VERIFY)
       })
       .catch((error) => {
-        form.error = error
+        form.error = error.response.data
       })
   } else if (form.state === FormState.VERIFY) {
     http
       ?.post('/auth/verify-email', {
         registerId: registerStore.registerId,
-        code: form.data.verificationCode
+        verificationCode: form.data.verificationCode
       })
       .then(() => {
         if (registerStore.email && registerStore.firstname && registerStore.lastname) {
@@ -134,11 +134,7 @@ const submit = () => {
         })
       })
       .catch((error) => {
-        if (error.response.status === 401) {
-          form.error = 'Verification code is not correct'
-        } else {
-          form.error = 'Error while processing request'
-        }
+        form.error = error.response.data
         form.data.verificationCode = ''
       })
   }
@@ -167,6 +163,7 @@ const submit = () => {
             label="Email"
             name="email"
             type="email"
+            :error="form.error"
             :focused="true"
             v-model.trim="form.data.email"
             @enterPressed="submit"
@@ -184,6 +181,7 @@ const submit = () => {
             label="Firstname"
             name="firstname"
             type="text"
+            :error="form.error"
             :focused="true"
             v-model.trim="form.data.firstname"
             @enterPressed="submit"
@@ -193,6 +191,7 @@ const submit = () => {
             label="Lastname"
             name="lastname"
             type="text"
+            :error="form.error"
             v-model.trim="form.data.lastname"
             @enterPressed="submit"
           />
@@ -205,6 +204,7 @@ const submit = () => {
             label="Password"
             name="password"
             type="password"
+            :error="form.error"
             v-model="form.data.password"
             @enterPressed="submit"
           />
@@ -213,6 +213,7 @@ const submit = () => {
             label="Confirm Password"
             name="configm"
             type="password"
+            :error="form.error"
             v-model="form.data.confirm"
             @enterPressed="submit"
           />
@@ -227,6 +228,7 @@ const submit = () => {
             label="Verification Code"
             name="verificationCode"
             type="text"
+            :error="form.error"
             :focused="true"
             v-model.trim="form.data.verificationCode"
             @enterPressed="submit"
@@ -240,9 +242,7 @@ const submit = () => {
           </p>
         </div>
 
-        <p v-show="form.error" class="text-red-600 text-sm mb-4">
-          {{ form.error }}
-        </p>
+        <GenericError :error="form.error" />
 
         <div class="text-right">
           <button

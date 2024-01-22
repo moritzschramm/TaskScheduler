@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"log"
 	"task-scheduler/domain"
 
 	"github.com/gofiber/fiber/v2"
@@ -38,8 +37,8 @@ type (
 	}
 
 	verifyEmailAndCreateUserReq struct {
-		RegisterId string `json:"registerId" validate:"required,uuid4"`
-		Code       string `json:"password" validate:"required,len=10"`
+		RegisterId       string `json:"registerId" validate:"required,uuid4"`
+		VerificationCode string `json:"verificationCode" validate:"required,len=10"`
 	}
 )
 
@@ -62,12 +61,13 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 
 	match, err := ac.userService.CheckLogin(req.Email, req.Password)
 	if err != nil {
-		log.Printf("Login: error checking login: %v\n", err)
-		return c.SendStatus(fiber.StatusBadRequest)
+		return err
 	}
 
 	if !match {
-		return c.SendStatus(fiber.StatusUnauthorized)
+		return c.Status(fiber.StatusUnauthorized).JSON(&fiber.Map{
+			"err": "Wrong email or password.",
+		})
 	}
 
 	return c.SendStatus(fiber.StatusOK)
@@ -82,18 +82,18 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 
 	emailExists, err := ac.userService.CheckEmailExists(req.Email)
 	if err != nil {
-		log.Printf("RegisterEmail: error checking if email exists: %v\n", err)
-		return c.SendStatus(fiber.StatusNotFound)
+		return err
 	}
 
 	if emailExists {
-		return c.SendStatus(fiber.StatusForbidden)
+		return c.Status(fiber.StatusUnauthorized).JSON(&fiber.Map{
+			"email": "Email alreadyd exists.",
+		})
 	}
 
 	registerId, err := ac.userService.SetRegisterEmail(req.Email)
 	if err != nil {
-		log.Printf("RegisterEmail: error storing email: %v\n", err)
-		return c.SendStatus(fiber.StatusBadRequest)
+		return err
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(&fiber.Map{
@@ -108,12 +108,9 @@ func (ac *authController) RegisterUser(c *fiber.Ctx) error {
 		return err
 	}
 
-	log.Printf("RegisterUser: %v\n", req)
-
 	err = ac.userService.SetRegisterUserData(req.RegisterId, req.Firstname, req.Lastname, req.Password)
 	if err != nil {
-		log.Printf("RegisterUser: error parsing body: %v\n", err)
-		return c.SendStatus(fiber.StatusBadRequest)
+		return err
 	}
 
 	return c.SendStatus(fiber.StatusCreated)
@@ -126,20 +123,20 @@ func (ac *authController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 		return err
 	}
 
-	verified, user, err := ac.userService.VerifyEmailAndGetTempUser(req.RegisterId, req.Code)
+	verified, user, err := ac.userService.VerifyEmailAndGetTempUser(req.RegisterId, req.VerificationCode)
 	if err != nil {
-		log.Printf("VerifyEmail: error verifying email: %v\n", err)
-		return c.SendStatus(fiber.StatusBadRequest)
+		return err
 	}
 
 	if !verified {
-		return c.SendStatus(fiber.StatusForbidden)
+		return c.Status(fiber.StatusForbidden).JSON(&fiber.Map{
+			"err": "Wrong verification code.",
+		})
 	}
 
 	err = ac.userService.CreateUser(user)
 	if err != nil {
-		log.Printf("VerifyEmail: error creating user: %v\n", err)
-		return c.SendStatus(fiber.StatusBadRequest)
+		return err
 	}
 
 	return c.SendStatus(fiber.StatusOK)

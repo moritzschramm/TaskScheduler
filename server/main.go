@@ -5,6 +5,7 @@ import (
 	"sync"
 	"task-scheduler/controller"
 	"task-scheduler/infrastructure"
+	"unicode"
 
 	"github.com/joho/godotenv"
 
@@ -16,6 +17,8 @@ import (
 	//"github.com/gofiber/fiber/v2/middleware/csrf" // TODO enable CSRF protection
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/session"
+
+	"github.com/go-playground/validator/v10"
 )
 
 type GlobalErrorHandlerResp struct {
@@ -51,11 +54,27 @@ func main() {
 		CaseSensitive: true,
 		StrictRouting: true,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
-			return c.Status(fiber.StatusBadRequest).JSON(GlobalErrorHandlerResp{
-				Success: false,
-				Message: err.Error(), // TODO check if **all** errors should be given to user
+
+			if validationErrors, ok := err.(validator.ValidationErrors); ok {
+
+				errMsg := make(map[string]string)
+
+				for _, err := range validationErrors {
+
+					// TODO create better error msgs
+
+					// make first letter lowercase (err.Field does not use json tag value, even if docs say otherwise...)
+					field := []rune(err.Field())
+					field[0] = unicode.ToLower(field[0])
+					errMsg[string(field)] = err.Tag()
+				}
+
+				return c.Status(fiber.StatusBadRequest).JSON(errMsg)
+			}
+
+			return c.Status(fiber.StatusBadRequest).JSON(&fiber.Map{
+				"err": "Error while processing request.",
 			})
-			// TODO create custom error messages that can (and should) be parsed by client
 		},
 	})
 

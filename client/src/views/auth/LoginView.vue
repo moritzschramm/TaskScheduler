@@ -3,7 +3,9 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { inject, reactive, watch } from 'vue'
 import { HttpClient } from '@/injectable/http'
+import { emptyError } from '@/error'
 import InputText from '@/components/InputText.vue'
+import GenericError from '@/components/GenericError.vue'
 
 const http = inject(HttpClient)
 const route = useRoute()
@@ -15,7 +17,7 @@ const form = reactive({
     password: ''
   },
   invalid: true,
-  error: ''
+  error: emptyError
 })
 
 watch(
@@ -31,16 +33,13 @@ const submit = () => {
     return
   }
   http
-    ?.post('/auth/login', {
-      email: form.data.email,
-      password: form.data.password
-    })
+    ?.post('/auth/login', form.data)
     .then(() => {
-      alert('login successful')
+      alert('login successful') // TODO
     })
-    .catch(() => {
+    .catch((error) => {
       form.data.password = ''
-      form.error = 'Email address and password do not match'
+      form.error = error.response.data
     })
 }
 </script>
@@ -62,7 +61,8 @@ const submit = () => {
           label="Email"
           name="email"
           type="email"
-          :focused="!!sessionStore.user.email"
+          :error="form.error"
+          :focused="!sessionStore.user.email"
           v-model="form.data.email"
           @enterPressed="submit"
         />
@@ -71,10 +71,13 @@ const submit = () => {
           label="Password"
           name="password"
           type="password"
+          :error="form.error"
           :focused="!!sessionStore.user.email"
           v-model="form.data.password"
           @enterPressed="submit"
         />
+
+        <GenericError :error="form.error" />
 
         <button
           @click="submit"
