@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 	"sync"
+
 	"task-scheduler/controller"
 	"task-scheduler/infrastructure"
-	"unicode"
 
 	"github.com/joho/godotenv"
 
@@ -14,17 +14,9 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
-	//"github.com/gofiber/fiber/v2/middleware/csrf" // TODO enable CSRF protection
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/session"
-
-	"github.com/go-playground/validator/v10"
 )
-
-type GlobalErrorHandlerResp struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-}
 
 func main() {
 
@@ -53,29 +45,7 @@ func main() {
 		Prefork:       true,
 		CaseSensitive: true,
 		StrictRouting: true,
-		ErrorHandler: func(c *fiber.Ctx, err error) error {
-
-			if validationErrors, ok := err.(validator.ValidationErrors); ok {
-
-				errMsg := make(map[string]string)
-
-				for _, err := range validationErrors {
-
-					// TODO create better error msgs
-
-					// make first letter lowercase (err.Field does not use json tag value, even if docs say otherwise...)
-					field := []rune(err.Field())
-					field[0] = unicode.ToLower(field[0])
-					errMsg[string(field)] = err.Tag()
-				}
-
-				return c.Status(fiber.StatusBadRequest).JSON(errMsg)
-			}
-
-			return c.Status(fiber.StatusBadRequest).JSON(&fiber.Map{
-				"err": "Error while processing request.",
-			})
-		},
+		ErrorHandler:  GlobalErrorHandler,
 	})
 
 	// * register middleware
@@ -94,6 +64,21 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           3600, // 1 hour caching
 	}))
+	// TODO implement csrf (in client!)
+	/*app.Use(csrf.New(csrf.Config{
+		KeyLookup:         "header:" + csrf.HeaderName,
+		CookieName:        "__Host-csrf_",
+		CookieSameSite:    "Lax",
+		CookieSecure:      os.Getenv("DEV_ENV") != "true",
+		CookieSessionOnly: true,
+		CookieHTTPOnly:    true,
+		Expiration:        1 * time.Hour,
+		KeyGenerator:      utils.UUIDv4,
+		Extractor:         csrf.CsrfFromHeader(csrf.HeaderName),
+		Session:           session,
+		SessionKey:        "fiber.csrf.token",
+		HandlerContextKey: "fiber.csrf.handler",
+	}))*/
 
 	// * register routes for API
 	api := app.Group("/api") // prefix all routes with /api
