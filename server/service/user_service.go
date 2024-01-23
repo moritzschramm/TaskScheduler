@@ -106,7 +106,7 @@ func (us *userService) CheckLogin(email, password string) (bool, error) {
 
 	hash, err := us.userRepository.GetPasswordHash(email)
 	if err != nil {
-		return false, err
+		return false, nil // no hash found
 	}
 
 	match, err := argon2id.ComparePasswordAndHash(password, hash)

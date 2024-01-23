@@ -148,11 +148,11 @@ const submit = () => {
 
       <h2 class="text-2xl font-semibold mb-4">
         {{
-          form.state === FormState.USER_DATA
-            ? 'Enter Your User Data'
-            : form.state === FormState.VERIFY
-              ? 'Verify Email Address'
-              : 'Register New Account'
+          form.state === FormState.EMAIL
+            ? 'Register New Account'
+            : form.state === FormState.USER_DATA
+              ? 'Enter Your Account Data'
+              : 'Verify Email Address'
         }}
       </h2>
 
@@ -196,7 +196,7 @@ const submit = () => {
             @enterPressed="submit"
           />
 
-          <p class="my-2 text-sm">
+          <p class="mt-6 mb-2 text-sm">
             Make sure to choose a strong password of at least 10 characters
           </p>
 

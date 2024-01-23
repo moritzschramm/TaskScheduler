@@ -34,8 +34,9 @@ const submit = () => {
   }
   http
     ?.post('/auth/login', form.data)
-    .then(() => {
-      alert('login successful') // TODO
+    .then((response) => {
+      sessionStore.setEmail(form.data.email)
+      alert(JSON.stringify(response)) // TODO
     })
     .catch((error) => {
       form.data.password = ''
