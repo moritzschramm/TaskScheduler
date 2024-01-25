@@ -3,10 +3,11 @@ import type { AxiosInstance } from 'axios'
 import type { InjectionKey } from 'vue'
 
 export const axiosInstance: AxiosInstance = axios.create({
-  baseURL: 'http://localhost:3000/api', // TODO load addr from env
+  baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
   headers: {
-    'Content-type': 'application/json'
+    'Content-Type': 'application/json',
+    'X-Ts-Custom-Csrf': '1'
   }
 })
 

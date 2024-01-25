@@ -37,7 +37,8 @@ func main() {
 
 	// * create session storage
 	session := session.New(session.Config{
-		Storage: store,
+		Storage:        store,
+		CookieHTTPOnly: true,
 	})
 
 	// * create new server
@@ -60,25 +61,18 @@ func main() {
 	}))
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "http://localhost:5173",
-		AllowHeaders:     "Origin, Content-Type, Accept",
+		AllowHeaders:     "Origin, Content-Type, Accept, X-Ts-Custom-Csrf",
 		AllowCredentials: true,
 		MaxAge:           3600, // 1 hour caching
 	}))
-	// TODO implement csrf (in client!)
-	/*app.Use(csrf.New(csrf.Config{
-		KeyLookup:         "header:" + csrf.HeaderName,
-		CookieName:        "__Host-csrf_",
-		CookieSameSite:    "Lax",
-		CookieSecure:      os.Getenv("DEV_ENV") != "true",
-		CookieSessionOnly: true,
-		CookieHTTPOnly:    true,
-		Expiration:        1 * time.Hour,
-		KeyGenerator:      utils.UUIDv4,
-		Extractor:         csrf.CsrfFromHeader(csrf.HeaderName),
-		Session:           session,
-		SessionKey:        "fiber.csrf.token",
-		HandlerContextKey: "fiber.csrf.handler",
-	}))*/
+	app.Use(func(c *fiber.Ctx) error { // check if request has custom csrf protection header set
+		// apparently it is enough for a purely ajax req/res scheme to rely on this header
+		// see https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#employing-custom-request-headers-for-ajaxapi
+		if c.Get("X-Ts-Custom-Csrf") != "1" {
+			return c.SendStatus(fiber.StatusForbidden)
+		}
+		return c.Next()
+	})
 
 	// * register routes for API
 	api := app.Group("/api") // prefix all routes with /api

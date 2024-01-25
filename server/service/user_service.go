@@ -101,20 +101,24 @@ func (us *userService) CreateUser(user *domain.User) error {
 	return us.userRepository.CreateUser(user)
 }
 
-func (us *userService) CheckLogin(email, password string) (bool, error) {
+func (us *userService) CheckLogin(email, password string) (*domain.User, error) {
 	// TODO save IP to block after 3 attempts -> in service
 
-	hash, err := us.userRepository.GetPasswordHash(email)
+	user, err := us.userRepository.GetUserByEmail(email)
 	if err != nil {
-		return false, nil // no hash found
+		return nil, nil // no hash found
 	}
 
-	match, err := argon2id.ComparePasswordAndHash(password, hash)
+	match, err := argon2id.ComparePasswordAndHash(password, user.PasswordHash)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	return match, nil
+	if match {
+		return user, nil
+	}
+
+	return nil, nil
 }
 
 func GenerateVerificationCode() (string, error) {

@@ -52,25 +52,36 @@ func NewAuthController(us domain.UserService, session *session.Store) AuthContro
 
 func (ac *authController) Login(c *fiber.Ctx) error {
 
-	// TODO create session
-
 	req, err := ParseAndValidate[loginReq](c)
 	if err != nil {
 		return err
 	}
 
-	match, err := ac.userService.CheckLogin(req.Email, req.Password)
+	user, err := ac.userService.CheckLogin(req.Email, req.Password)
 	if err != nil {
 		return err
 	}
 
-	if !match {
+	if user == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(&fiber.Map{
 			"err": "Wrong email or password.",
 		})
 	}
 
-	return c.SendStatus(fiber.StatusOK)
+	sess, err := ac.session.Get(c)
+	if err != nil {
+		return err
+	}
+
+	sess.Reset()
+	sess.Set("user", user)
+
+	return c.JSON(&fiber.Map{
+		"id":        user.Id,
+		"email":     user.Email,
+		"firstname": user.Firstname,
+		"lastname":  user.Lastname,
+	})
 }
 
 func (ac *authController) RegisterEmail(c *fiber.Ctx) error {

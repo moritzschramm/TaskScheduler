@@ -15,7 +15,7 @@ func SetupRoutes(api fiber.Router,
 	cc := createControllers(db, store, session)
 
 	api.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("API version 0.1")
+		return c.SendString("0.1") // send API version
 	})
 
 	auth := api.Group("/auth")

@@ -18,7 +18,7 @@ type (
 
 		CreateUser(user *User) error
 
-		CheckLogin(email, password string) (bool, error)
+		CheckLogin(email, password string) (*User, error)
 	}
 
 	UserRepository interface {
@@ -26,7 +26,7 @@ type (
 		GetTempUser(key string) (*User, error)    // get user from object store
 
 		ExistsEmail(email string) (bool, error)
-		GetPasswordHash(email string) (string, error)
+		GetUserByEmail(email string) (*User, error)
 		CreateUser(user *User) error
 		DeleteUser(id string) error
 	}

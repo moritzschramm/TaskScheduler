@@ -19,13 +19,16 @@ export const useSessionStore = defineStore(sessionStoreConfig.name, () => {
 
   const user = ref<User>(oldState.user ?? {})
 
-  function setEmail(emailAddr: string) {
-    user.value.email = emailAddr
+  function setUserId(id: string) {
+    user.value.id = id
+  }
+  function setEmail(email: string) {
+    user.value.email = email
   }
   function setName(first: string, last: string) {
     user.value.firstname = first
     user.value.lastname = last
   }
 
-  return { user, setEmail, setName }
+  return { user, setUserId, setEmail, setName }
 })

@@ -58,19 +58,19 @@ func (ur *userRepository) GetTempUser(key string) (*domain.User, error) {
 	return &user, nil
 }
 
-func (ur *userRepository) GetPasswordHash(email string) (string, error) {
+func (ur *userRepository) GetUserByEmail(email string) (*domain.User, error) {
 
-	var hash string
+	user := new(domain.User)
 
 	err := ur.db.QueryRow(
-		"select u.passwordhash from users as u where u.email=$1",
+		"select u.id, u.email, u.firstname, u.lastname, u.passwordhash from users as u where u.email=$1",
 		email,
-	).Scan(&hash)
+	).Scan(&user.Id, &user.Email, &user.Firstname, &user.Lastname, &user.PasswordHash)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return hash, nil
+	return user, nil
 }
 
 func (ur *userRepository) CreateUser(user *domain.User) error {
