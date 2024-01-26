@@ -39,7 +39,7 @@ const submit = () => {
             sessionStore.setUserId(response.data.id)
             sessionStore.setEmail(response.data.email)
             sessionStore.setName(response.data.firstname, response.data.lastname)
-            router.replace({ path: '/' })
+            router.replace({ name: 'home' })
         })
         .catch((error) => {
             form.data.password = ''

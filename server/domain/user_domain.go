@@ -1,5 +1,7 @@
 package domain
 
+import "github.com/gofiber/fiber/v2/middleware/session"
+
 type (
 	User struct {
 		Id                   string
@@ -12,19 +14,17 @@ type (
 
 	UserService interface {
 		CheckEmailExists(email string) (bool, error)
-		SetRegisterEmail(email string) (string, error)
-		SetRegisterUserData(registerId, firstname, lastname, password string) error
-		VerifyEmailAndGetTempUser(registerId, code string) (bool, *User, error)
+
+		SetRegisterEmail(email string, sess *session.Session) error
+		SetRegisterUserData(firstname, lastname, password string, sess *session.Session) error
+		VerifyEmailAndGetTempUser(code string, sess *session.Session) (bool, *User, error)
 
 		CreateUser(user *User) error
 
-		CheckLogin(email, password string) (*User, error)
+		CheckCredentials(email, password string) (*User, error)
 	}
 
 	UserRepository interface {
-		SetTempUser(key string, user *User) error // store user in object store (for 1h)
-		GetTempUser(key string) (*User, error)    // get user from object store
-
 		ExistsEmail(email string) (bool, error)
 		GetUserByEmail(email string) (*User, error)
 		CreateUser(user *User) error

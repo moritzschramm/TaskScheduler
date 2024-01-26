@@ -1,23 +1,20 @@
 package repository
 
 import (
-	"time"
-
 	"task-scheduler/domain"
 	"task-scheduler/infrastructure"
 
-	"github.com/vmihailenco/msgpack/v5"
+	"github.com/gofiber/fiber/v2/middleware/session"
 )
 
 type userRepository struct {
-	db    infrastructure.Database
-	store infrastructure.Store
+	db      infrastructure.Database
+	session *session.Store
 }
 
-func NewUserRepository(db infrastructure.Database, store infrastructure.Store) domain.UserRepository {
+func NewUserRepository(db infrastructure.Database) domain.UserRepository {
 	return &userRepository{
-		db:    db,
-		store: store,
+		db: db,
 	}
 }
 
@@ -30,32 +27,6 @@ func (ur *userRepository) ExistsEmail(email string) (bool, error) {
 	}
 
 	return exists, nil
-}
-
-func (ur *userRepository) SetTempUser(key string, regData *domain.User) error {
-
-	b, err := msgpack.Marshal(regData)
-	if err != nil {
-		return err
-	}
-
-	return ur.store.Set(key, b, time.Hour)
-}
-
-func (ur *userRepository) GetTempUser(key string) (*domain.User, error) {
-
-	b, err := ur.store.Get(key)
-	if err != nil {
-		return nil, err
-	}
-
-	var user domain.User
-	err = msgpack.Unmarshal(b, &user)
-	if err != nil {
-		return nil, err
-	}
-
-	return &user, nil
 }
 
 func (ur *userRepository) GetUserByEmail(email string) (*domain.User, error) {

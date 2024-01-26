@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"log"
 	"math/big"
 	"task-scheduler/domain"
@@ -8,8 +9,11 @@ import (
 	"crypto/rand"
 
 	"github.com/alexedwards/argon2id"
-	"github.com/google/uuid"
+	"github.com/gofiber/fiber/v2/middleware/session"
 )
+
+const TMP_USER_KEY = "temp_user"
+const ERROR_DESERIALIZATION_OF_USER_FAILED = "Failed to deserialize *User from session storage"
 
 type userService struct {
 	userRepository domain.UserRepository
@@ -26,13 +30,11 @@ func (us *userService) CheckEmailExists(email string) (bool, error) {
 	return us.userRepository.ExistsEmail(email)
 }
 
-func (us *userService) SetRegisterEmail(email string) (string, error) {
-
-	registerId := uuid.New().String()
+func (us *userService) SetRegisterEmail(email string, sess *session.Session) error {
 
 	code, err := GenerateVerificationCode()
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// ! TODO remove in prod
@@ -41,7 +43,7 @@ func (us *userService) SetRegisterEmail(email string) (string, error) {
 
 	hashedCode, err := argon2id.CreateHash(code, argon2id.DefaultParams)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	user := &domain.User{
@@ -49,39 +51,42 @@ func (us *userService) SetRegisterEmail(email string) (string, error) {
 		VerificationCodeHash: hashedCode,
 	}
 
-	err = us.userRepository.SetTempUser(registerId, user)
+	sess.Set(TMP_USER_KEY, user)
+	err = sess.Save()
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return registerId, nil
+	return nil
 }
 
-func (us *userService) SetRegisterUserData(registerId, firstname, lastname, password string) error {
+func (us *userService) SetRegisterUserData(firstname, lastname, password string, sess *session.Session) error {
 
 	hashedPassword, err := argon2id.CreateHash(password, argon2id.DefaultParams)
 	if err != nil {
 		return err
 	}
 
-	user, err := us.userRepository.GetTempUser(registerId)
-	if err != nil {
-		return err
+	user, ok := sess.Get(TMP_USER_KEY).(*domain.User)
+	if !ok {
+		return errors.New(ERROR_DESERIALIZATION_OF_USER_FAILED)
 	}
 
 	user.Firstname = firstname
 	user.Lastname = lastname
 	user.PasswordHash = hashedPassword
 
-	return us.userRepository.SetTempUser(registerId, user)
+	sess.Set(TMP_USER_KEY, user)
+
+	return sess.Save()
 }
 
-func (us *userService) VerifyEmailAndGetTempUser(registerId, code string) (bool, *domain.User, error) {
+func (us *userService) VerifyEmailAndGetTempUser(code string, sess *session.Session) (bool, *domain.User, error) {
 	// TODO save IP to block after 3 attempts -> in service
 
-	user, err := us.userRepository.GetTempUser(registerId)
-	if err != nil {
-		return false, nil, err
+	user, ok := sess.Get(TMP_USER_KEY).(*domain.User)
+	if !ok {
+		return false, nil, errors.New(ERROR_DESERIALIZATION_OF_USER_FAILED)
 	}
 
 	match, err := argon2id.ComparePasswordAndHash(code, user.VerificationCodeHash)
@@ -101,7 +106,7 @@ func (us *userService) CreateUser(user *domain.User) error {
 	return us.userRepository.CreateUser(user)
 }
 
-func (us *userService) CheckLogin(email, password string) (*domain.User, error) {
+func (us *userService) CheckCredentials(email, password string) (*domain.User, error) {
 	// TODO save IP to block after 3 attempts -> in service
 
 	user, err := us.userRepository.GetUserByEmail(email)

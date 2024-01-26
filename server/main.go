@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"task-scheduler/controller"
+	"task-scheduler/domain"
 	"task-scheduler/infrastructure"
 
 	"github.com/joho/godotenv"
@@ -16,6 +17,8 @@ import (
 
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/session"
+
+	"github.com/gofiber/storage/redis/v3"
 )
 
 func main() {
@@ -31,15 +34,20 @@ func main() {
 	defer db.Close()
 
 	// * connect to key value store
-	store := infrastructure.NewKeyValueStore(&wg)
-	go store.Open(os.Getenv("REDIS_ADDR"))
+	store := redis.New(redis.Config{
+		Host: os.Getenv("REDIS_HOST"),
+	})
 	defer store.Close()
 
 	// * create session storage
 	session := session.New(session.Config{
 		Storage:        store,
 		CookieHTTPOnly: true,
+		CookieSecure:   os.Getenv("DEV_ENV") != "true",
+		CookieSameSite: "Lax",
 	})
+	// register structs that are going to be (de)serialized
+	session.RegisterType(new(domain.User))
 
 	// * create new server
 	app := fiber.New(fiber.Config{
@@ -60,23 +68,24 @@ func main() {
 		SkipSuccessfulRequests: true,
 	}))
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:5173",
-		AllowHeaders:     "Origin, Content-Type, Accept, X-Ts-Custom-Csrf",
+		AllowOrigins:     os.Getenv("FRONTEND_URL"),
+		AllowHeaders:     "Origin, Content-Type, Accept, X-Csrf",
 		AllowCredentials: true,
 		MaxAge:           3600, // 1 hour caching
 	}))
 	app.Use(func(c *fiber.Ctx) error { // check if request has custom csrf protection header set
 		// apparently it is enough for a purely ajax req/res scheme to rely on this header
 		// see https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#employing-custom-request-headers-for-ajaxapi
-		if c.Get("X-Ts-Custom-Csrf") != "1" {
+		if c.Get("X-Csrf") != "1" {
 			return c.SendStatus(fiber.StatusForbidden)
 		}
 		return c.Next()
 	})
 
 	// * register routes for API
-	api := app.Group("/api") // prefix all routes with /api
-	controller.SetupRoutes(api, db, store, session)
+	api := app.Group("/api")                                                                 // prefix all routes with /api
+	api.Get("/", func(c *fiber.Ctx) error { return c.SendString(os.Getenv("API_VERSION")) }) // send API version
+	controller.SetupRoutes(api, db, session)
 
 	// * start listening on port defined in .env
 	wg.Wait()

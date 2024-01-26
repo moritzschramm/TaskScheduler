@@ -9,18 +9,17 @@ import (
 
 func SetupRoutes(api fiber.Router,
 	db infrastructure.Database,
-	store infrastructure.Store,
 	session *session.Store) {
 
-	cc := createControllers(db, store, session)
-
-	api.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("0.1") // send API version
-	})
+	cc := createControllers(db, session)
 
 	auth := api.Group("/auth")
 	auth.Post("/login", cc.authController.Login)
+	auth.Post("/logout", cc.authController.Logout)
 	auth.Post("/register-email", cc.authController.RegisterEmail)
 	auth.Post("/register-user-data", cc.authController.RegisterUser)
 	auth.Post("/verify-email", cc.authController.VerifyEmailAndCreateUser)
+
+	test := api.Group("/test").Use(AuthMiddleware(session))
+	test.Post("/hello", func(c *fiber.Ctx) error { return c.SendString("This works!") })
 }

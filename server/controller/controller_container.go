@@ -13,11 +13,9 @@ type controllerContainer struct {
 	authController AuthController
 }
 
-func createControllers(db infrastructure.Database,
-	store infrastructure.Store,
-	session *session.Store,
-) *controllerContainer {
+func createControllers(db infrastructure.Database, session *session.Store) *controllerContainer {
+
 	return &controllerContainer{
-		authController: NewAuthController(service.NewUserService(repository.NewUserRepository(db, store)), session),
+		authController: NewAuthController(service.NewUserService(repository.NewUserRepository(db)), session),
 	}
 }

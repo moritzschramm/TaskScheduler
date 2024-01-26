@@ -10,6 +10,7 @@ import (
 type (
 	AuthController interface {
 		Login(c *fiber.Ctx) error
+		Logout(c *fiber.Ctx) error
 		RegisterEmail(c *fiber.Ctx) error
 		RegisterUser(c *fiber.Ctx) error
 		VerifyEmailAndCreateUser(c *fiber.Ctx) error
@@ -30,14 +31,12 @@ type (
 	}
 
 	registerUserReq struct {
-		RegisterId string `json:"registerId" validate:"required,uuid4"`
-		Password   string `json:"password" validate:"required,min=10"`
-		Firstname  string `json:"firstname" validate:"required,max=256"`
-		Lastname   string `json:"lastname" validate:"required,max=256"`
+		Password  string `json:"password" validate:"required,min=10"`
+		Firstname string `json:"firstname" validate:"required,max=256"`
+		Lastname  string `json:"lastname" validate:"required,max=256"`
 	}
 
 	verifyEmailAndCreateUserReq struct {
-		RegisterId       string `json:"registerId" validate:"required,uuid4"`
 		VerificationCode string `json:"verificationCode" validate:"required,len=10"`
 	}
 )
@@ -57,7 +56,7 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 		return err
 	}
 
-	user, err := ac.userService.CheckLogin(req.Email, req.Password)
+	user, err := ac.userService.CheckCredentials(req.Email, req.Password)
 	if err != nil {
 		return err
 	}
@@ -75,6 +74,7 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 
 	sess.Reset()
 	sess.Set("user", user)
+	sess.Save()
 
 	return c.JSON(&fiber.Map{
 		"id":        user.Id,
@@ -84,12 +84,31 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 	})
 }
 
+func (ac *authController) Logout(c *fiber.Ctx) error {
+
+	sess, err := ac.session.Get(c)
+	if err != nil {
+		return err
+	}
+
+	sess.Reset()
+
+	return c.SendStatus(fiber.StatusOK)
+}
+
 func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 
 	req, err := ParseAndValidate[registerEmailReq](c)
 	if err != nil {
 		return err
 	}
+
+	sess, err := ac.session.Get(c)
+	if err != nil {
+		return err
+	}
+
+	sess.Reset()
 
 	emailExists, err := ac.userService.CheckEmailExists(req.Email)
 	if err != nil {
@@ -98,18 +117,16 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 
 	if emailExists {
 		return c.Status(fiber.StatusUnauthorized).JSON(&fiber.Map{
-			"email": "Email alreadyd exists.",
+			"email": "Email already exists.",
 		})
 	}
 
-	registerId, err := ac.userService.SetRegisterEmail(req.Email)
+	err = ac.userService.SetRegisterEmail(req.Email, sess)
 	if err != nil {
 		return err
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(&fiber.Map{
-		"registerId": registerId,
-	})
+	return c.SendStatus(fiber.StatusCreated)
 }
 
 func (ac *authController) RegisterUser(c *fiber.Ctx) error {
@@ -119,7 +136,12 @@ func (ac *authController) RegisterUser(c *fiber.Ctx) error {
 		return err
 	}
 
-	err = ac.userService.SetRegisterUserData(req.RegisterId, req.Firstname, req.Lastname, req.Password)
+	sess, err := ac.session.Get(c)
+	if err != nil {
+		return err
+	}
+
+	err = ac.userService.SetRegisterUserData(req.Firstname, req.Lastname, req.Password, sess)
 	if err != nil {
 		return err
 	}
@@ -134,7 +156,12 @@ func (ac *authController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 		return err
 	}
 
-	verified, user, err := ac.userService.VerifyEmailAndGetTempUser(req.RegisterId, req.VerificationCode)
+	sess, err := ac.session.Get(c)
+	if err != nil {
+		return err
+	}
+
+	verified, user, err := ac.userService.VerifyEmailAndGetTempUser(req.VerificationCode, sess)
 	if err != nil {
 		return err
 	}
@@ -146,6 +173,12 @@ func (ac *authController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 	}
 
 	err = ac.userService.CreateUser(user)
+	if err != nil {
+		return err
+	}
+
+	sess.Reset()
+	err = sess.Save()
 	if err != nil {
 		return err
 	}

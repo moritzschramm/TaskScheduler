@@ -10,13 +10,11 @@ export const registerStoreConfig: StoreConfig = {
 export const useRegisterStore = defineStore(registerStoreConfig.name, () => {
   const oldState = loadOldState(registerStoreConfig)
 
-  const registerId = ref<string | undefined>(oldState.registerId ?? undefined)
   const email = ref<string | undefined>(oldState.email ?? undefined)
   const firstname = ref<string | undefined>(oldState.firstname ?? undefined)
   const lastname = ref<string | undefined>(oldState.lastname ?? undefined)
 
-  function setEmail(registerIdStr: string, emailAddr: string) {
-    registerId.value = registerIdStr
+  function setEmail(emailAddr: string) {
     email.value = emailAddr
   }
   function setName(first: string, last: string) {
@@ -30,5 +28,5 @@ export const useRegisterStore = defineStore(registerStoreConfig.name, () => {
     lastname.value = undefined
   }
 
-  return { registerId, email, firstname, lastname, setEmail, setName, $reset }
+  return { email, firstname, lastname, setEmail, setName, $reset }
 })

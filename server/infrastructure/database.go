@@ -1,7 +1,5 @@
 package infrastructure
 
-import "time"
-
 // generic relational database
 type (
 	Database interface {
@@ -26,16 +24,5 @@ type (
 	}
 	Row interface {
 		Scan(dest ...any) error
-	}
-
-	// generic key value store
-	Store interface {
-		Open(addr string)
-		Close() error
-		Get(key string) ([]byte, error)
-		Set(key string, val []byte, exp time.Duration) error
-		Delete(key string) error
-		Reset() error
-		Keys() ([][]byte, error)
 	}
 )
