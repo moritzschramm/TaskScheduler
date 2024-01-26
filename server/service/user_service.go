@@ -52,10 +52,6 @@ func (us *userService) SetRegisterEmail(email string, sess *session.Session) err
 	}
 
 	sess.Set(TMP_USER_KEY, user)
-	err = sess.Save()
-	if err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -78,7 +74,7 @@ func (us *userService) SetRegisterUserData(firstname, lastname, password string,
 
 	sess.Set(TMP_USER_KEY, user)
 
-	return sess.Save()
+	return nil
 }
 
 func (us *userService) VerifyEmailAndGetTempUser(code string, sess *session.Session) (bool, *domain.User, error) {

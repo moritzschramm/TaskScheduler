@@ -1,5 +1,5 @@
 # TaskScheduler
-Mischung aus Todo- und Kalender-App. Nimmt sich Todos und versucht diese automatisch in einen Kalendertermin umzuwandeln, ohne, dass dabei Konflikte entstehen.
+Mischung aus Todo- und Kalender-App. Nimmt sich Todos und versucht diese automatisch in einen Kalendertermin umzuwandeln. Ohne, dass dabei Konflikte entstehen.
 
 ## Dev Setup
 ### Requirements
@@ -28,7 +28,7 @@ cd database
 ./migrate.sh
 ```
 
-This will expose the frontend to http://localhost:5173 and the API to http://localhost:3000/api/. Also, a Postgres service is started in the background and exposed on port 5432. 
+This will expose the frontend to http://localhost:5173 and the API to http://localhost:3000/api/. Also, a Postgres service is started in the background and exposed on port 5432.
 
 If there are any file changes (in client or server), the node and go service will automatically recompile the project and the changes will be live (even with HMR in client!).
 

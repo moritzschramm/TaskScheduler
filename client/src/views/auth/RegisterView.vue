@@ -21,8 +21,7 @@ enum FormState {
     USER_DATA = 2,
     VERIFY = 3
 }
-
-const form = reactive({
+const initialForm = {
     data: {
         email: '',
         firstname: '',
@@ -34,7 +33,8 @@ const form = reactive({
     invalid: true,
     state: FormState.EMAIL,
     error: emptyError
-})
+}
+const form = reactive(initialForm)
 
 // check if page was reloaded and restore state
 onBeforeMount(() => {
@@ -88,7 +88,7 @@ const submit = () => {
                 next(FormState.USER_DATA)
             })
             .catch((error) => {
-                form.error = error.response
+                form.error = error.response.data
             })
     } else if (form.state === FormState.USER_DATA) {
         if (form.data.password.length < 10) {
@@ -137,6 +137,11 @@ const submit = () => {
             })
     }
 }
+
+function reset() {
+    registerStore.$reset()
+    Object.assign(form, initialForm)
+}
 </script>
 
 <template>
@@ -157,18 +162,23 @@ const submit = () => {
             <form>
                 <div v-show="form.state === FormState.EMAIL">
                     <p class="mb-6">Enter your email address to register a new account.</p>
-                    <InputText label="Email" name="email" type="email" :error="form.error" :focused="true"
-                        v-model.trim="form.data.email" @enterPressed="submit" />
+                    <InputText label="Email" name="email" type="email" :error="form.error"
+                        :focused="form.state === FormState.EMAIL" v-model.trim="form.data.email" @enterPressed="submit" />
                 </div>
 
                 <div v-show="form.state === FormState.USER_DATA">
-                    <p class="mb-6">
+                    <p class="mb-4">
                         We have send a verification code to <strong>{{ form.data.email }}</strong><br />
                         In the meantime, please enter the fields below.
                     </p>
-
-                    <InputText label="Firstname" name="firstname" type="text" :error="form.error" :focused="true"
-                        v-model.trim="form.data.firstname" @enterPressed="submit" />
+                    <p class="mb-6 text-sm">
+                        Wrong email address?
+                        <button @click="reset" class="text-blue-500 hover:text-blue-600">Start a new
+                            registration process</button>
+                    </p>
+                    <InputText label="Firstname" name="firstname" type="text" :error="form.error"
+                        :focused="form.state === FormState.USER_DATA" v-model.trim="form.data.firstname"
+                        @enterPressed="submit" />
 
                     <InputText label="Lastname" name="lastname" type="text" :error="form.error"
                         v-model.trim="form.data.lastname" @enterPressed="submit" />
@@ -182,21 +192,23 @@ const submit = () => {
 
                     <InputText label="Confirm Password" name="confirm" type="password" :error="form.error"
                         v-model="form.data.confirm" @enterPressed="submit" />
+
                 </div>
 
                 <div v-show="form.state === FormState.VERIFY">
-                    <p class="mb-6">
+                    <p class="mb-4">
                         Please enter the verification code send to <strong>{{ form.data.email }}</strong>
+                    </p>
+                    <p class="mb-6 text-sm">
+                        Wrong email address?
+                        <button @click="reset" class="text-blue-500 hover:text-blue-600">Start a new
+                            registration process</button>
                     </p>
 
                     <InputText label="Verification Code" name="verificationCode" type="text" :error="form.error"
-                        :focused="true" v-model.trim="form.data.verificationCode" @enterPressed="submit" />
+                        :focused="form.state === FormState.VERIFY" v-model.trim="form.data.verificationCode"
+                        @enterPressed="submit" />
 
-                    <p class="mb-4 text-sm">
-                        Wrong email address?
-                        <a href="/register" target="_blank" class="text-blue-500 hover:text-blue-600">Start a new
-                            registration process</a>
-                    </p>
                 </div>
 
                 <GenericError :error="form.error" />

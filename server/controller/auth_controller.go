@@ -74,7 +74,10 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 
 	sess.Reset()
 	sess.Set("user", user)
-	sess.Save()
+	err = sess.Save()
+	if err != nil {
+		return err
+	}
 
 	return c.JSON(&fiber.Map{
 		"id":        user.Id,
@@ -92,6 +95,10 @@ func (ac *authController) Logout(c *fiber.Ctx) error {
 	}
 
 	sess.Reset()
+	err = sess.Save()
+	if err != nil {
+		return err
+	}
 
 	return c.SendStatus(fiber.StatusOK)
 }
@@ -126,6 +133,11 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 		return err
 	}
 
+	err = sess.Save()
+	if err != nil {
+		return err
+	}
+
 	return c.SendStatus(fiber.StatusCreated)
 }
 
@@ -142,6 +154,11 @@ func (ac *authController) RegisterUser(c *fiber.Ctx) error {
 	}
 
 	err = ac.userService.SetRegisterUserData(req.Firstname, req.Lastname, req.Password, sess)
+	if err != nil {
+		return err
+	}
+
+	err = sess.Save()
 	if err != nil {
 		return err
 	}

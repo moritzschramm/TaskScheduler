@@ -27,13 +27,10 @@ func (db *PostgresDB) Open(postgresDSN string) {
 	if err != nil {
 		log.Fatalf("Unable to create connection pool: %v\n", err)
 		os.Exit(1)
-	} else {
-		log.Println("Database connection setup")
 	}
 
 	err = db.Conn.Ping(context.Background())
 	if err == nil {
-		log.Printf("Database connection established with %v\n", postgresDSN)
 		db.syncOnConnected.Done()
 	} else {
 		log.Fatalf("Failed to establish database connection: %v\n", err)

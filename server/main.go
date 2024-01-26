@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"sync"
+	"time"
 
 	"task-scheduler/controller"
 	"task-scheduler/domain"
@@ -45,6 +46,7 @@ func main() {
 		CookieHTTPOnly: true,
 		CookieSecure:   os.Getenv("DEV_ENV") != "true",
 		CookieSameSite: "Lax",
+		Expiration:     12 * time.Hour,
 	})
 	// register structs that are going to be (de)serialized
 	session.RegisterType(new(domain.User))

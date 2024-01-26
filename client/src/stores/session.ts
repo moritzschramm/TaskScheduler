@@ -29,6 +29,9 @@ export const useSessionStore = defineStore(sessionStoreConfig.name, () => {
     user.value.firstname = first
     user.value.lastname = last
   }
+  function reset() {
+    user.value = {}
+  }
 
-  return { user, setUserId, setEmail, setName }
+  return { user, setUserId, setEmail, setName, reset }
 })
