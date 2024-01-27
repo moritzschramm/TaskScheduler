@@ -159,7 +159,7 @@ function reset() {
                 }}
             </h2>
 
-            <form>
+            <div>
                 <div v-show="form.state === FormState.EMAIL">
                     <p class="mb-6">Enter your email address to register a new account.</p>
                     <InputText label="Email" name="email" type="email" :error="form.error"
@@ -224,7 +224,7 @@ function reset() {
                     <RouterLink to="/login" class="text-blue-500 hover:text-blue-600">Already have an account? Login
                     </RouterLink>
                 </div>
-            </form>
+            </div>
         </div>
     </div>
 </template>

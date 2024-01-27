@@ -58,7 +58,7 @@ const submit = () => {
                 Successfully created account!<br />Please login now
             </div>
 
-            <form>
+            <div>
                 <InputText label="Email" name="email" type="email" :error="form.error" :focused="!sessionStore.user.email"
                     v-model="form.data.email" @enterPressed="submit" />
 
@@ -75,7 +75,7 @@ const submit = () => {
                 <div v-show="!route.query.created" class="text-center">
                     <RouterLink to="/register" class="text-blue-500 hover:text-blue-600">New? Create an account</RouterLink>
                 </div>
-            </form>
+            </div>
         </div>
     </div>
 </template>

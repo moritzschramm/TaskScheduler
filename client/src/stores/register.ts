@@ -4,9 +4,10 @@ import { type StoreConfig, loadOldState } from '@/stores/PersistentStorage'
 
 export const registerStoreConfig: StoreConfig = {
   name: 'registerStore',
-  storageInterface: sessionStorage
+  storageInterface: localStorage
 }
 
+// TODO add expiration date for data in this store (1hr)
 export const useRegisterStore = defineStore(registerStoreConfig.name, () => {
   const oldState = loadOldState(registerStoreConfig)
 
