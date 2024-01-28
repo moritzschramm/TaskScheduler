@@ -15,6 +15,7 @@ services:
       - api
   frontend:
     image: node:21
+    stop_signal: SIGKILL
     networks:
       - skynet
     ports:
