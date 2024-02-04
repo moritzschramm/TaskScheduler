@@ -3,7 +3,6 @@ package infrastructure
 import (
 	"context"
 	"log"
-	"os"
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -26,7 +25,6 @@ func (db *PostgresDB) Open(postgresDSN string) {
 	db.Conn, err = pgxpool.New(context.Background(), postgresDSN)
 	if err != nil {
 		log.Fatalf("Unable to create connection pool: %v\n", err)
-		os.Exit(1)
 	}
 
 	err = db.Conn.Ping(context.Background())
