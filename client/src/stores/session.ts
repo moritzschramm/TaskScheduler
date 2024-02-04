@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { type StoreConfig, loadOldState } from './PersistentStorage'
+import { type StoreConfig, loadOldState } from '@/stores/PersistentStorage'
 
 export interface User {
   id?: string

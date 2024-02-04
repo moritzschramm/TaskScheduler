@@ -20,7 +20,7 @@ export const loadOldState = (storeConfig: StoreConfig): any => {
   return JSON.parse(storeConfig.storageInterface.getItem(storeConfig.name) ?? '{}')
 }
 
-// make state persistent with localStorage
+// make state persistent with localStorage (or whatever storageInterface is set)
 // should be called in main, after pinia is registered
 export const registerPersistentStores = () => {
   registerStateSubscriber(useSessionStore(), sessionStoreConfig)
