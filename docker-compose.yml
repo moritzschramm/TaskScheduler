@@ -28,7 +28,7 @@ services:
     depends_on:
       - api
   api:
-    image: golang:1.21
+    image: golang:1.22
     networks:
       - skynet
     working_dir: /usr/src/app
