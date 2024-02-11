@@ -7,6 +7,7 @@ Make sure that [Docker](https://www.docker.com/products/docker-desktop/) is inst
 #### Setting the config vars
 ```sh
 mkdir database/data     # create necessary data directory for postgres
+docker-compose build    # build docker containers of go and node service
 cp .example.env .env
 ```
 > [!IMPORTANT]
@@ -14,7 +15,7 @@ cp .example.env .env
 
 #### Launching the application
 ```sh
-docker-compose up -d
+docker-compose up
 ```
 
 #### Migrate database schema after first launch
