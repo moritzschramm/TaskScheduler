@@ -24,7 +24,7 @@ services:
       - "5173:5173"
     volumes:
       - ./client:/usr/src/app
-      - node_modules:/usr/src/app/node_modules
+      - ignore_in_filesystem:/usr/src/app/node_modules
       - .env:/usr/src/app/.env
     depends_on:
       - api
@@ -37,7 +37,7 @@ services:
       - skynet
     volumes:
       - ./server:/usr/src/app
-      - .env:/usr/src/app/.env
+      - .env:/usr/src/.env
     depends_on:
       - db
       - redis
@@ -64,4 +64,4 @@ networks:
 volumes:
   data:
     driver: local
-  node_modules:
+  ignore_in_filesystem:

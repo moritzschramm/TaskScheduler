@@ -12,11 +12,9 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/gofiber/fiber/v2"
-	//"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
-	//"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/session"
 
 	"github.com/gofiber/storage/redis/v3"
@@ -25,7 +23,7 @@ import (
 func main() {
 
 	// * load env vars
-	godotenv.Load(".env")
+	godotenv.Load("../.env")
 
 	var wg sync.WaitGroup
 
@@ -64,17 +62,6 @@ func main() {
 	app.Use(recover.New(recover.Config{
 		EnableStackTrace: os.Getenv("DEV_ENV") == "true",
 	}))
-	/*app.Use(limiter.New(limiter.Config{
-		// TODO check if KeyGenerator works when behind reverse proxy
-		// TODO checkout sliding window approach
-		SkipSuccessfulRequests: true,
-	}))
-	app.Use(cors.New(cors.Config{
-		AllowOrigins:     os.Getenv("FRONTEND_URL"),
-		AllowHeaders:     "Origin, Content-Type, Accept, X-Csrf",
-		AllowCredentials: true,
-		MaxAge:           3600, // 1 hour caching
-	}))*/
 	app.Use(func(c *fiber.Ctx) error { // check if request has custom csrf protection header set
 		// apparently it is enough for a purely ajax req/res scheme to rely on this header
 		// see https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#employing-custom-request-headers-for-ajaxapi
