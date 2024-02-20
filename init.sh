@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo
-echo -e "\033[1012mCreating necessary directories and configuration files...\033[0m"
+echo -e "\033[102mCreating necessary directories and configuration files...\033[0m"
 echo
 
 database_password=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | fold -w 50 | head -c 32)
@@ -9,7 +9,6 @@ rm -rf ./database/data # remove already exisiting directory, if present
 mkdir ./database/data
 sed "s/<YOUR PASSWORD HERE>/$database_password/" .example.env > .env
 
-echo
 echo -e "\033[102mBuilding docker images...\033[0m"
 echo
 
