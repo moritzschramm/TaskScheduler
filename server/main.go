@@ -29,7 +29,7 @@ func main() {
 
 	// * connect database pool
 	db := infrastructure.NewDatabaseConnection(&wg)
-	go db.Open(os.Getenv("POSTGRES_DSN"))
+	go db.Open(os.Getenv("POSTGRES_DSN"), os.Getenv("POSTGRES_SCHEMA"))
 	defer db.Close()
 
 	// * connect to key value store

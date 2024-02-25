@@ -12,7 +12,9 @@ Make sure that [Docker](https://www.docker.com/products/docker-desktop/) is inst
 docker-compose up
 ```
 
-The client and API should be available at http://localhost:8000. Also, Postgres and Redis are exposed on port 5432 and 6379 respectively.
+The client and API should be available at http://localhost:8000.
+
+Also, Postgres and Redis dashboards are exposed on port 5050 and 5051 respectively.
 
 ## Development
 If there are any file changes (in client or server), the dockerized node and go services will automatically recompile the project and the changes will be live (even with HMR in client!).

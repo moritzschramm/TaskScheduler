@@ -1,0 +1,41 @@
+{
+  "name": "0001_create_users_table",
+  "operations": [
+    {
+      "create_table": {
+        "name": "users",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "pk": true,
+            "unique": true,
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          {
+            "name": "email",
+            "type": "varchar(512)",
+            "unique": true,
+            "nullable": false
+          },
+          {
+            "name": "passwordhash",
+            "type": "varchar(128)",
+            "nullable": false
+          },
+          {
+            "name": "firstname",
+            "type": "varchar(255)",
+            "nullable": false
+          },
+          {
+            "name": "lastname",
+            "type": "varchar(255)",
+            "nullable": false
+          }
+        ]
+      }
+    }
+  ]
+}

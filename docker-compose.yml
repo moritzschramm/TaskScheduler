@@ -1,7 +1,9 @@
 # ! ONLY FOR DEV; NOT FOR PRODUCTION
 
 services:
+  ####### APP SERVICES
   revproxy:
+    container_name: ts.revproxy
     image: nginx:1.25
     restart: unless-stopped
     networks:
@@ -13,7 +15,9 @@ services:
     depends_on:
       - frontend
       - api
+
   frontend:
+    container_name: ts.frontend
     image: taskscheduler/webclient:1.0
     build:
       context: .
@@ -28,7 +32,9 @@ services:
       - .env:/usr/src/app/.env
     depends_on:
       - api
+
   api:
+    container_name: ts.api
     image: taskscheduler/api:1.0
     build:
       context: .
@@ -39,29 +45,70 @@ services:
       - ./server:/usr/src/app
       - .env:/usr/src/.env
     depends_on:
-      - db
+      - postgres
       - redis
-  db:
+
+  ####### DEV SERVICES
+  pgroll: # database migrations
+    container_name: ts.pgroll
+    image: taskscheduler/pgroll:1.0
+    tty: true
+    build:
+      context: .
+      dockerfile: ./docker/pgroll/Dockerfile
+    networks:
+      - skynet
+    depends_on:
+      - postgres
+  pgadmin: # postgres admin dashboard
+    container_name: ts.pgadmin
+    image: dpage/pgadmin4:8.3
+    ports:
+      - "5050:80"
+    networks:
+      - skynet
+    volumes:
+      - ./database/internal/pgadmin:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    environment:
+      PGADMIN_DEFAULT_EMAIL: db@admin.org
+      PGADMIN_DEFAULT_PASSWORD: db
+      PGADMIN_DISABLE_POSTFIX: 0 == 0 # docker interprets python's 'False' as a string...
+      PGADMIN_CONFIG_SERVER_MODE: 1 == 0
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 1 == 0
+  redisinsight: # redis admin dashboard
+    container_name: ts.redisinsight
+    image: redislabs/redisinsight:v2
+    ports:
+      - "5051:5540"
+    networks:
+      - skynet
+    volumes:
+      - ./database/internal/redisinsight:/data
+    depends_on:
+      - redis
+
+  ###### STORAGE SERVICES
+  postgres:
+    container_name: ts.postgres
     image: postgres:16
     networks:
       - skynet
     env_file: .env
-    ports:
-      - "5432:5432"
     volumes:
-      - ./database/data:/var/lib/postgresql/data
+      - ./database/internal/postgres:/var/lib/postgresql/data
   redis:
+    container_name: ts.redis
     image: redis:7
     networks:
       - skynet
-    ports:
-      - "6379:6379"
+    volumes:
+      - ./database/internal/redis:/data
 
 networks:
   skynet:
     driver: bridge
 
 volumes:
-  data:
-    driver: local
   ignore_in_filesystem:

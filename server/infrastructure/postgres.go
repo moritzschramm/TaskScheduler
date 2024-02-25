@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 
@@ -20,18 +21,18 @@ func NewDatabaseConnection(syncOnConnected *sync.WaitGroup) Database {
 	}
 }
 
-func (db *PostgresDB) Open(postgresDSN string) {
+func (db *PostgresDB) Open(postgresDSN, schema string) {
 	var err error
 	db.Conn, err = pgxpool.New(context.Background(), postgresDSN)
 	if err != nil {
 		log.Fatalf("Unable to create connection pool: %v\n", err)
 	}
 
-	err = db.Conn.Ping(context.Background())
+	err = db.Exec(fmt.Sprintf("SET search_path = '%s'", schema))
 	if err == nil {
 		db.syncOnConnected.Done()
 	} else {
-		log.Fatalf("Failed to establish database connection: %v\n", err)
+		log.Fatalf("Failed to establish database connection with required schema: %v\n", err)
 	}
 }
 
