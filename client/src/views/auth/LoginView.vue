@@ -5,8 +5,9 @@ import { inject, reactive, watch } from 'vue'
 import { HttpClient } from '@/injectable/http'
 import { emptyError } from '@/error'
 import router from '@/router'
-import InputText from '@/components/InputText.vue'
 import GenericError from '@/components/GenericError.vue'
+import InputText from '@/components/InputText.vue'
+import SubmitButton from '@/components/SubmitButton.vue'
 
 const http = inject(HttpClient)
 const route = useRoute()
@@ -18,6 +19,7 @@ const form = reactive({
     password: ''
   },
   invalid: true,
+  loading: false,
   error: emptyError
 })
 
@@ -33,6 +35,7 @@ const submit = () => {
   if (form.invalid) {
     return
   }
+  form.loading = true
   http
     ?.post('/auth/login', form.data)
     .then((response) => {
@@ -44,6 +47,9 @@ const submit = () => {
     .catch((error) => {
       form.data.password = ''
       form.error = error.response.data
+    })
+    .finally(() => {
+      form.loading = false
     })
 }
 </script>
@@ -83,14 +89,14 @@ const submit = () => {
 
         <GenericError :error="form.error" />
 
-        <button
+        <SubmitButton
           @click="submit"
           :disabled="form.invalid"
-          type="button"
-          class="my-2 w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:bg-blue-600 disabled:bg-blue-400"
+          :loading="form.loading"
+          class="w-full"
         >
           Login
-        </button>
+        </SubmitButton>
 
         <div v-show="!route.query.created" class="text-center">
           <RouterLink to="/register" class="text-blue-500 hover:text-blue-600"

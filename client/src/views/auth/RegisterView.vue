@@ -5,9 +5,10 @@ import { HttpClient } from '@/injectable/http'
 import { useRegisterStore } from '@/stores/register'
 import { useSessionStore } from '@/stores/session'
 import { emptyError } from '@/error'
-import StepBar from '@/components/StepBar.vue'
-import InputText from '@/components/InputText.vue'
 import GenericError from '@/components/GenericError.vue'
+import InputText from '@/components/InputText.vue'
+import StepBar from '@/components/StepBar.vue'
+import SubmitButton from '@/components/SubmitButton.vue'
 
 const router = useRouter()
 const http = inject(HttpClient)
@@ -31,6 +32,7 @@ const initialForm = {
     verificationCode: ''
   },
   invalid: true,
+  loading: false,
   state: FormState.EMAIL,
   error: emptyError
 }
@@ -81,6 +83,7 @@ const submit = () => {
     return
   }
   if (form.state === FormState.EMAIL) {
+    form.loading = true
     http
       ?.post('/auth/register-email', { email: form.data.email })
       .then(() => {
@@ -89,6 +92,9 @@ const submit = () => {
       })
       .catch((error) => {
         form.error = error.response.data
+      })
+      .finally(() => {
+        form.loading = false
       })
   } else if (form.state === FormState.USER_DATA) {
     if (form.data.password.length < 10) {
@@ -102,6 +108,7 @@ const submit = () => {
       return
     }
 
+    form.loading = true
     http
       ?.post('/auth/register-user-data', {
         firstname: form.data.firstname,
@@ -115,7 +122,11 @@ const submit = () => {
       .catch((error) => {
         form.error = error.response.data
       })
+      .finally(() => {
+        form.loading = false
+      })
   } else if (form.state === FormState.VERIFY) {
+    form.loading = true
     http
       ?.post('/auth/verify-email', {
         verificationCode: form.data.verificationCode
@@ -134,6 +145,9 @@ const submit = () => {
       .catch((error) => {
         form.error = error.response.data
         form.data.verificationCode = ''
+      })
+      .finally(() => {
+        form.loading = false
       })
   }
 }
@@ -252,14 +266,9 @@ function reset() {
         <GenericError :error="form.error" />
 
         <div class="text-right">
-          <button
-            @click="submit"
-            :disabled="form.invalid"
-            type="button"
-            class="mb-4 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:bg-blue-600 disabled:bg-blue-400"
-          >
+          <SubmitButton @click="submit" :disabled="form.invalid" :loading="form.loading">
             {{ form.state === FormState.VERIFY ? 'Finish' : 'Next step' }}
-          </button>
+          </SubmitButton>
         </div>
 
         <div v-show="form.state === FormState.EMAIL" class="text-center">
