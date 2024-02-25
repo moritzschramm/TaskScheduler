@@ -34,7 +34,7 @@ const initialForm = {
   state: FormState.EMAIL,
   error: emptyError
 }
-const form = reactive(initialForm)
+const form = reactive(structuredClone(initialForm))
 
 // check if page was reloaded and restore state
 onBeforeMount(() => {
@@ -140,7 +140,7 @@ const submit = () => {
 
 function reset() {
   registerStore.$reset()
-  Object.assign(form, initialForm)
+  Object.assign(form, structuredClone(initialForm))
 }
 </script>
 
