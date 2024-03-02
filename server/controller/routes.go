@@ -17,9 +17,9 @@ func SetupRoutes(api fiber.Router,
 	auth.Post("/login", cc.authController.Login)
 	auth.Post("/logout", cc.authController.Logout)
 	auth.Post("/register-email", cc.authController.RegisterEmail)
-	auth.Post("/register-user-data", cc.authController.RegisterUser)
+	auth.Post("/register-password", cc.authController.RegisterPassword)
 	auth.Post("/verify-email", cc.authController.VerifyEmailAndCreateUser)
 
 	test := api.Group("/test").Use(AuthMiddleware(session))
-	test.Post("/hello", func(c *fiber.Ctx) error { return c.SendString("This works!") })
+	test.Post("/hello", func(c *fiber.Ctx) error { return c.SendString("This works!") }) // ! remove
 }

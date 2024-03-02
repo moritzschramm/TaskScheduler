@@ -2,6 +2,7 @@ package controller
 
 import (
 	"task-scheduler/domain"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
@@ -12,7 +13,7 @@ type (
 		Login(c *fiber.Ctx) error
 		Logout(c *fiber.Ctx) error
 		RegisterEmail(c *fiber.Ctx) error
-		RegisterUser(c *fiber.Ctx) error
+		RegisterPassword(c *fiber.Ctx) error
 		VerifyEmailAndCreateUser(c *fiber.Ctx) error
 	}
 
@@ -22,22 +23,20 @@ type (
 	}
 
 	loginReq struct {
-		Email    string `json:"email" validate:"required,email,max=512"`
+		Email    string `json:"email" validate:"required,email,max=511"`
 		Password string `json:"password" validate:"required"`
 	}
 
 	registerEmailReq struct {
-		Email string `json:"email" validate:"required,email,max=512"`
+		Email string `json:"email" validate:"required,email,max=511"`
 	}
 
-	registerUserReq struct {
-		Password  string `json:"password" validate:"required,min=10"`
-		Firstname string `json:"firstname" validate:"required,max=256"`
-		Lastname  string `json:"lastname" validate:"required,max=256"`
+	registerPasswordReq struct {
+		Password string `json:"password" validate:"required,min=10"`
 	}
 
 	verifyEmailAndCreateUserReq struct {
-		VerificationCode string `json:"verificationCode" validate:"required,len=10"`
+		VerificationCode string `json:"verificationCode" validate:"required,len=6"`
 	}
 )
 
@@ -80,10 +79,9 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(&fiber.Map{
-		"id":        user.Id,
-		"email":     user.Email,
-		"firstname": user.Firstname,
-		"lastname":  user.Lastname,
+		"id":    user.Id,
+		"email": user.Email,
+		"name":  user.Name,
 	})
 }
 
@@ -116,6 +114,7 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 	}
 
 	sess.Reset()
+	sess.SetExpiry(30 * time.Minute)
 
 	emailExists, err := ac.userService.CheckEmailExists(req.Email)
 	if err != nil {
@@ -141,9 +140,9 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusCreated)
 }
 
-func (ac *authController) RegisterUser(c *fiber.Ctx) error {
+func (ac *authController) RegisterPassword(c *fiber.Ctx) error {
 
-	req, err := ParseAndValidate[registerUserReq](c)
+	req, err := ParseAndValidate[registerPasswordReq](c)
 	if err != nil {
 		return err
 	}
@@ -153,7 +152,7 @@ func (ac *authController) RegisterUser(c *fiber.Ctx) error {
 		return err
 	}
 
-	err = ac.userService.SetRegisterUserData(req.Firstname, req.Lastname, req.Password, sess)
+	err = ac.userService.SetRegisterPassword(req.Password, sess)
 	if err != nil {
 		return err
 	}

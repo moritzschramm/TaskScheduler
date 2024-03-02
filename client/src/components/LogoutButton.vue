@@ -2,7 +2,7 @@
 import { HttpClient } from '@/injectable/http'
 import router from '@/router'
 import { inject } from 'vue'
-import { useSessionStore } from '@/stores/session'
+import { useSessionStore } from '@/stores/sessionStore'
 
 const http = inject(HttpClient)
 const sessionStore = useSessionStore()

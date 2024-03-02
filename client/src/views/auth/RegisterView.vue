@@ -2,11 +2,12 @@
 import { RouterLink, useRouter } from 'vue-router'
 import { inject, reactive, watch, onBeforeMount } from 'vue'
 import { HttpClient } from '@/injectable/http'
-import { useRegisterStore } from '@/stores/register'
-import { useSessionStore } from '@/stores/session'
+import { useRegisterStore } from '@/stores/registerStore'
+import { useSessionStore } from '@/stores/sessionStore'
 import { emptyError } from '@/error'
 import GenericError from '@/components/GenericError.vue'
 import InputText from '@/components/InputText.vue'
+import InputVerificationCode from '@/components/InputVerificationCode.vue'
 import StepBar from '@/components/StepBar.vue'
 import SubmitButton from '@/components/SubmitButton.vue'
 
@@ -19,14 +20,12 @@ const EMAIL_REGEX = /^.+@.+\..+$/
 
 enum FormState {
   EMAIL = 1,
-  USER_DATA = 2,
+  PASSWORD = 2,
   VERIFY = 3
 }
 const initialForm = {
   data: {
     email: '',
-    firstname: '',
-    lastname: '',
     password: '',
     confirm: '',
     verificationCode: ''
@@ -40,14 +39,11 @@ const form = reactive(structuredClone(initialForm))
 
 // check if page was reloaded and restore state
 onBeforeMount(() => {
-  if (registerStore.email) {
-    form.data.email = registerStore.email
-    form.state = FormState.USER_DATA
-  }
-  if (registerStore.firstname && registerStore.lastname) {
-    form.data.firstname = registerStore.firstname
-    form.data.lastname = registerStore.lastname
-    form.state = FormState.VERIFY
+  if (registerStore.state) {
+    form.state = registerStore.state
+    if (registerStore.email) {
+      form.data.email = registerStore.email
+    }
   }
 })
 
@@ -57,10 +53,8 @@ watch(
   (data) => {
     if (form.state === FormState.EMAIL) {
       form.invalid = data.email.length === 0 || !EMAIL_REGEX.test(data.email)
-    } else if (form.state === FormState.USER_DATA) {
+    } else if (form.state === FormState.PASSWORD) {
       form.invalid =
-        data.firstname.length === 0 ||
-        data.lastname.length === 0 ||
         data.password.length === 0 ||
         data.confirm.length === 0
     } else if (form.state === FormState.VERIFY) {
@@ -75,6 +69,7 @@ const next = (state: FormState) => {
   form.invalid = true
   form.error = emptyError
   form.state = state
+  registerStore.setState(state)
 }
 
 // submit form at current state and go to next state
@@ -88,7 +83,7 @@ const submit = () => {
       ?.post('/auth/register-email', { email: form.data.email })
       .then(() => {
         registerStore.setEmail(form.data.email)
-        next(FormState.USER_DATA)
+        next(FormState.PASSWORD)
       })
       .catch((error) => {
         form.error = error.response.data
@@ -96,11 +91,7 @@ const submit = () => {
       .finally(() => {
         form.loading = false
       })
-  } else if (form.state === FormState.USER_DATA) {
-    if (form.data.password.length < 10) {
-      form.error = { confirm: 'Password needs to have at least 10 characters' }
-      return
-    }
+  } else if (form.state === FormState.PASSWORD) {
 
     if (form.data.password !== form.data.confirm) {
       form.error = { confirm: 'Passwords do not match' }
@@ -110,13 +101,10 @@ const submit = () => {
 
     form.loading = true
     http
-      ?.post('/auth/register-user-data', {
-        firstname: form.data.firstname,
-        lastname: form.data.lastname,
+      ?.post('/auth/register-password', {
         password: form.data.password
       })
       .then(() => {
-        registerStore.setName(form.data.firstname, form.data.lastname)
         next(FormState.VERIFY)
       })
       .catch((error) => {
@@ -124,6 +112,7 @@ const submit = () => {
       })
       .finally(() => {
         form.loading = false
+        form.data.confirm = ''
       })
   } else if (form.state === FormState.VERIFY) {
     form.loading = true
@@ -132,11 +121,10 @@ const submit = () => {
         verificationCode: form.data.verificationCode
       })
       .then(() => {
-        if (registerStore.email && registerStore.firstname && registerStore.lastname) {
+        if (registerStore.email) {
           session.setEmail(registerStore.email)
-          session.setName(registerStore.firstname, registerStore.lastname)
-          registerStore.$reset()
         }
+        registerStore.$reset()
         router.replace({
           name: 'login',
           query: { created: 'now' }
@@ -166,10 +154,10 @@ function reset() {
       <h2 class="text-2xl font-semibold mb-4">
         {{
           form.state === FormState.EMAIL
-            ? 'Register New Account'
-            : form.state === FormState.USER_DATA
-              ? 'Enter Your Account Data'
-              : 'Verify Email Address'
+            ? 'Enter Your Email Address'
+            : form.state === FormState.PASSWORD
+              ? 'Enter a Password'
+              : 'Verify Your Email Address'
         }}
       </h2>
 
@@ -187,38 +175,20 @@ function reset() {
           />
         </div>
 
-        <div v-show="form.state === FormState.USER_DATA">
+        <div v-show="form.state === FormState.PASSWORD">
           <p class="mb-4">
             We have send a verification code to <strong>{{ form.data.email }}</strong
             ><br />
-            In the meantime, please enter the fields below.
+            In the meantime, please enter a password.
           </p>
-          <p class="mb-6 text-sm">
+          <p class="mb-4 text-sm">
             Wrong email address?
             <button @click="reset" class="text-blue-500 hover:text-blue-600">
               Start a new registration process
             </button>
           </p>
-          <InputText
-            label="Firstname"
-            name="firstname"
-            type="text"
-            :error="form.error"
-            :focused="form.state === FormState.USER_DATA"
-            v-model.trim="form.data.firstname"
-            @enterPressed="submit"
-          />
 
-          <InputText
-            label="Lastname"
-            name="lastname"
-            type="text"
-            :error="form.error"
-            v-model.trim="form.data.lastname"
-            @enterPressed="submit"
-          />
-
-          <p class="mt-6 mb-2 text-sm">
+          <p class="mt-4 mb-4 text-sm">
             Make sure to choose a strong password of at least 10 characters
           </p>
 
@@ -252,10 +222,9 @@ function reset() {
             </button>
           </p>
 
-          <InputText
+          <InputVerificationCode
             label="Verification Code"
             name="verificationCode"
-            type="text"
             :error="form.error"
             :focused="form.state === FormState.VERIFY"
             v-model.trim="form.data.verificationCode"

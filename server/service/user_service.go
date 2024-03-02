@@ -13,7 +13,7 @@ import (
 )
 
 const TMP_USER_KEY = "temp_user"
-const ERROR_DESERIALIZATION_OF_USER_FAILED = "Failed to deserialize *User from session storage"
+const ERROR_DESERIALIZATION_OF_USER_FAILED = "failed to deserialize *User from session storage"
 
 type userService struct {
 	userRepository domain.UserRepository
@@ -56,7 +56,7 @@ func (us *userService) SetRegisterEmail(email string, sess *session.Session) err
 	return nil
 }
 
-func (us *userService) SetRegisterUserData(firstname, lastname, password string, sess *session.Session) error {
+func (us *userService) SetRegisterPassword(password string, sess *session.Session) error {
 
 	hashedPassword, err := argon2id.CreateHash(password, argon2id.DefaultParams)
 	if err != nil {
@@ -68,8 +68,6 @@ func (us *userService) SetRegisterUserData(firstname, lastname, password string,
 		return errors.New(ERROR_DESERIALIZATION_OF_USER_FAILED)
 	}
 
-	user.Firstname = firstname
-	user.Lastname = lastname
 	user.PasswordHash = hashedPassword
 
 	sess.Set(TMP_USER_KEY, user)
@@ -124,7 +122,7 @@ func (us *userService) CheckCredentials(email, password string) (*domain.User, e
 
 func GenerateVerificationCode() (string, error) {
 	const letters = "123456789ABCDEFGHIJKLMNPQRSTUVWXYZ"
-	const length = 10
+	const length = 6
 	ret := make([]byte, length)
 	for i := 0; i < length; i++ {
 		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))

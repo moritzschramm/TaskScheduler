@@ -6,8 +6,7 @@ type (
 	User struct {
 		Id                   string
 		Email                string
-		Firstname            string
-		Lastname             string
+		Name                 string
 		PasswordHash         string
 		VerificationCodeHash string
 	}
@@ -16,7 +15,7 @@ type (
 		CheckEmailExists(email string) (bool, error)
 
 		SetRegisterEmail(email string, sess *session.Session) error
-		SetRegisterUserData(firstname, lastname, password string, sess *session.Session) error
+		SetRegisterPassword(password string, sess *session.Session) error
 		VerifyEmailAndGetTempUser(code string, sess *session.Session) (bool, *User, error)
 
 		CreateUser(user *User) error

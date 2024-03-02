@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from 'vue-router'
-import { useSessionStore } from '@/stores/session'
+import { useSessionStore } from '@/stores/sessionStore'
 import { inject, reactive, watch } from 'vue'
 import { HttpClient } from '@/injectable/http'
 import { emptyError } from '@/error'

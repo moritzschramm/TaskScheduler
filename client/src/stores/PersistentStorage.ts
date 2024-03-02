@@ -1,5 +1,5 @@
-import { sessionStoreConfig, useSessionStore } from '@/stores/session'
-import { registerStoreConfig, useRegisterStore } from '@/stores/register'
+import { sessionStoreConfig, useSessionStore } from '@/stores/sessionStore'
+import { registerStoreConfig, useRegisterStore } from '@/stores/registerStore'
 import type { Store } from 'pinia'
 
 export interface StoreConfig {

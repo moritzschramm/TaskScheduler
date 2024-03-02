@@ -5,8 +5,7 @@ import { type StoreConfig, loadOldState } from '@/stores/PersistentStorage'
 export interface User {
   id?: string
   email?: string
-  firstname?: string
-  lastname?: string
+  name?: string
 }
 
 export const sessionStoreConfig: StoreConfig = {
@@ -25,9 +24,8 @@ export const useSessionStore = defineStore(sessionStoreConfig.name, () => {
   function setEmail(email: string) {
     user.value.email = email
   }
-  function setName(first: string, last: string) {
-    user.value.firstname = first
-    user.value.lastname = last
+  function setName(name: string) {
+    user.value.name = name
   }
   function reset() {
     user.value = {}

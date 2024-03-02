@@ -7,7 +7,7 @@ import { axiosInstance, HttpClient } from '@/injectable/http'
 import App from '@/App.vue'
 
 import router from '@/router'
-import { useSessionStore } from '@/stores/session'
+import { useSessionStore } from '@/stores/sessionStore'
 import { registerPersistentStores } from '@/stores/PersistentStorage'
 
 const app = createApp(App)
