@@ -7,7 +7,7 @@ const props = defineProps<{
   label: string
   type: string
   error?: Error
-  focused?: boolean
+  focus?: boolean
 }>()
 
 defineEmits(['enterPressed'])
@@ -16,7 +16,7 @@ const inputRef = ref<HTMLInputElement | null>(null)
 const content = defineModel()
 
 onMounted(() => {
-  if (props.focused) {
+  if (props.focus) {
     inputRef.value?.focus()
   }
 })

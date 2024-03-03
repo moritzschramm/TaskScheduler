@@ -41,16 +41,14 @@ const submit = () => {
     .then((response) => {
       session.setUserId(response.data.id)
       session.setEmail(response.data.email)
-      session.setName(response.data.firstname, response.data.lastname)
+      session.setName(response.data.name)
       router.replace({ name: 'home' })
     })
     .catch((error) => {
       form.data.password = ''
       form.error = error.response.data
     })
-    .finally(() => {
-      form.loading = false
-    })
+    .finally(() => form.loading = false)
 }
 </script>
 
@@ -72,7 +70,7 @@ const submit = () => {
           name="email"
           type="email"
           :error="form.error"
-          :focused="!session.user.email"
+          :focus="!session.user.email"
           v-model="form.data.email"
           @enterPressed="submit"
         />
@@ -82,7 +80,7 @@ const submit = () => {
           name="password"
           type="password"
           :error="form.error"
-          :focused="!!session.user.email"
+          :focus="!!session.user.email"
           v-model="form.data.password"
           @enterPressed="submit"
         />

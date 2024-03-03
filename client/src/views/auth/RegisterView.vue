@@ -54,18 +54,16 @@ watch(
     if (form.state === FormState.EMAIL) {
       form.invalid = data.email.length === 0 || !EMAIL_REGEX.test(data.email)
     } else if (form.state === FormState.PASSWORD) {
-      form.invalid =
-        data.password.length === 0 ||
-        data.confirm.length === 0
+      form.invalid = data.password.length === 0 || data.confirm.length === 0
     } else if (form.state === FormState.VERIFY) {
-      form.invalid = data.verificationCode.length === 0
+      form.invalid = data.verificationCode.length !== 6
     }
   },
   { deep: true } // important for state watching on deeper levels then data (i.e. data.email etc.)
 )
 
 // go to next form state
-const next = (state: FormState) => {
+function next(state: FormState) {
   form.invalid = true
   form.error = emptyError
   form.state = state
@@ -73,7 +71,7 @@ const next = (state: FormState) => {
 }
 
 // submit form at current state and go to next state
-const submit = () => {
+function submit() {
   if (form.invalid) {
     return
   }
@@ -88,11 +86,8 @@ const submit = () => {
       .catch((error) => {
         form.error = error.response.data
       })
-      .finally(() => {
-        form.loading = false
-      })
+      .finally(() => (form.loading = false))
   } else if (form.state === FormState.PASSWORD) {
-
     if (form.data.password !== form.data.confirm) {
       form.error = { confirm: 'Passwords do not match' }
       form.data.confirm = ''
@@ -109,11 +104,9 @@ const submit = () => {
       })
       .catch((error) => {
         form.error = error.response.data
-      })
-      .finally(() => {
-        form.loading = false
         form.data.confirm = ''
       })
+      .finally(() => (form.loading = false))
   } else if (form.state === FormState.VERIFY) {
     form.loading = true
     http
@@ -134,9 +127,7 @@ const submit = () => {
         form.error = error.response.data
         form.data.verificationCode = ''
       })
-      .finally(() => {
-        form.loading = false
-      })
+      .finally(() => (form.loading = false))
   }
 }
 
@@ -162,20 +153,20 @@ function reset() {
       </h2>
 
       <div>
-        <div v-show="form.state === FormState.EMAIL">
+        <div v-if="form.state === FormState.EMAIL">
           <p class="mb-6">Enter your email address to register a new account.</p>
           <InputText
             label="Email"
             name="email"
             type="email"
             :error="form.error"
-            :focused="form.state === FormState.EMAIL"
+            :focus="form.state === FormState.EMAIL"
             v-model.trim="form.data.email"
             @enterPressed="submit"
           />
         </div>
 
-        <div v-show="form.state === FormState.PASSWORD">
+        <div v-if="form.state === FormState.PASSWORD">
           <p class="mb-4">
             We have send a verification code to <strong>{{ form.data.email }}</strong
             ><br />
@@ -197,6 +188,7 @@ function reset() {
             name="password"
             type="password"
             :error="form.error"
+            :focus="form.state === FormState.PASSWORD"
             v-model="form.data.password"
             @enterPressed="submit"
           />
@@ -211,7 +203,7 @@ function reset() {
           />
         </div>
 
-        <div v-show="form.state === FormState.VERIFY">
+        <div v-if="form.state === FormState.VERIFY">
           <p class="mb-4">
             Please enter the verification code send to <strong>{{ form.data.email }}</strong>
           </p>
@@ -226,8 +218,8 @@ function reset() {
             label="Verification Code"
             name="verificationCode"
             :error="form.error"
-            :focused="form.state === FormState.VERIFY"
-            v-model.trim="form.data.verificationCode"
+            :focus="form.state === FormState.VERIFY"
+            v-model="form.data.verificationCode"
             @enterPressed="submit"
           />
         </div>
