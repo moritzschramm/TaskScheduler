@@ -1,10 +1,10 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"math/big"
 	"time"
-	"errors"
 
 	"crypto/rand"
 

@@ -4,10 +4,10 @@ go 1.22
 
 require (
 	github.com/alexedwards/argon2id v1.0.0
-	github.com/go-playground/validator/v10 v10.18.0
+	github.com/go-playground/validator/v10 v10.19.0
 	github.com/gofiber/fiber/v2 v2.52.2
-	github.com/gofiber/storage/redis/v3 v3.1.0
-	github.com/jackc/pgx/v5 v5.5.3
+	github.com/gofiber/storage/redis/v3 v3.1.1
+	github.com/jackc/pgx/v5 v5.5.5
 	github.com/joho/godotenv v1.5.1
 )
 
@@ -32,9 +32,9 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.52.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
-	golang.org/x/crypto v0.20.0 // indirect
-	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/net v0.22.0 // indirect
 	golang.org/x/sync v0.6.0 // indirect
-	golang.org/x/sys v0.17.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 )

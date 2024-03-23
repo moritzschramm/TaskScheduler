@@ -64,7 +64,6 @@ func RouteLogout(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusOK)
 }
 
-
 func checkCredentials(email, password string) (*User, error) {
 	// TODO save IP to block after 3 attempts -> in service
 

@@ -71,7 +71,7 @@ func main() {
 	})
 
 	// * register routes for API
-	api := app.Group("/api")                                                    // prefix all routes with /api
+	api := app.Group("/api")                                                                 // prefix all routes with /api
 	api.Get("/", func(c *fiber.Ctx) error { return c.SendString(os.Getenv("API_VERSION")) }) // send API version
 	SetupRoutes(api)
 
