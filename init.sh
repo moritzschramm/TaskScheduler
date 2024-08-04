@@ -1,18 +1,15 @@
 #!/bin/bash
 
-# cleanup to start from scratch
-echo -e "\033[102mPerforming cleanup...\033[0m"
-
-docker-compose down
-rm -rf ./database/internal
-
 echo -e "\033[102mCreating local directories and configuration files...\033[0m"
 
-mkdir -p ./database/internal/postgres ./database/internal/redis ./database/internal/redisinsight ./database/internal/pgadmin # create necessary data directories
 database_password=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-zA-Z0-9' | fold -w 50 | head -c 32) # generate db password
-touch .env
 sed "s/<YOUR PASSWORD HERE>/$database_password/" .example.env > .env # generate env file
 [ ! -f .env ] || export $(grep -v '^#' .env | xargs) # load variables from env file
+
+# cleanup to start from scratch
+docker-compose down
+rm -rf ./database/internal
+mkdir -p ./database/internal/postgres ./database/internal/redis ./database/internal/redisinsight ./database/internal/pgadmin # create necessary data directories
 
 echo -e "\033[102mBuilding docker images...\033[0m"
 

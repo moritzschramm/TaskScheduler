@@ -5,6 +5,10 @@ import (
 	"sync"
 	"time"
 
+	"task-scheduler/controller"
+	"task-scheduler/domain"
+	"task-scheduler/infrastructure"
+
 	"github.com/joho/godotenv"
 
 	"github.com/gofiber/fiber/v2"
@@ -16,9 +20,6 @@ import (
 	"github.com/gofiber/storage/redis/v3"
 )
 
-var store *session.Store
-var db Database
-
 func main() {
 
 	// * load env vars
@@ -27,26 +28,26 @@ func main() {
 	var wg sync.WaitGroup
 
 	// * connect database pool
-	db = NewDatabaseConnection(&wg)
+	db := infrastructure.NewDatabaseConnection(&wg)
 	go db.Open(os.Getenv("POSTGRES_DSN"), os.Getenv("POSTGRES_SCHEMA"))
 	defer db.Close()
 
 	// * connect to key value store
-	storage := redis.New(redis.Config{
+	store := redis.New(redis.Config{
 		Host: os.Getenv("REDIS_HOST"),
 	})
-	defer storage.Close()
+	defer store.Close()
 
 	// * create session storage
-	store = session.New(session.Config{
-		Storage:        storage,
+	session := session.New(session.Config{
+		Storage:        store,
 		CookieHTTPOnly: true,
 		CookieSecure:   os.Getenv("DEV_ENV") != "true",
 		CookieSameSite: "Lax",
 		Expiration:     12 * time.Hour,
 	})
 	// register structs that are going to be (de)serialized
-	store.RegisterType(new(User))
+	session.RegisterType(new(domain.User))
 
 	// * create new server
 	app := fiber.New(fiber.Config{
@@ -73,7 +74,7 @@ func main() {
 	// * register routes for API
 	api := app.Group("/api")                                                                 // prefix all routes with /api
 	api.Get("/", func(c *fiber.Ctx) error { return c.SendString(os.Getenv("API_VERSION")) }) // send API version
-	SetupRoutes(api)
+	controller.SetupRoutes(api, db, session)
 
 	// * start listening on port defined in .env
 	wg.Wait()

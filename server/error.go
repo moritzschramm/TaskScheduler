@@ -35,7 +35,7 @@ func GlobalErrorHandler(c *fiber.Ctx, err error) error {
 			jsonField := []rune(err.Field())
 			jsonField[0] = unicode.ToLower(jsonField[0])
 
-			errMsg[string(jsonField)] = getValidationErrorMsg(err.StructField(), err.Tag(), err.Param())
+			errMsg[string(jsonField)] = GetValidationErrorMsg(err.StructField(), err.Tag(), err.Param())
 		}
 
 		return c.Status(fiber.StatusBadRequest).JSON(errMsg)
@@ -46,7 +46,7 @@ func GlobalErrorHandler(c *fiber.Ctx, err error) error {
 	})
 }
 
-func getValidationErrorMsg(field, tag, param string) string {
+func GetValidationErrorMsg(field, tag, param string) string {
 
 	readableField := internalCamelCaseToSpaceRegex.ReplaceAllString(field, "$1 $2")
 
