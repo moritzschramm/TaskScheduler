@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"task-scheduler/controller"
-	"task-scheduler/domain"
 	"task-scheduler/infrastructure"
+	"task-scheduler/repository"
+	"task-scheduler/routes"
 
 	"github.com/joho/godotenv"
 
@@ -25,7 +25,7 @@ func main() {
 	// * load env vars
 	godotenv.Load("../.env")
 
-	var wg sync.WaitGroup
+	var wg sync.WaitGroup // used for to synchronize async init steps of server
 
 	// * connect database pool
 	db := infrastructure.NewDatabaseConnection(&wg)
@@ -47,7 +47,7 @@ func main() {
 		Expiration:     12 * time.Hour,
 	})
 	// register structs that are going to be (de)serialized
-	session.RegisterType(new(domain.User))
+	session.RegisterType(new(repository.User))
 
 	// * create new server
 	app := fiber.New(fiber.Config{
@@ -74,7 +74,7 @@ func main() {
 	// * register routes for API
 	api := app.Group("/api")                                                                 // prefix all routes with /api
 	api.Get("/", func(c *fiber.Ctx) error { return c.SendString(os.Getenv("API_VERSION")) }) // send API version
-	controller.SetupRoutes(api, db, session)
+	routes.Setup(api, db, session)
 
 	// * start listening on port defined in .env
 	wg.Wait()

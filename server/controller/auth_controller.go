@@ -1,56 +1,33 @@
 package controller
 
 import (
-	"task-scheduler/domain"
+	"task-scheduler/service"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
 )
 
-type (
-	AuthController interface {
-		Login(c *fiber.Ctx) error
-		Logout(c *fiber.Ctx) error
-		RegisterEmail(c *fiber.Ctx) error
-		RegisterPassword(c *fiber.Ctx) error
-		VerifyEmailAndCreateUser(c *fiber.Ctx) error
-	}
+type AuthController struct {
+	userService *service.UserService
+	session     *session.Store
+}
 
-	authController struct {
-		userService domain.UserService
-		session     *session.Store
-	}
-
-	loginReq struct {
-		Email    string `json:"email" validate:"required,email,max=511"`
-		Password string `json:"password" validate:"required"`
-	}
-
-	registerEmailReq struct {
-		Email string `json:"email" validate:"required,email,max=511"`
-	}
-
-	registerPasswordReq struct {
-		Password string `json:"password" validate:"required,min=10"`
-	}
-
-	verifyEmailAndCreateUserReq struct {
-		VerificationCode string `json:"verificationCode" validate:"required,len=6"`
-	}
-)
-
-// constructor
-func NewAuthController(us domain.UserService, session *session.Store) AuthController {
-	return &authController{
+func CreateAuthController(us *service.UserService, session *session.Store) *AuthController {
+	return &AuthController{
 		userService: us,
 		session:     session,
 	}
 }
 
-func (ac *authController) Login(c *fiber.Ctx) error {
+func (ac *AuthController) Login(c *fiber.Ctx) error {
 
-	req, err := ParseAndValidate[loginReq](c)
+	type Request struct {
+		Email    string `json:"email" validate:"required,email,max=511"`
+		Password string `json:"password" validate:"required"`
+	}
+
+	req, err := ParseAndValidate[Request](c)
 	if err != nil {
 		return err
 	}
@@ -85,7 +62,7 @@ func (ac *authController) Login(c *fiber.Ctx) error {
 	})
 }
 
-func (ac *authController) Logout(c *fiber.Ctx) error {
+func (ac *AuthController) Logout(c *fiber.Ctx) error {
 
 	sess, err := ac.session.Get(c)
 	if err != nil {
@@ -101,9 +78,13 @@ func (ac *authController) Logout(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusOK)
 }
 
-func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
+func (ac *AuthController) RegisterEmail(c *fiber.Ctx) error {
 
-	req, err := ParseAndValidate[registerEmailReq](c)
+	type Request struct {
+		Email string `json:"email" validate:"required,email,max=511"`
+	}
+
+	req, err := ParseAndValidate[Request](c)
 	if err != nil {
 		return err
 	}
@@ -140,9 +121,13 @@ func (ac *authController) RegisterEmail(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusCreated)
 }
 
-func (ac *authController) RegisterPassword(c *fiber.Ctx) error {
+func (ac *AuthController) RegisterPassword(c *fiber.Ctx) error {
 
-	req, err := ParseAndValidate[registerPasswordReq](c)
+	type Request struct {
+		Password string `json:"password" validate:"required,min=10"`
+	}
+
+	req, err := ParseAndValidate[Request](c)
 	if err != nil {
 		return err
 	}
@@ -165,9 +150,13 @@ func (ac *authController) RegisterPassword(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusCreated)
 }
 
-func (ac *authController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
+func (ac *AuthController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 
-	req, err := ParseAndValidate[verifyEmailAndCreateUserReq](c)
+	type Request struct {
+		VerificationCode string `json:"verificationCode" validate:"required,len=6"`
+	}
+
+	req, err := ParseAndValidate[Request](c)
 	if err != nil {
 		return err
 	}

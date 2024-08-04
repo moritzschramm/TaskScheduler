@@ -4,7 +4,7 @@ import (
 	"errors"
 	"log"
 	"math/big"
-	"task-scheduler/domain"
+	"task-scheduler/repository"
 
 	"crypto/rand"
 
@@ -15,22 +15,22 @@ import (
 const TMP_USER_KEY = "temp_user"
 const ERROR_DESERIALIZATION_OF_USER_FAILED = "failed to deserialize *User from session storage"
 
-type userService struct {
-	userRepository domain.UserRepository
+type UserService struct {
+	userRepository *repository.UserRepository
 }
 
-func NewUserService(ur domain.UserRepository) domain.UserService {
-	return &userService{
+func CreateUserService(ur *repository.UserRepository) *UserService {
+	return &UserService{
 		userRepository: ur,
 	}
 }
 
-func (us *userService) CheckEmailExists(email string) (bool, error) {
+func (us *UserService) CheckEmailExists(email string) (bool, error) {
 
 	return us.userRepository.ExistsEmail(email)
 }
 
-func (us *userService) SetRegisterEmail(email string, sess *session.Session) error {
+func (us *UserService) SetRegisterEmail(email string, sess *session.Session) error {
 
 	code, err := GenerateVerificationCode()
 	if err != nil {
@@ -46,7 +46,7 @@ func (us *userService) SetRegisterEmail(email string, sess *session.Session) err
 		return err
 	}
 
-	user := &domain.User{
+	user := &repository.User{
 		Email:                email,
 		VerificationCodeHash: hashedCode,
 	}
@@ -56,14 +56,14 @@ func (us *userService) SetRegisterEmail(email string, sess *session.Session) err
 	return nil
 }
 
-func (us *userService) SetRegisterPassword(password string, sess *session.Session) error {
+func (us *UserService) SetRegisterPassword(password string, sess *session.Session) error {
 
 	hashedPassword, err := argon2id.CreateHash(password, argon2id.DefaultParams)
 	if err != nil {
 		return err
 	}
 
-	user, ok := sess.Get(TMP_USER_KEY).(*domain.User)
+	user, ok := sess.Get(TMP_USER_KEY).(*repository.User)
 	if !ok {
 		return errors.New(ERROR_DESERIALIZATION_OF_USER_FAILED)
 	}
@@ -75,10 +75,10 @@ func (us *userService) SetRegisterPassword(password string, sess *session.Sessio
 	return nil
 }
 
-func (us *userService) VerifyEmailAndGetTempUser(code string, sess *session.Session) (bool, *domain.User, error) {
+func (us *UserService) VerifyEmailAndGetTempUser(code string, sess *session.Session) (bool, *repository.User, error) {
 	// TODO save IP to block after 3 attempts -> in service
 
-	user, ok := sess.Get(TMP_USER_KEY).(*domain.User)
+	user, ok := sess.Get(TMP_USER_KEY).(*repository.User)
 	if !ok {
 		return false, nil, errors.New(ERROR_DESERIALIZATION_OF_USER_FAILED)
 	}
@@ -95,12 +95,12 @@ func (us *userService) VerifyEmailAndGetTempUser(code string, sess *session.Sess
 	return true, user, nil
 }
 
-func (us *userService) CreateUser(user *domain.User) error {
+func (us *UserService) CreateUser(user *repository.User) error {
 
 	return us.userRepository.CreateUser(user)
 }
 
-func (us *userService) CheckCredentials(email, password string) (*domain.User, error) {
+func (us *UserService) CheckCredentials(email, password string) (*repository.User, error) {
 	// TODO save IP to block after 3 attempts -> in service
 
 	user, err := us.userRepository.GetUserByEmail(email)

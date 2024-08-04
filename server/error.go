@@ -14,7 +14,6 @@ var internalValidationErrorMsg = make(map[string]string)
 var internalCamelCaseToSpaceRegex = regexp.MustCompile("([a-z])([A-Z])")
 
 func init() {
-
 	internalValidationErrorMsg["required"] = "{field} is required."
 	internalValidationErrorMsg["min"] = "{field} needs to at least {param} characters long."
 	internalValidationErrorMsg["max"] = "{field} can not be more than {param} characters long."
