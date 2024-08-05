@@ -10,17 +10,19 @@ import (
 
 func Setup(api fiber.Router,
 	db infrastructure.Database,
-	session *session.Store) {
+	store *session.Store) {
 
-	c := CreateController(db, session)
+	c := CreateController(db)
 
-	auth := api.Group("/auth")
+	// ordering is important!
+
+	auth := api.Group("/auth").Use(middleware.SessionMiddleware(store))
 	auth.Post("/login", c.auth.Login)
-	auth.Post("/logout", c.auth.Logout)
 	auth.Post("/register-email", c.auth.RegisterEmail)
 	auth.Post("/register-password", c.auth.RegisterPassword)
 	auth.Post("/verify-email", c.auth.VerifyEmailAndCreateUser)
+	auth.Post("/logout", c.auth.Logout).Use(middleware.AuthMiddleware())
 
-	test := api.Group("/test").Use(middleware.AuthMiddleware(session))
+	test := api.Group("/test").Use(middleware.SessionMiddleware(store), middleware.AuthMiddleware())
 	test.Post("/hello", func(c *fiber.Ctx) error { return c.SendString("This works!") }) // ! remove
 }

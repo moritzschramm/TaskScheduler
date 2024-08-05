@@ -7,18 +7,20 @@ import (
 
 var validate = validator.New()
 
-func ParseAndValidate[Req interface{}](c *fiber.Ctx) (*Req, error) {
+func ParseAndValidate[Request interface{}](c *fiber.Ctx) (*Request, error) {
 
-	req := new(Req)
+	request := new(Request)
 
-	if err := c.BodyParser(req); err != nil {
-		return req, err
+	// parse from context to request
+	if err := c.BodyParser(request); err != nil {
+		return request, err
 	}
 
-	errs := validate.Struct(req)
+	// validate request fields
+	errs := validate.Struct(request)
 	if errs != nil {
-		return req, errs
+		return request, errs
 	}
 
-	return req, nil
+	return request, nil
 }

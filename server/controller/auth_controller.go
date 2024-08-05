@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"task-scheduler/middleware"
 	"task-scheduler/service"
 	"time"
 
@@ -10,13 +11,11 @@ import (
 
 type AuthController struct {
 	userService *service.UserService
-	session     *session.Store
 }
 
-func CreateAuthController(us *service.UserService, session *session.Store) *AuthController {
+func CreateAuthController(us *service.UserService) *AuthController {
 	return &AuthController{
 		userService: us,
-		session:     session,
 	}
 }
 
@@ -37,20 +36,22 @@ func (ac *AuthController) Login(c *fiber.Ctx) error {
 		return err
 	}
 
+	// user not found or password and hash did not match
 	if user == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(&fiber.Map{
 			"err": "Wrong email or password.",
 		})
 	}
 
-	sess, err := ac.session.Get(c)
-	if err != nil {
-		return err
+	// credentials confirmed, create new session
+	session, ok := c.Locals(middleware.SessionKey).(*session.Session)
+	if !ok {
+		return middleware.SessionError
 	}
 
-	sess.Reset()
-	sess.Set("user", user)
-	err = sess.Save()
+	session.Reset()
+	session.Set(middleware.UserKey, user)
+	err = session.Save()
 	if err != nil {
 		return err
 	}
@@ -64,13 +65,14 @@ func (ac *AuthController) Login(c *fiber.Ctx) error {
 
 func (ac *AuthController) Logout(c *fiber.Ctx) error {
 
-	sess, err := ac.session.Get(c)
-	if err != nil {
-		return err
+	// get current session and reset it
+	session, ok := c.Locals(middleware.SessionKey).(*session.Session)
+	if !ok {
+		return middleware.SessionError
 	}
 
-	sess.Reset()
-	err = sess.Save()
+	session.Reset()
+	err := session.Save()
 	if err != nil {
 		return err
 	}
@@ -89,13 +91,13 @@ func (ac *AuthController) RegisterEmail(c *fiber.Ctx) error {
 		return err
 	}
 
-	sess, err := ac.session.Get(c)
-	if err != nil {
-		return err
+	session, ok := c.Locals(middleware.SessionKey).(*session.Session)
+	if !ok {
+		return middleware.SessionError
 	}
 
-	sess.Reset()
-	sess.SetExpiry(30 * time.Minute)
+	session.Reset()
+	session.SetExpiry(30 * time.Minute)
 
 	emailExists, err := ac.userService.CheckEmailExists(req.Email)
 	if err != nil {
@@ -108,12 +110,12 @@ func (ac *AuthController) RegisterEmail(c *fiber.Ctx) error {
 		})
 	}
 
-	err = ac.userService.SetRegisterEmail(req.Email, sess)
+	err = ac.userService.SetRegisterEmail(req.Email, session)
 	if err != nil {
 		return err
 	}
 
-	err = sess.Save()
+	err = session.Save()
 	if err != nil {
 		return err
 	}
@@ -132,17 +134,17 @@ func (ac *AuthController) RegisterPassword(c *fiber.Ctx) error {
 		return err
 	}
 
-	sess, err := ac.session.Get(c)
+	session, ok := c.Locals(middleware.SessionKey).(*session.Session)
+	if !ok {
+		return middleware.SessionError
+	}
+
+	err = ac.userService.SetRegisterPassword(req.Password, session)
 	if err != nil {
 		return err
 	}
 
-	err = ac.userService.SetRegisterPassword(req.Password, sess)
-	if err != nil {
-		return err
-	}
-
-	err = sess.Save()
+	err = session.Save()
 	if err != nil {
 		return err
 	}
@@ -161,12 +163,12 @@ func (ac *AuthController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 		return err
 	}
 
-	sess, err := ac.session.Get(c)
-	if err != nil {
-		return err
+	session, ok := c.Locals(middleware.SessionKey).(*session.Session)
+	if !ok {
+		return middleware.SessionError
 	}
 
-	verified, user, err := ac.userService.VerifyEmailAndGetTempUser(req.VerificationCode, sess)
+	verified, user, err := ac.userService.VerifyEmailAndGetTempUser(req.VerificationCode, session)
 	if err != nil {
 		return err
 	}
@@ -182,8 +184,9 @@ func (ac *AuthController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 		return err
 	}
 
-	sess.Reset()
-	err = sess.Save()
+	// reset session to flush out temporary user
+	session.Reset()
+	err = session.Save()
 	if err != nil {
 		return err
 	}

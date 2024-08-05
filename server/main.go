@@ -32,22 +32,22 @@ func main() {
 	go db.Open(os.Getenv("POSTGRES_DSN"), os.Getenv("POSTGRES_SCHEMA"))
 	defer db.Close()
 
-	// * connect to key value store
-	store := redis.New(redis.Config{
+	// * connect to key value redis
+	redis := redis.New(redis.Config{
 		Host: os.Getenv("REDIS_HOST"),
 	})
-	defer store.Close()
+	defer redis.Close()
 
-	// * create session storage
-	session := session.New(session.Config{
-		Storage:        store,
+	// * create store storage
+	store := session.New(session.Config{
+		Storage:        redis,
 		CookieHTTPOnly: true,
 		CookieSecure:   os.Getenv("DEV_ENV") != "true",
 		CookieSameSite: "Lax",
 		Expiration:     12 * time.Hour,
 	})
 	// register structs that are going to be (de)serialized
-	session.RegisterType(new(repository.User))
+	store.RegisterType(new(repository.User))
 
 	// * create new server
 	app := fiber.New(fiber.Config{
@@ -74,7 +74,7 @@ func main() {
 	// * register routes for API
 	api := app.Group("/api")                                                                 // prefix all routes with /api
 	api.Get("/", func(c *fiber.Ctx) error { return c.SendString(os.Getenv("API_VERSION")) }) // send API version
-	routes.Setup(api, db, session)
+	routes.Setup(api, db, store)
 
 	// * start listening on port defined in .env
 	wg.Wait()
