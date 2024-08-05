@@ -5,6 +5,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/session"
 )
 
+// checks if the current session is authenticated
 func AuthMiddleware() func(*fiber.Ctx) error {
 
 	return func(c *fiber.Ctx) error {

@@ -18,16 +18,16 @@ const (
 	UserKey          = "UserKey"
 )
 
-// all keys for c.Locals(..) should use this type (not IN session)
-type LocalsKeyType struct{}
-
-var SessionKey LocalsKeyType
-
 // this error message can be used in a handler when retrieving the session via c.Locals(..) fails
 var SessionError = &fiber.Error{Code: 500, Message: "Session error"}
+
+// this error message can be used when a key can't be retrieved from the session
 var SessionKeyError = &fiber.Error{Code: 500, Message: "Session key error"}
 
-// retrieve session from store; session is available with c.Locals(middleware.SessionKey)
+const SessionKey = "SessionMiddleware"
+
+// injects session into context
+// available via c.Locals(middleware.SessionKey)
 func SessionMiddleware(store *session.Store) func(*fiber.Ctx) error {
 
 	return func(c *fiber.Ctx) error {
@@ -37,7 +37,6 @@ func SessionMiddleware(store *session.Store) func(*fiber.Ctx) error {
 			return err
 		}
 
-		// inject session to request
 		c.Locals(SessionKey, session)
 
 		return c.Next()

@@ -14,14 +14,12 @@ func Setup(api fiber.Router,
 
 	c := CreateController(db)
 
-	// ordering is important!
-
-	auth := api.Group("/auth").Use(middleware.SessionMiddleware(store))
-	auth.Post("/login", c.auth.Login)
+	auth := api.Group("/auth", middleware.SessionMiddleware(store))
+	auth.Post("/login", middleware.StoreMiddleware(store), c.auth.Login)
+	auth.Post("/logout", middleware.AuthMiddleware(), c.auth.Logout)
 	auth.Post("/register-email", c.auth.RegisterEmail)
 	auth.Post("/register-password", c.auth.RegisterPassword)
-	auth.Post("/verify-email", c.auth.VerifyEmailAndCreateUser)
-	auth.Post("/logout", c.auth.Logout).Use(middleware.AuthMiddleware())
+	auth.Post("/verify-email", middleware.StoreMiddleware(store), c.auth.VerifyEmailAndCreateUser)
 
 	test := api.Group("/test").Use(middleware.SessionMiddleware(store), middleware.AuthMiddleware())
 	test.Post("/hello", func(c *fiber.Ctx) error { return c.SendString("This works!") }) // ! remove

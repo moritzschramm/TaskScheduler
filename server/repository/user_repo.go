@@ -2,8 +2,6 @@ package repository
 
 import (
 	"task-scheduler/infrastructure"
-
-	"github.com/gofiber/fiber/v2/middleware/session"
 )
 
 type User struct {
@@ -15,8 +13,7 @@ type User struct {
 }
 
 type UserRepository struct {
-	db      infrastructure.Database
-	session *session.Store
+	db infrastructure.Database
 }
 
 func CreateUserRepository(db infrastructure.Database) *UserRepository {

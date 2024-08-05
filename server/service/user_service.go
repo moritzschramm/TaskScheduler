@@ -1,10 +1,11 @@
 package service
 
 import (
-	"log"
 	"math/big"
+	"task-scheduler/infrastructure"
 	"task-scheduler/middleware"
 	"task-scheduler/repository"
+	"time"
 
 	"crypto/rand"
 
@@ -35,9 +36,7 @@ func (us *UserService) SetRegisterEmail(email string, session *session.Session) 
 		return err
 	}
 
-	// ! TODO remove in prod
-	log.Printf("Email code is %v\n", verificationCode)
-	// TODO send email
+	infrastructure.SendMail(verificationCode)
 
 	// verification code is only stored as a hash in session store
 	hashedCode, err := argon2id.CreateHash(verificationCode, argon2id.DefaultParams)
@@ -76,7 +75,6 @@ func (us *UserService) SetRegisterPassword(password string, session *session.Ses
 }
 
 func (us *UserService) VerifyEmailAndGetTempUser(verificationCode string, session *session.Session) (bool, *repository.User, error) {
-	// TODO save IP to block after 3 attempts
 
 	user, ok := session.Get(middleware.TemporaryUserKey).(*repository.User)
 	if !ok {
@@ -101,7 +99,6 @@ func (us *UserService) CreateUser(user *repository.User) error {
 }
 
 func (us *UserService) CheckCredentials(email, password string) (*repository.User, error) {
-	// TODO save IP to block after 3 attempts
 
 	user, err := us.userRepository.GetUserByEmail(email)
 	if err != nil {
@@ -118,6 +115,32 @@ func (us *UserService) CheckCredentials(email, password string) (*repository.Use
 	}
 
 	return nil, nil // password and hash do not match
+}
+
+func (us *UserService) GetBruteForceAttempts(userIdentifier string, store *session.Store) (uint8, error) {
+	// TODO use user email as identifier as well (if available)
+	attemptsBytes, err := store.Storage.Get(userIdentifier)
+	if err != nil {
+		return 0, err
+	}
+
+	var attempts uint8 = 0
+	if attemptsBytes != nil {
+		attempts = uint8(attemptsBytes[0])
+	}
+
+	return attempts, nil
+}
+
+func (us *UserService) IncreaseBruteForceAttempts(userIdentifier string, attempts uint8, store *session.Store) error {
+
+	attempts += 1
+	return store.Storage.Set(userIdentifier, []byte{attempts}, 4*time.Hour)
+}
+
+func (us *UserService) ResetBruteForceAttempts(userIdentifier string, store *session.Store) error {
+
+	return store.Storage.Delete(userIdentifier)
 }
 
 func GenerateVerificationCode() (string, error) {

@@ -21,6 +21,22 @@ func CreateAuthController(us *service.UserService) *AuthController {
 
 func (ac *AuthController) Login(c *fiber.Ctx) error {
 
+	store, ok := c.Locals(middleware.StoreKey).(*session.Store)
+	if !ok {
+		return middleware.SessionError
+	}
+
+	// check if request is trying to brute-force access
+	userIdentifier := c.IP() + c.Get("User-Agent")
+
+	attempts, err := ac.userService.GetBruteForceAttempts(userIdentifier, store)
+
+	if attempts >= 3 {
+		return c.Status(fiber.StatusTooManyRequests).JSON(&fiber.Map{
+			"err": "Too many attempts. Please try again later.",
+		})
+	}
+
 	type Request struct {
 		Email    string `json:"email" validate:"required,email,max=511"`
 		Password string `json:"password" validate:"required"`
@@ -38,10 +54,13 @@ func (ac *AuthController) Login(c *fiber.Ctx) error {
 
 	// user not found or password and hash did not match
 	if user == nil {
+		ac.userService.IncreaseBruteForceAttempts(userIdentifier, attempts, store)
 		return c.Status(fiber.StatusUnauthorized).JSON(&fiber.Map{
 			"err": "Wrong email or password.",
 		})
 	}
+
+	ac.userService.ResetBruteForceAttempts(userIdentifier, store)
 
 	// credentials confirmed, create new session
 	session, ok := c.Locals(middleware.SessionKey).(*session.Session)
@@ -154,6 +173,22 @@ func (ac *AuthController) RegisterPassword(c *fiber.Ctx) error {
 
 func (ac *AuthController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 
+	// check if request is trying to brute-force access
+	store, ok := c.Locals(middleware.StoreKey).(*session.Store)
+	if !ok {
+		return middleware.SessionError
+	}
+
+	userIdentifier := c.IP() + c.Get("User-Agent")
+
+	attempts, err := ac.userService.GetBruteForceAttempts(userIdentifier, store)
+
+	if attempts >= 3 {
+		return c.Status(fiber.StatusTooManyRequests).JSON(&fiber.Map{
+			"err": "Too many attempts. Please try again later.",
+		})
+	}
+
 	type Request struct {
 		VerificationCode string `json:"verificationCode" validate:"required,len=6"`
 	}
@@ -174,10 +209,13 @@ func (ac *AuthController) VerifyEmailAndCreateUser(c *fiber.Ctx) error {
 	}
 
 	if !verified {
+		ac.userService.IncreaseBruteForceAttempts(userIdentifier, attempts, store)
 		return c.Status(fiber.StatusForbidden).JSON(&fiber.Map{
 			"err": "Wrong verification code.",
 		})
 	}
+
+	ac.userService.ResetBruteForceAttempts(userIdentifier, store)
 
 	err = ac.userService.CreateUser(user)
 	if err != nil {
