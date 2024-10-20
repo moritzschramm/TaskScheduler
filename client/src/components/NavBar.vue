@@ -5,13 +5,13 @@ import LogoutButton from '@/components/LogoutButton.vue'
 
 <template>
   <header>
-    <nav class="bg-gray-800 p-4">
-      <div class="container mx-auto flex justify-between items-center">
-        <RouterLink to="/" class="text-white text-lg font-semibold">TaskScheduler</RouterLink>
+    <nav class="bg-gray-50 p-4">
+      <div class="container flex justify-between items-center">
+        <RouterLink to="/" class="text-gray-900 hover:text-gray-500 text-lg">TaskScheduler</RouterLink>
 
         <div class="space-x-4">
-          <RouterLink to="/" class="text-white hover:text-gray-300">Home</RouterLink>
-          <RouterLink to="/profile" class="text-white hover:text-gray-300">Profile</RouterLink>
+          <RouterLink to="/" class="text-gray-900 hover:text-gray-500">Home</RouterLink>
+          <RouterLink to="/profile" class="text-gray-900 hover:text-gray-500">Profile</RouterLink>
           <LogoutButton />
         </div>
       </div>

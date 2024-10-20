@@ -24,5 +24,5 @@ function logout() {
 </script>
 
 <template>
-  <button @click="logout" class="text-white">Logout</button>
+  <button @click="logout" class="text-gray-900 hover:text-gray-500">Logout</button>
 </template>

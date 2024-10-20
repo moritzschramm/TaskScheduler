@@ -9,7 +9,7 @@ services:
     networks:
       - skynet
     volumes:
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./docker/nginx/dev/default.conf:/etc/nginx/conf.d/default.conf
     ports:
       - "8000:80"
     depends_on:
