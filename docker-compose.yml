@@ -1,114 +1,75 @@
-# ! ONLY FOR DEV; NOT FOR PRODUCTION
+# Development stack. `docker compose up --build` then open http://localhost:8080
+#
+# nginx is the only exposed port: it fronts the Vite dev server and the API so
+# the browser sees one origin, matching production.
 
 services:
-  ####### APP SERVICES
-  revproxy:
-    container_name: ts.revproxy
-    image: nginx:1.25
-    restart: unless-stopped
-    networks:
-      - skynet
-    volumes:
-      - ./docker/nginx/dev/default.conf:/etc/nginx/conf.d/default.conf
-    ports:
-      - "8000:80"
-    depends_on:
-      - frontend
-      - api
-
-  frontend:
-    container_name: ts.frontend
-    image: taskscheduler/webclient:1.0
-    build:
-      context: .
-      dockerfile: ./docker/node/dev.Dockerfile
-    networks:
-      - skynet
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./client:/usr/src/app
-      - ignore_in_filesystem:/usr/src/app/node_modules
-      - .env:/usr/src/app/.env
-    depends_on:
-      - api
-
-  api:
-    container_name: ts.api
-    image: taskscheduler/api:1.0
-    build:
-      context: .
-      dockerfile: ./docker/go/dev.Dockerfile
-    networks:
-      - skynet
-    volumes:
-      - ./server:/usr/src/app
-      - .env:/usr/src/.env
-    depends_on:
-      - postgres
-      - redis
-
-  ####### DEV SERVICES
-  pgroll: # database migrations
-    container_name: ts.pgroll
-    image: taskscheduler/pgroll:1.0
-    tty: true
-    build:
-      context: .
-      dockerfile: ./docker/pgroll/Dockerfile
-    networks:
-      - skynet
-    depends_on:
-      - postgres
-  pgadmin: # postgres admin dashboard
-    container_name: ts.pgadmin
-    image: dpage/pgadmin4:8.3
-    ports:
-      - "5050:80"
-    networks:
-      - skynet
-    volumes:
-      - ./database/internal/pgadmin:/var/lib/pgadmin
-    depends_on:
-      - postgres
-    environment:
-      PGADMIN_DEFAULT_EMAIL: db@admin.org
-      PGADMIN_DEFAULT_PASSWORD: db
-      PGADMIN_DISABLE_POSTFIX: 0 == 0 # docker interprets python's 'False' as a string...
-      PGADMIN_CONFIG_SERVER_MODE: 1 == 0
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 1 == 0
-  redisinsight: # redis admin dashboard
-    container_name: ts.redisinsight
-    image: redislabs/redisinsight:v2
-    ports:
-      - "5051:5540"
-    networks:
-      - skynet
-    volumes:
-      - ./database/internal/redisinsight:/data
-    depends_on:
-      - redis
-
-  ###### STORAGE SERVICES
   postgres:
-    container_name: ts.postgres
-    image: postgres:16
-    networks:
-      - skynet
-    env_file: .env
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ambitime}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ambitime}
+      POSTGRES_DB: ${POSTGRES_DB:-ambitime}
+    ports:
+      # Exposed so tests and drizzle-kit can run from the host.
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
-      - ./database/internal/postgres:/var/lib/postgresql/data
-  redis:
-    container_name: ts.redis
-    image: redis:7
-    networks:
-      - skynet
-    volumes:
-      - ./database/internal/redis:/data
+      # Postgres 18+ expects a single mount at the parent directory; it
+      # places version-specific data in a subdirectory for pg_upgrade.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ambitime} -d ${POSTGRES_DB:-ambitime}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
-networks:
-  skynet:
-    driver: bridge
+  server:
+    build:
+      context: .
+      dockerfile: docker/node/dev.Dockerfile
+    command: sh -c "/usr/local/bin/server-entrypoint.sh pnpm --filter @ambitime/server dev"
+    environment:
+      NODE_ENV: development
+      SERVER_PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-ambitime}:${POSTGRES_PASSWORD:-ambitime}@postgres:5432/${POSTGRES_DB:-ambitime}
+    volumes:
+      - .:/app
+      # Keep container-installed node_modules; the host's are for the host.
+      - /app/node_modules
+      - /app/packages/shared/node_modules
+      - /app/packages/scheduler/node_modules
+      - /app/packages/server/node_modules
+      - /app/packages/client/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  client:
+    build:
+      context: .
+      dockerfile: docker/node/dev.Dockerfile
+    command: pnpm --filter @ambitime/client dev --host 0.0.0.0
+    environment:
+      NODE_ENV: development
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/packages/shared/node_modules
+      - /app/packages/scheduler/node_modules
+      - /app/packages/server/node_modules
+      - /app/packages/client/node_modules
+    depends_on:
+      - server
+
+  nginx:
+    image: nginx:1.29-alpine
+    ports:
+      - '${HTTP_PORT:-8080}:80'
+    volumes:
+      - ./docker/nginx/dev/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - server
+      - client
 
 volumes:
-  ignore_in_filesystem:
+  postgres-data:

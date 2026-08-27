@@ -1,44 +1,69 @@
-# TaskScheduler
+# Ambitime (name is WIP)
 
-A mix between a todo and calendar app. Creates tasks from todos by inserting them into the calendar while avoiding conflicts with existing entries. A task is scheduled in a predefined timespan.
+A mix between a todo and calendar app. Creates tasks from todos by inserting them into the calendar
+while avoiding conflicts with existing entries. A task is scheduled in a predefined timespan.
 
-## Project Structure
+- [`specification.md`](./specification.md) — the source of truth for what is being built.
+- [`implementation-plan.md`](./implementation-plan.md) — the milestone sequence. **Current: M0 complete.**
 
-Important files and directories:
-
-- `init.sh` initializes and resets application
-- `docker-compose.yml` file and `docker` directory: Orchestration of containers and image specification
-- `.example.env` and `.env` contain relevant configuration variables
-- `client` contains code for the frontend client application
-- `server` contains code for the backend API
-- `database`: `/internal` is used by some docker services, `/migrations` contains all database changes
-
-## Setup
-
-Make sure that [Docker](https://www.docker.com/products/docker-desktop/) is installed and running. Then, execute the init script:
+## Quick start
 
 ```sh
-./init.sh
+cp .env.example .env
+docker compose up --build
 ```
 
-## Launching the application (dev env)
+Then open <http://localhost:8080>. The page reports whether the server reached Postgres.
+
+## Layout
+
+```
+packages/
+  shared/     Zod schemas + types, imported by both client and server
+  scheduler/  the scheduling engine — a pure package (no DB, no HTTP, no clock)
+  server/     Hono API + Drizzle
+  client/     Vue 3 + Tailwind + Reka UI / shadcn-vue
+docker/
+  node/       dev and multi-stage prod images
+  nginx/      reverse-proxy config (dev proxies Vite; prod serves the built bundle)
+```
+
+Everything is served through nginx on one origin: `/api/*` goes to the server, everything else to
+the client. There is no cross-origin configuration in either environment.
+
+## Commands
+
+| Command            | What it does                                      |
+| ------------------ | ------------------------------------------------- |
+| `pnpm dev`         | `docker compose up --build`                       |
+| `pnpm build`       | Build every package                               |
+| `pnpm typecheck`   | Typecheck every package                           |
+| `pnpm lint`        | ESLint, warnings treated as errors                |
+| `pnpm format`      | Prettier write (the two design docs are excluded) |
+| `pnpm test`        | Vitest across every package                       |
+| `pnpm db:generate` | Generate a Drizzle migration from the schema      |
+| `pnpm db:migrate`  | Apply pending migrations                          |
+
+Server tests need a real Postgres — `docker compose up -d postgres` is enough. Override the
+connection with `TEST_DATABASE_URL` if it is not on `localhost:5432`.
+
+## Production
 
 ```sh
-docker-compose up
+docker compose -f docker-compose.prod.yml up --build
 ```
 
-The client and API should be available at http://localhost:8000.
+Requires `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` in the environment. The server
+container applies migrations on start, which suits the current single-replica setup; a multi-replica
+deploy should run them as a separate release step instead.
 
-Also, Postgres and Redis dashboards are available at http://localhost:5050 and http://localhost:5051 respectively.
+## Conventions
 
-### Development
+These hold across every milestone (see the implementation plan for the full list):
 
-If there are any file changes (in client or server), the dockerized node and go services will automatically recompile the project and the changes will be live (even with HMR in client!).
-
-## Planned Features
-
-- [ ] Crude calendar and todo list view
-- [ ] Multiple todo lists / dynamical, daily lists with priorities
-- [ ] Adaptable "working hours"
-- [ ] Moving many todos from one day to the next (conflict free)
-- [ ] Statistics for how many times a task was moved
+- TypeScript strict mode; Zod schemas live in `packages/shared` and are the single source of both
+  types and validation.
+- Intervals are half-open `[start, end)`. Instants are stored as `timestamptz` (UTC).
+- `packages/scheduler` stays pure: no DB or HTTP imports, no wall-clock reads, no randomness. Lint
+  rules and `packages/scheduler/test/purity.test.ts` both enforce this.
+- All writes go through the command layer (from M6 onwards); nothing else mutates source state.

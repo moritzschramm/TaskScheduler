@@ -1,0 +1,48 @@
+# Production-shaped stack: built images, no bind mounts, nginx serving the
+# compiled client bundle. Secrets come from the environment, not this file.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+    volumes:
+      # Postgres 18+ expects a single mount at the parent directory; it
+      # places version-specific data in a subdirectory for pg_upgrade.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/node/prod.Dockerfile
+      target: server
+    environment:
+      NODE_ENV: production
+      SERVER_PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/node/prod.Dockerfile
+      target: client
+    ports:
+      - '${HTTP_PORT:-8080}:80'
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
