@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // No ambient Node types: the pure package must not even see `process` or `fs`.
+    "types": []
+  },
+  "include": ["src/**/*.ts"]
+}

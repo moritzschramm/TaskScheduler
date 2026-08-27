@@ -1,0 +1,20 @@
+{
+  "name": "@ambitime/scheduler",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "echo 'scheduler is consumed from source; nothing to build'",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.11",
+    "@types/node": "^26.4.0"
+  }
+}
