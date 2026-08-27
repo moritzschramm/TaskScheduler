@@ -1,0 +1,25 @@
+packages:
+  - 'packages/*'
+
+# Packages whose install scripts are allowed to run.
+allowBuilds:
+  # Ships a platform-specific binary via postinstall.
+  esbuild: true
+  # Picks its Vue 2/3 entry point at install time (transitive, via reka-ui).
+  vue-demi: true
+
+minimumReleaseAgeExclude:
+  - '@types/node@26.4.0'
+  - '@tanstack/table-core@9.2.3'
+  - '@tanstack/vue-table@9.2.3'
+  - '@vue/compiler-core@3.5.42'
+  - '@vue/compiler-dom@3.5.42'
+  - '@vue/compiler-sfc@3.5.42'
+  - '@vue/compiler-ssr@3.5.42'
+  - '@vue/reactivity@3.5.42'
+  - '@vue/runtime-core@3.5.42'
+  - '@vue/runtime-dom@3.5.42'
+  - '@vue/server-renderer@3.5.42'
+  - '@vue/shared@3.5.42'
+  - '@vue/test-utils@2.5.0'
+  - vue@3.5.42
