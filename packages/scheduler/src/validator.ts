@@ -1,0 +1,450 @@
+import { overlaps, type Interval } from './time.js';
+import { byId, byInt, chain, sorted } from './ordering.js';
+import { eligibleWindows, windowContaining } from './windows.js';
+import type { Violation, ValidationResult } from './diagnostics.js';
+import type { Placement, ResolvedWindow, Schedulable, ScheduleContext } from './types.js';
+
+/**
+ * The hard-constraint validator (spec §6.2). A schedule violating any of these
+ * is invalid, full stop — soft constraints are scored elsewhere and may be
+ * violated, these may not.
+ *
+ * Order-insensitive by construction: the result depends only on the *set* of
+ * placements, never on the order they arrive in. That matters because spec §3.3
+ * has the server validate a client-proposed schedule, and the two sides have no
+ * reason to agree on array order.
+ *
+ * Violations are collected rather than thrown on first failure, so a caller
+ * sees everything wrong at once.
+ */
+
+/** The footprint a placement occupies: its own time plus its cooldown (rule 3). */
+function footprintOf(placement: Placement): Interval {
+  return {
+    start: placement.interval.start,
+    end: placement.interval.end + placement.cooldownMin,
+  };
+}
+
+/** Deterministic output order, so two runs report violations identically. */
+const compareViolations = chain<Violation>(
+  byInt((v) => v.interval?.start ?? 0),
+  byId((v) => v.occurrenceId),
+  byId((v) => v.code),
+  byId((v) => v.relatedOccurrenceId ?? ''),
+  byId((v) => v.relatedBlockId ?? ''),
+);
+
+function formatInterval(interval: Interval): string {
+  return `[${interval.start}, ${interval.end})`;
+}
+
+export function validateSchedule(
+  context: ScheduleContext,
+  placements: readonly Placement[],
+): ValidationResult {
+  const violations: Violation[] = [];
+
+  const schedulableByOccurrence = new Map<string, Schedulable>(
+    context.schedulables.map((schedulable) => [schedulable.occurrenceId, schedulable]),
+  );
+
+  // --- Structural checks first -------------------------------------------
+  // A placement referencing nothing, or two placements for one occurrence,
+  // would make every rule below ambiguous.
+  const seen = new Set<string>();
+  const usable: Placement[] = [];
+
+  for (const placement of sorted(
+    placements,
+    chain(
+      byInt((p) => p.interval.start),
+      byId((p) => p.occurrenceId),
+    ),
+  )) {
+    if (!schedulableByOccurrence.has(placement.occurrenceId)) {
+      violations.push({
+        code: 'unknown_occurrence',
+        occurrenceId: placement.occurrenceId,
+        interval: placement.interval,
+        message: `Placement references occurrence ${placement.occurrenceId}, which is not in the schedule context.`,
+      });
+      continue;
+    }
+
+    if (seen.has(placement.occurrenceId)) {
+      violations.push({
+        code: 'duplicate_placement',
+        occurrenceId: placement.occurrenceId,
+        interval: placement.interval,
+        message: `Occurrence ${placement.occurrenceId} is placed more than once.`,
+      });
+      continue;
+    }
+
+    seen.add(placement.occurrenceId);
+    usable.push(placement);
+  }
+
+  checkWindowMembership(context, usable, schedulableByOccurrence, violations);
+  checkOverlaps(context, usable, violations);
+  checkDueDates(usable, schedulableByOccurrence, violations);
+  checkManualFloors(usable, schedulableByOccurrence, violations);
+  checkSequences(context, usable, schedulableByOccurrence, violations);
+
+  return {
+    valid: violations.length === 0,
+    violations: sorted(violations, compareViolations),
+  };
+}
+
+/**
+ * Rule 1 — a task is placed within an availability window of its category,
+ * week-type overrides already applied by `resolveWindows`.
+ *
+ * The window must contain the task's own interval. The cooldown that follows is
+ * a footprint for *overlap* purposes (rule 3) and is allowed to extend past the
+ * window edge — the spec reserves it against other tasks, not against the clock.
+ */
+function checkWindowMembership(
+  context: ScheduleContext,
+  placements: readonly Placement[],
+  schedulables: ReadonlyMap<string, Schedulable>,
+  violations: Violation[],
+): void {
+  for (const placement of placements) {
+    const schedulable = schedulables.get(placement.occurrenceId)!;
+    const candidates = eligibleWindows(
+      context.windows,
+      schedulable.calendarId,
+      schedulable.categoryId,
+    );
+    const window = windowContaining(candidates, placement.interval);
+
+    if (!window) {
+      violations.push({
+        code: 'outside_availability_window',
+        occurrenceId: placement.occurrenceId,
+        interval: placement.interval,
+        message:
+          candidates.length === 0
+            ? `Task ${schedulable.taskId} is placed at ${formatInterval(placement.interval)} but category ${schedulable.categoryId} has no availability window in this horizon.`
+            : `Task ${schedulable.taskId} is placed at ${formatInterval(placement.interval)}, which is not contained by any availability window of category ${schedulable.categoryId}.`,
+      });
+    }
+  }
+}
+
+/**
+ * Rules 2 and 3 — no overlap between placements, or between a placement and a
+ * fixed block, with each placement's cooldown counted as part of its footprint.
+ *
+ * Compared pairwise over a sorted copy, so the same pair is reported once and
+ * always in the same direction regardless of input order.
+ */
+function checkOverlaps(
+  context: ScheduleContext,
+  placements: readonly Placement[],
+  violations: Violation[],
+): void {
+  const ordered = sorted(
+    placements,
+    chain(
+      byInt((p) => p.interval.start),
+      byId((p) => p.occurrenceId),
+    ),
+  );
+
+  for (let i = 0; i < ordered.length; i += 1) {
+    const first = ordered[i]!;
+    const firstFootprint = footprintOf(first);
+
+    for (let j = i + 1; j < ordered.length; j += 1) {
+      const second = ordered[j]!;
+      // Sorted by start, so once a later placement begins after this one's
+      // footprint ends, no subsequent one can overlap it either.
+      if (second.interval.start >= firstFootprint.end) break;
+
+      if (overlaps(first.interval, second.interval)) {
+        violations.push({
+          code: 'placement_overlap',
+          occurrenceId: first.occurrenceId,
+          relatedOccurrenceId: second.occurrenceId,
+          interval: first.interval,
+          message: `Occurrences ${first.occurrenceId} at ${formatInterval(first.interval)} and ${second.occurrenceId} at ${formatInterval(second.interval)} overlap.`,
+        });
+        continue;
+      }
+
+      // No direct overlap, so the conflict is with the reserved cooldown.
+      // Distinguished because the fix differs: a cooldown clash is resolved by
+      // moving later, not by finding an entirely different slot.
+      if (overlaps(firstFootprint, second.interval)) {
+        violations.push({
+          code: 'cooldown_overlap',
+          occurrenceId: second.occurrenceId,
+          relatedOccurrenceId: first.occurrenceId,
+          interval: second.interval,
+          limit: firstFootprint.end,
+          message: `Occurrence ${second.occurrenceId} starts at ${second.interval.start}, inside the ${first.cooldownMin}-minute cooldown reserved after ${first.occurrenceId} until ${firstFootprint.end}.`,
+        });
+      }
+    }
+  }
+
+  for (const placement of ordered) {
+    const footprint = footprintOf(placement);
+
+    for (const block of sorted(
+      context.fixedBlocks,
+      byId((b) => b.id),
+    )) {
+      if (overlaps(placement.interval, block.interval)) {
+        violations.push({
+          code: 'fixed_block_overlap',
+          occurrenceId: placement.occurrenceId,
+          relatedBlockId: block.id,
+          interval: placement.interval,
+          message: `Occurrence ${placement.occurrenceId} at ${formatInterval(placement.interval)} overlaps fixed block ${block.id} at ${formatInterval(block.interval)}.`,
+        });
+        continue;
+      }
+
+      if (overlaps(footprint, block.interval)) {
+        violations.push({
+          code: 'cooldown_overlap',
+          occurrenceId: placement.occurrenceId,
+          relatedBlockId: block.id,
+          interval: placement.interval,
+          limit: footprint.end,
+          message: `The ${placement.cooldownMin}-minute cooldown after occurrence ${placement.occurrenceId} runs to ${footprint.end}, overlapping fixed block ${block.id}.`,
+        });
+      }
+    }
+  }
+}
+
+/** Rule 4 — a `hard` due date is enforced: placement end ≤ due date. */
+function checkDueDates(
+  placements: readonly Placement[],
+  schedulables: ReadonlyMap<string, Schedulable>,
+  violations: Violation[],
+): void {
+  for (const placement of placements) {
+    const schedulable = schedulables.get(placement.occurrenceId)!;
+    // Soft due dates are scored, not enforced (spec §6.5); only `hard` invalidates.
+    if (schedulable.dueKind !== 'hard' || schedulable.dueDate === undefined) continue;
+
+    if (placement.interval.end > schedulable.dueDate) {
+      violations.push({
+        code: 'hard_due_date_missed',
+        occurrenceId: placement.occurrenceId,
+        interval: placement.interval,
+        limit: schedulable.dueDate,
+        message: `Task ${schedulable.taskId} has a hard due date at ${schedulable.dueDate} but its placement ends at ${placement.interval.end}.`,
+      });
+    }
+  }
+}
+
+/** Rule 6 — a manually repositioned task is never placed before its floor. */
+function checkManualFloors(
+  placements: readonly Placement[],
+  schedulables: ReadonlyMap<string, Schedulable>,
+  violations: Violation[],
+): void {
+  for (const placement of placements) {
+    const schedulable = schedulables.get(placement.occurrenceId)!;
+    if (schedulable.manualFloor === undefined) continue;
+
+    if (placement.interval.start < schedulable.manualFloor) {
+      violations.push({
+        code: 'manual_floor_violated',
+        occurrenceId: placement.occurrenceId,
+        interval: placement.interval,
+        limit: schedulable.manualFloor,
+        message: `Task ${schedulable.taskId} was manually moved to ${schedulable.manualFloor} and may not be placed earlier, but starts at ${placement.interval.start}.`,
+      });
+    }
+  }
+}
+
+/**
+ * Rule 5 — sequence members are placed contiguously within a single window, in
+ * order if ordered, with no foreign task interleaved.
+ *
+ * "Contiguous" includes the internal cooldowns: M5 collapses a sequence to a
+ * composite of summed durations *plus* those cooldowns, so the next member
+ * starts exactly where the previous member's footprint ends.
+ */
+function checkSequences(
+  context: ScheduleContext,
+  placements: readonly Placement[],
+  schedulables: ReadonlyMap<string, Schedulable>,
+  violations: Violation[],
+): void {
+  const placementByOccurrence = new Map(placements.map((p) => [p.occurrenceId, p]));
+
+  for (const sequence of sorted(
+    context.sequences,
+    byId((s) => s.id),
+  )) {
+    const members = context.schedulables
+      .filter((schedulable) => schedulable.sequenceId === sequence.id)
+      .map((schedulable) => placementByOccurrence.get(schedulable.occurrenceId))
+      .filter((placement): placement is Placement => placement !== undefined);
+
+    // A sequence with fewer than two placed members cannot be discontiguous.
+    if (members.length < 2) continue;
+
+    const ordered = sorted(
+      members,
+      chain(
+        byInt((p) => p.interval.start),
+        byId((p) => p.occurrenceId),
+      ),
+    );
+
+    checkSequenceContiguity(sequence.id, ordered, violations);
+    if (sequence.isOrdered) {
+      checkSequenceOrder(sequence.id, ordered, schedulables, violations);
+    }
+    checkSequenceWindow(context, sequence.id, ordered, schedulables, violations);
+    checkSequenceIsolation(sequence.id, ordered, placements, schedulables, violations);
+  }
+}
+
+function checkSequenceContiguity(
+  sequenceId: string,
+  ordered: readonly Placement[],
+  violations: Violation[],
+): void {
+  for (let i = 1; i < ordered.length; i += 1) {
+    const previous = ordered[i - 1]!;
+    const current = ordered[i]!;
+    const expectedStart = previous.interval.end + previous.cooldownMin;
+
+    if (current.interval.start !== expectedStart) {
+      violations.push({
+        code: 'sequence_not_contiguous',
+        occurrenceId: current.occurrenceId,
+        relatedOccurrenceId: previous.occurrenceId,
+        sequenceId,
+        interval: current.interval,
+        limit: expectedStart,
+        message: `Sequence ${sequenceId} is uninterruptible, so ${current.occurrenceId} must start at ${expectedStart}, immediately after ${previous.occurrenceId} and its cooldown, but starts at ${current.interval.start}.`,
+      });
+    }
+  }
+}
+
+function checkSequenceOrder(
+  sequenceId: string,
+  ordered: readonly Placement[],
+  schedulables: ReadonlyMap<string, Schedulable>,
+  violations: Violation[],
+): void {
+  for (let i = 1; i < ordered.length; i += 1) {
+    const previous = ordered[i - 1]!;
+    const current = ordered[i]!;
+    const previousPosition = schedulables.get(previous.occurrenceId)?.sequencePosition;
+    const currentPosition = schedulables.get(current.occurrenceId)?.sequencePosition;
+
+    if (previousPosition === undefined || currentPosition === undefined) continue;
+
+    if (currentPosition < previousPosition) {
+      violations.push({
+        code: 'sequence_out_of_order',
+        occurrenceId: current.occurrenceId,
+        relatedOccurrenceId: previous.occurrenceId,
+        sequenceId,
+        interval: current.interval,
+        message: `Sequence ${sequenceId} is ordered: position ${currentPosition} (${current.occurrenceId}) is placed after position ${previousPosition} (${previous.occurrenceId}).`,
+      });
+    }
+  }
+}
+
+function checkSequenceWindow(
+  context: ScheduleContext,
+  sequenceId: string,
+  ordered: readonly Placement[],
+  schedulables: ReadonlyMap<string, Schedulable>,
+  violations: Violation[],
+): void {
+  const windowsPerMember = ordered.map((placement) => {
+    const schedulable = schedulables.get(placement.occurrenceId)!;
+    const candidates = eligibleWindows(
+      context.windows,
+      schedulable.calendarId,
+      schedulable.categoryId,
+    );
+    return { placement, window: windowContaining(candidates, placement.interval) };
+  });
+
+  const first = windowsPerMember[0];
+  // Members outside any window are already reported by rule 1; reporting them
+  // again here as a "span" would be noise rather than a second problem.
+  if (!first?.window) return;
+
+  for (const { placement, window } of windowsPerMember.slice(1)) {
+    if (!window) return;
+
+    if (!isSameWindow(window, first.window)) {
+      violations.push({
+        code: 'sequence_spans_windows',
+        occurrenceId: placement.occurrenceId,
+        relatedOccurrenceId: first.placement.occurrenceId,
+        sequenceId,
+        windowRuleId: window.ruleId,
+        interval: placement.interval,
+        message: `Sequence ${sequenceId} must sit inside a single window, but ${placement.occurrenceId} is in window ${window.ruleId} at ${formatInterval(window.interval)} while ${first.placement.occurrenceId} is in ${first.window.ruleId} at ${formatInterval(first.window.interval)}.`,
+      });
+    }
+  }
+}
+
+/** Resolved windows have no identity of their own; a rule plus its span is one. */
+function isSameWindow(a: ResolvedWindow, b: ResolvedWindow): boolean {
+  return (
+    a.ruleId === b.ruleId &&
+    a.interval.start === b.interval.start &&
+    a.interval.end === b.interval.end
+  );
+}
+
+function checkSequenceIsolation(
+  sequenceId: string,
+  ordered: readonly Placement[],
+  allPlacements: readonly Placement[],
+  schedulables: ReadonlyMap<string, Schedulable>,
+  violations: Violation[],
+): void {
+  const first = ordered[0]!;
+  const last = ordered[ordered.length - 1]!;
+  const span: Interval = {
+    start: first.interval.start,
+    // The trailing cooldown belongs to the block; a task placed inside it is
+    // interleaved just as surely as one between two members.
+    end: last.interval.end + last.cooldownMin,
+  };
+
+  const memberOccurrences = new Set(ordered.map((placement) => placement.occurrenceId));
+
+  for (const placement of sorted(
+    allPlacements,
+    byId((p) => p.occurrenceId),
+  )) {
+    if (memberOccurrences.has(placement.occurrenceId)) continue;
+    if (!overlaps(placement.interval, span)) continue;
+
+    const schedulable = schedulables.get(placement.occurrenceId);
+    violations.push({
+      code: 'sequence_interleaved',
+      occurrenceId: placement.occurrenceId,
+      sequenceId,
+      interval: placement.interval,
+      message: `Task ${schedulable?.taskId ?? placement.occurrenceId} is placed at ${formatInterval(placement.interval)}, inside the uninterruptible span ${formatInterval(span)} of sequence ${sequenceId}.`,
+    });
+  }
+}
