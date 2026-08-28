@@ -12,7 +12,9 @@ import type { Schedulable } from '../types.js';
  * matter of choosing weights carefully.
  *
  * Sequence contiguity (rule 5) is the exception: it constrains a *group*, not a
- * single placement, and arrives with sequence support in M5.
+ * single placement. It is enforced a level up, by collapsing a sequence into a
+ * single composite before it reaches here (see `sequences.ts`), so what this
+ * module filters is always one indivisible span.
  */
 
 export interface OccupiedFootprint {

@@ -2,6 +2,8 @@ import { byId, byInt, chain, descending, sorted } from '../ordering.js';
 import { DEFAULT_TUNING, type TuningConfig } from '../config.js';
 import { computeHardHorizon } from '../horizon.js';
 import { eligibleWindows } from '../windows.js';
+import { freeSpans, maxSpanMinutes } from '../spans.js';
+import { buildPlacementUnits, expandUnit, type PlacementUnit } from '../sequences.js';
 import { defaultScoringPolicy } from '../scoring/default-policy.js';
 import {
   assertPolicyMatchesWeights,
@@ -10,7 +12,7 @@ import {
   type ScoringPolicy,
 } from '../scoring/policy.js';
 import { candidateIntervals, occupiedWithin, type OccupiedFootprint } from './slots.js';
-import { assignBacklogWeeks, type BacklogEntry, type UnplacedTask } from '../backlog.js';
+import { assignBacklogWeeks, type BacklogEntry, type UnplacedUnit } from '../backlog.js';
 import type { CompositeScore } from '../fixed-point.js';
 import type { Diagnostic, InfeasibilityReason } from '../diagnostics.js';
 import type { Interval } from '../time.js';
@@ -25,15 +27,22 @@ import type {
 /**
  * The greedy solver (spec §6.5).
  *
- * Two stages: stage 1 decides which task chooses first, stage 2 decides which
+ * Two stages: stage 1 decides which unit chooses first, stage 2 decides which
  * slot it takes. Both are pure ranking over candidates that have *already*
  * passed every hard filter in `slots.ts`. That ordering is the point — it makes
  * "soft constraints never override hard ones" structural rather than a property
  * of how the weights happen to be set. No weighting of the scoring terms can
  * produce an invalid placement, because invalid slots are never scored.
  *
- * A task with no feasible slot is never placed illegally: it goes to the
- * backlog with a named reason (§6.7).
+ * What is placed is a **unit**, not a task: a lone task, or a whole
+ * uninterruptible sequence collapsed into one composite (§6.2 rule 5, see
+ * `sequences.ts`). Placing the block as a single indivisible thing is what
+ * makes contiguity structural too — there is no moment at which some members
+ * are placed and others are not, so nothing can be interleaved and no member
+ * can be stranded in a different window.
+ *
+ * A unit with no feasible slot is never placed illegally: every member goes to
+ * the backlog together, with a named reason (§6.7).
  */
 
 export interface SolveOptions {
@@ -57,33 +66,43 @@ export function solve(context: ScheduleContext, options: SolveOptions = {}): Sol
   const calendars = new Map(context.calendars.map((calendar) => [calendar.id, calendar]));
   const horizon = resolveHorizon(context, calendars, config);
 
-  // Only windows inside the hard horizon are placeable; anything beyond it
-  // belongs to the coarse weekly planner (§6.1).
-  const windows = context.windows.filter(
-    (window) => window.interval.start < horizon.end && window.interval.end > horizon.start,
-  );
+  // Only time inside the hard horizon is placeable; anything beyond it belongs
+  // to the coarse weekly planner (§6.1). Windows are **clipped**, not merely
+  // filtered: `resolveWindows` already clips, but a caller building windows by
+  // hand should not be able to make the solver place past the horizon end, and
+  // clipping is what makes "every placement is inside the horizon" true by
+  // construction rather than by the caller's good manners.
+  const windows = context.windows
+    .filter((window) => window.interval.start < horizon.end && window.interval.end > horizon.start)
+    .map((window) => ({
+      ...window,
+      interval: {
+        start: Math.max(window.interval.start, horizon.start),
+        end: Math.min(window.interval.end, horizon.end),
+      },
+    }));
 
   const feasibleMinutes = feasibleMinutesByCategory(windows);
 
   // Stage 1 — placement order: descending score, then the spec's tie-break of
   // earlier due date, higher priority, smaller id (§6.5).
   const ordered = sorted(
-    context.schedulables,
-    chain<Schedulable>(
+    buildPlacementUnits(context),
+    chain<PlacementUnit>(
       descending(
-        byInt((schedulable) =>
+        byInt((unit) =>
           orderScore(policy, config, {
-            schedulable,
+            schedulable: unit.composite,
             now: context.now,
             horizon,
-            feasibleWindowMinutes: feasibleMinutes.get(categoryKey(schedulable)) ?? 0,
+            feasibleWindowMinutes: feasibleMinutes.get(categoryKey(unit.composite)) ?? 0,
             config,
           }),
         ),
       ),
-      byInt((schedulable) => schedulable.dueDate ?? Number.MAX_SAFE_INTEGER),
-      descending(byInt((schedulable) => schedulable.priority ?? 0)),
-      byId((schedulable) => schedulable.occurrenceId),
+      byInt((unit) => unit.composite.dueDate ?? Number.MAX_SAFE_INTEGER),
+      descending(byInt((unit) => unit.composite.priority ?? 0)),
+      byId((unit) => unit.id),
     ),
   );
 
@@ -91,27 +110,34 @@ export function solve(context: ScheduleContext, options: SolveOptions = {}): Sol
     interval: block.interval,
   }));
   const placements: Placement[] = [];
-  const unplaced: UnplacedTask[] = [];
+  const unplaced: UnplacedUnit[] = [];
 
-  for (const schedulable of ordered) {
-    const best = chooseSlot(schedulable, windows, occupied, calendars, policy, config, horizon);
+  for (const unit of ordered) {
+    const best = unit.blocked
+      ? undefined
+      : chooseSlot(unit.composite, windows, occupied, calendars, policy, config, horizon);
 
     if (!best) {
-      unplaced.push({ schedulable, reason: diagnoseInfeasibility(schedulable, windows, horizon) });
+      unplaced.push({ unit, reason: diagnoseInfeasibility(unit, windows, occupied, horizon) });
       continue;
     }
 
-    placements.push({
-      occurrenceId: schedulable.occurrenceId,
-      interval: best.interval,
-      cooldownMin: schedulable.cooldownMin,
-    });
-    // The committed footprint includes the cooldown, so later tasks avoid it
-    // (§6.2 rule 3).
-    occupied.push({
-      interval: { start: best.interval.start, end: best.interval.end + schedulable.cooldownMin },
-      occurrenceId: schedulable.occurrenceId,
-    });
+    // Expanding here rather than at the end keeps the committed footprint and
+    // the reported placements the same thing, so a later unit sees exactly what
+    // the validator will see.
+    for (const placement of expandUnit(unit, best.interval.start)) {
+      placements.push(placement);
+      // The committed footprint includes the cooldown, so later units avoid it
+      // (§6.2 rule 3). Member footprints abut, so a sequence's members together
+      // occupy one unbroken span with no seam to slip a foreign task into.
+      occupied.push({
+        interval: {
+          start: placement.interval.start,
+          end: placement.interval.end + placement.cooldownMin,
+        },
+        occurrenceId: placement.occurrenceId,
+      });
+    }
   }
 
   const backlog = assignBacklogWeeks(unplaced, { ...context, horizon }, config);
@@ -161,7 +187,7 @@ interface ScoredSlot {
 }
 
 /**
- * Stage 2 — the best slot for one task.
+ * Stage 2 — the best slot for one unit.
  *
  * Every candidate reaching here already satisfies the hard constraints, so this
  * is pure preference. Ties break by earliest start, then window rule id (§6.5).
@@ -224,29 +250,50 @@ function compareSlotKeys(a: SlotKey, b: SlotKey): number {
 }
 
 /**
- * Names why a task could not be placed (spec §6.7).
+ * Names why a unit could not be placed (spec §6.7).
  *
- * Distinguishing these matters: "this category has no windows" and "the week is
- * full" call for entirely different responses from the user.
+ * Distinguishing these matters: "this category has no windows", "the week is
+ * full" and "no window is long enough to hold this sequence" call for entirely
+ * different responses from the user.
  */
 function diagnoseInfeasibility(
-  schedulable: Schedulable,
+  unit: PlacementUnit,
   windows: readonly ResolvedWindow[],
+  occupied: readonly OccupiedFootprint[],
   horizon: Interval,
 ): InfeasibilityReason {
-  const candidates = eligibleWindows(windows, schedulable.calendarId, schedulable.categoryId);
+  if (unit.blocked !== undefined) return unit.blocked;
+
+  const { composite } = unit;
+  const candidates = eligibleWindows(windows, composite.calendarId, composite.categoryId);
   if (candidates.length === 0) return 'no_feasible_window';
 
-  if (schedulable.manualFloor !== undefined && schedulable.manualFloor >= horizon.end) {
+  if (composite.manualFloor !== undefined && composite.manualFloor >= horizon.end) {
     return 'manual_floor_beyond_horizon';
   }
 
-  if (schedulable.dueKind === 'hard' && schedulable.dueDate !== undefined) {
+  if (composite.dueKind === 'hard' && composite.dueDate !== undefined) {
     const earliest = Math.min(...candidates.map((window) => window.interval.start));
-    const floor = Math.max(earliest, schedulable.manualFloor ?? earliest);
-    if (floor + schedulable.durationMin > schedulable.dueDate) {
+    const floor = Math.max(earliest, composite.manualFloor ?? earliest);
+    if (floor + composite.durationMin > composite.dueDate) {
       return 'hard_due_date_unreachable';
     }
+  }
+
+  // §6.6's contiguity case, stated as an infeasibility reason (§6.7): the
+  // category may hold plenty of free minutes and still have nowhere to put an
+  // uninterruptible block, because they do not come in one piece. Free spans
+  // are carved per window, so a run never crosses a window boundary — rule 5
+  // would not let the block cross one either.
+  //
+  // Only sequences get this reason. §6.7 scopes it to them, and for a lone task
+  // "no window is long enough" is already what insufficient capacity means.
+  if (unit.sequenceId !== undefined) {
+    const spans = freeSpans(
+      candidates.map((window) => window.interval),
+      occupied.map((block) => block.interval),
+    );
+    if (maxSpanMinutes(spans) < composite.durationMin) return 'no_contiguous_span';
   }
 
   // A big enough window exists in principle, so what is missing is free time.
@@ -280,6 +327,7 @@ function buildDiagnostics(
       severity: hard ? 'alert' : 'warning',
       occurrenceId: placement.occurrenceId,
       taskId: schedulable.taskId,
+      ...(schedulable.sequenceId === undefined ? {} : { sequenceId: schedulable.sequenceId }),
       dueDate: schedulable.dueDate,
       message: `Task ${schedulable.taskId} is placed until ${placement.interval.end}, past its ${hard ? 'hard' : 'soft'} due date at ${schedulable.dueDate}.`,
     });
@@ -294,6 +342,7 @@ function buildDiagnostics(
       severity: 'info',
       occurrenceId: entry.occurrenceId,
       taskId: schedulable.taskId,
+      ...(entry.sequenceId === undefined ? {} : { sequenceId: entry.sequenceId }),
       reason: entry.reason,
       ...(entry.estimatedWeek === null ? {} : { estimatedWeek: entry.estimatedWeek }),
       message: backlogMessage(schedulable, entry),
@@ -308,6 +357,7 @@ function buildDiagnostics(
         severity: hard ? 'alert' : 'warning',
         occurrenceId: entry.occurrenceId,
         taskId: schedulable.taskId,
+        ...(entry.sequenceId === undefined ? {} : { sequenceId: entry.sequenceId }),
         dueDate: schedulable.dueDate,
         reason: entry.reason,
         message: `Task ${schedulable.taskId} could not be placed in the horizon and has a ${hard ? 'hard' : 'soft'} due date at ${schedulable.dueDate}.`,
@@ -330,14 +380,25 @@ function backlogMessage(schedulable: Schedulable, entry: BacklogEntry): string {
       ? 'moved to the backlog with no week available in the planning window'
       : `moved to the backlog, estimated week ${entry.estimatedWeek}`;
 
+  // A sequence member is backlogged because its *block* could not be placed, so
+  // naming the block is what makes the message make sense.
+  const subject =
+    entry.sequenceId === undefined
+      ? `Task ${schedulable.taskId}`
+      : `Task ${schedulable.taskId} (sequence ${entry.sequenceId})`;
+
   switch (entry.reason) {
     case 'no_feasible_window':
-      return `Task ${schedulable.taskId} was ${where}: category ${schedulable.categoryId} has no availability window in this horizon.`;
+      return `${subject} was ${where}: category ${schedulable.categoryId} has no availability window in this horizon.`;
     case 'hard_due_date_unreachable':
-      return `Task ${schedulable.taskId} was ${where}: its hard due date falls before any window it could use.`;
+      return `${subject} was ${where}: its hard due date falls before any window it could use.`;
     case 'manual_floor_beyond_horizon':
-      return `Task ${schedulable.taskId} was ${where}: it was manually moved past the end of the horizon.`;
+      return `${subject} was ${where}: it was manually moved past the end of the horizon.`;
+    case 'no_contiguous_span':
+      return `${subject} was ${where}: no window is long enough to hold the whole uninterruptible block in one piece.`;
+    case 'sequence_members_incompatible':
+      return `${subject} was ${where}: its members belong to different categories or calendars, so no single window can hold them.`;
     default:
-      return `Task ${schedulable.taskId} was ${where}: no window in its category has enough remaining free time.`;
+      return `${subject} was ${where}: no window in its category has enough remaining free time.`;
   }
 }
