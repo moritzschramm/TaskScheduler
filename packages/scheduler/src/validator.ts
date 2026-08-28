@@ -1,6 +1,7 @@
 import { overlaps, type Interval } from './time.js';
 import { byId, byInt, chain, sorted } from './ordering.js';
 import { eligibleWindows, windowContaining } from './windows.js';
+import { resolveSequences } from './sequences.js';
 import type { Violation, ValidationResult } from './diagnostics.js';
 import type { Placement, ResolvedWindow, Schedulable, ScheduleContext } from './types.js';
 
@@ -285,8 +286,10 @@ function checkSequences(
 ): void {
   const placementByOccurrence = new Map(placements.map((p) => [p.occurrenceId, p]));
 
+  // Resolved rather than read straight off the context, so a member referring
+  // to an undeclared sequence is still held to rule 5 — see `resolveSequences`.
   for (const sequence of sorted(
-    context.sequences,
+    [...resolveSequences(context).values()],
     byId((s) => s.id),
   )) {
     const members = context.schedulables
@@ -372,35 +375,59 @@ function checkSequenceWindow(
   schedulables: ReadonlyMap<string, Schedulable>,
   violations: Violation[],
 ): void {
-  const windowsPerMember = ordered.map((placement) => {
+  // Every window that could hold each member, intersected across them.
+  //
+  // Asking whether *some* window holds them all is order-independent, which
+  // matters because nothing stops a category having two overlapping
+  // availability windows. Resolving each member to "the first window in the
+  // array that contains it" would report a split between two members that a
+  // third, longer window comfortably contains.
+  const perMember = ordered.map((placement) => {
     const schedulable = schedulables.get(placement.occurrenceId)!;
     const candidates = eligibleWindows(
       context.windows,
       schedulable.calendarId,
       schedulable.categoryId,
     );
-    return { placement, window: windowContaining(candidates, placement.interval) };
+
+    return {
+      placement,
+      windows: candidates.filter(
+        (window) =>
+          placement.interval.start >= window.interval.start &&
+          placement.interval.end <= window.interval.end,
+      ),
+    };
   });
 
-  const first = windowsPerMember[0];
-  // Members outside any window are already reported by rule 1; reporting them
-  // again here as a "span" would be noise rather than a second problem.
-  if (!first?.window) return;
+  // A member in no window at all is rule 1's problem; reporting it again as a
+  // span would be noise rather than a second defect.
+  if (perMember.some((entry) => entry.windows.length === 0)) return;
 
-  for (const { placement, window } of windowsPerMember.slice(1)) {
-    if (!window) return;
+  const first = perMember[0]!;
+  let common = first.windows;
 
-    if (!isSameWindow(window, first.window)) {
-      violations.push({
-        code: 'sequence_spans_windows',
-        occurrenceId: placement.occurrenceId,
-        relatedOccurrenceId: first.placement.occurrenceId,
-        sequenceId,
-        windowRuleId: window.ruleId,
-        interval: placement.interval,
-        message: `Sequence ${sequenceId} must sit inside a single window, but ${placement.occurrenceId} is in window ${window.ruleId} at ${formatInterval(window.interval)} while ${first.placement.occurrenceId} is in ${first.window.ruleId} at ${formatInterval(first.window.interval)}.`,
-      });
+  for (const entry of perMember.slice(1)) {
+    const shared = common.filter((window) =>
+      entry.windows.some((candidate) => isSameWindow(candidate, window)),
+    );
+    if (shared.length > 0) {
+      common = shared;
+      continue;
     }
+
+    // Reported once, at the member that breaks the run: the fix is the same
+    // wherever the block was going to be moved to.
+    violations.push({
+      code: 'sequence_spans_windows',
+      occurrenceId: entry.placement.occurrenceId,
+      relatedOccurrenceId: first.placement.occurrenceId,
+      sequenceId,
+      windowRuleId: entry.windows[0]!.ruleId,
+      interval: entry.placement.interval,
+      message: `Sequence ${sequenceId} must sit inside a single window, but no availability window contains both ${first.placement.occurrenceId} at ${formatInterval(first.placement.interval)} and ${entry.placement.occurrenceId} at ${formatInterval(entry.placement.interval)}.`,
+    });
+    return;
   }
 }
 

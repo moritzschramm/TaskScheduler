@@ -81,7 +81,18 @@ export type InfeasibilityReason =
   /** A hard due date falls before any slot the task could occupy. */
   | 'hard_due_date_unreachable'
   /** A manual floor pushes the task past the end of the horizon. */
-  | 'manual_floor_beyond_horizon';
+  | 'manual_floor_beyond_horizon'
+  /**
+   * A sequence needs one unbroken span and no window offers one long enough
+   * (spec §6.6, §6.7). Distinct from insufficient capacity: the category may
+   * hold plenty of minutes, just never enough of them in a row.
+   */
+  | 'no_contiguous_span'
+  /**
+   * A sequence's members cannot share a window — they belong to different
+   * categories or calendars. A data problem, not a capacity one.
+   */
+  | 'sequence_members_incompatible';
 
 /**
  * A non-fatal signal about the schedule (spec §6.7, §11).
@@ -108,6 +119,11 @@ export interface Diagnostic {
   occurrenceId: string;
   taskId: string;
   message: string;
+  /**
+   * Set when the occurrence belongs to a sequence, so a caller can group the
+   * members' diagnostics into the one thing the user actually sees.
+   */
+  sequenceId?: string;
   /** Present when the diagnostic explains why placement failed. */
   reason?: InfeasibilityReason;
   /** The week the coarse planner assigned, formatted `YYYY-MM-DD`. */
