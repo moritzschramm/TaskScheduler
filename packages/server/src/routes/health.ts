@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { healthResponseSchema, type HealthError, type HealthResponse } from '@ambitime/shared';
-import { appMeta } from '../db/schema.js';
+import { appMeta } from '../db/schema/index.js';
 import type { Database } from '../db/client.js';
 
 export interface HealthEnv {

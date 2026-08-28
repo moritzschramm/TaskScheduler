@@ -8,6 +8,20 @@
       "when": 1787853814493,
       "tag": "0000_app_meta",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787856336768,
+      "tag": "0001_identity_and_tenancy",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787856415349,
+      "tag": "0002_rls_and_invariants",
+      "breakpoints": true
     }
   ]
 }
