@@ -22,6 +22,20 @@
       "when": 1787856415349,
       "tag": "0002_rls_and_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787906916583,
+      "tag": "0003_scheduling_domain",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787906986511,
+      "tag": "0004_scheduling_constraints",
+      "breakpoints": true
     }
   ]
 }
