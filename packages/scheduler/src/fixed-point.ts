@@ -39,6 +39,11 @@ export type Score = number;
  */
 export type CompositeScore = number;
 
+/** Converts a human-written fraction such as `0.85` into fixed point, once. */
+export function fixed(fraction: number): number {
+  return Math.round(fraction * ONE);
+}
+
 /** Converts a human-written weight such as `0.5` into fixed point, once. */
 export function weight(fraction: number): number {
   return Math.round(fraction * WEIGHT_ONE);
@@ -60,6 +65,19 @@ export function clampScore(value: number): Score {
 export function ratio(numerator: number, denominator: number): Score {
   if (denominator <= 0) return 0;
   return clampScore(Math.round((numerator * ONE) / denominator));
+}
+
+/**
+ * `numerator / denominator` in the same fixed-point scale, **unclamped**.
+ *
+ * For quantities that legitimately exceed 1 — utilization above `ONE` is the
+ * whole point of the overcommitment signal (§6.6) — where `ratio`'s clamp would
+ * hide exactly the case worth reporting. Returns `null` on a non-positive
+ * denominator, because "demand with no supply at all" is not a number.
+ */
+export function rate(numerator: number, denominator: number): number | null {
+  if (denominator <= 0) return null;
+  return Math.round((numerator * ONE) / denominator);
 }
 
 /** `1 − ratio(numerator, denominator)`, for terms that decay with distance. */

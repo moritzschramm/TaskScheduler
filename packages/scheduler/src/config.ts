@@ -1,4 +1,4 @@
-import { weight } from './fixed-point.js';
+import { fixed, weight } from './fixed-point.js';
 
 /**
  * The tuning surface (spec §15).
@@ -31,6 +31,23 @@ export interface TuningConfig {
   /** How many weeks past the hard horizon the coarse planner will assign (§6.1). */
   backlogPlanningWeeks: number;
 
+  /**
+   * Utilization thresholds (§6.6, §15), in the same fixed-point scale as the
+   * weights so no comparison touches a float (§6.3): at or above `tight` a week
+   * is fragile, strictly above `overcommitted` some tasks will backlog.
+   *
+   * The capacity *period* is the week, which is the grain §6.6 defines its
+   * formula at. §15 anticipates day and rolling periods; the span reported over
+   * is the caller's horizon, so a caller wanting more resolves windows further
+   * out rather than reconfiguring the engine.
+   */
+  capacityThresholds: { tight: number; overcommitted: number };
+  /**
+   * Chronic-postponement threshold `N` (§6.6, §15): the number of *user*
+   * deferrals, or of estimated weeks slipped, at which a task is called out.
+   */
+  chronicPostponementThreshold: number;
+
   /** Stage-1 weights: which task picks a slot first (§6.5). */
   orderWeights: Record<string, number>;
   /** Stage-2 weights: which slot that task takes (§6.5). */
@@ -51,6 +68,8 @@ export const DEFAULT_TUNING: TuningConfig = {
   minUsableGapMin: 15,
   priorityRange: { min: 1, max: 5 },
   backlogPlanningWeeks: 12,
+  capacityThresholds: { tight: fixed(0.85), overcommitted: fixed(1) },
+  chronicPostponementThreshold: 3,
 
   orderWeights: {
     urgency: weight(0.5),
@@ -77,6 +96,7 @@ export function withTuning(overrides: Partial<TuningConfig> = {}): TuningConfig 
     ...DEFAULT_TUNING,
     ...overrides,
     priorityRange: { ...DEFAULT_TUNING.priorityRange, ...overrides.priorityRange },
+    capacityThresholds: { ...DEFAULT_TUNING.capacityThresholds, ...overrides.capacityThresholds },
     orderWeights: { ...DEFAULT_TUNING.orderWeights, ...overrides.orderWeights },
     slotWeights: { ...DEFAULT_TUNING.slotWeights, ...overrides.slotWeights },
   };
