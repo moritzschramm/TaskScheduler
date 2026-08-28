@@ -66,3 +66,52 @@ export interface ValidationResult {
   valid: boolean;
   violations: Violation[];
 }
+
+/**
+ * Why a task could not be placed in the hard horizon (spec §6.7). The engine
+ * names the reason rather than reporting a bare failure, because the fixes
+ * differ: no window at all is a configuration problem, a full category is a
+ * capacity problem, an unreachable deadline is a planning problem.
+ */
+export type InfeasibilityReason =
+  /** The task's category has no availability window in the horizon. */
+  | 'no_feasible_window'
+  /** Windows exist, but every slot is taken by other tasks or fixed blocks. */
+  | 'insufficient_remaining_capacity'
+  /** A hard due date falls before any slot the task could occupy. */
+  | 'hard_due_date_unreachable'
+  /** A manual floor pushes the task past the end of the horizon. */
+  | 'manual_floor_beyond_horizon';
+
+/**
+ * A non-fatal signal about the schedule (spec §6.7, §11).
+ *
+ * Distinct from `Violation`: a violation means the schedule is *invalid*, while
+ * a diagnostic reports something the user should know about a schedule that is
+ * otherwise perfectly legal — a task pushed to the backlog, a soft due date at
+ * risk.
+ */
+export type DiagnosticCode =
+  /** Moved to the backlog with an estimated week. Informational (§11). */
+  | 'backlogged'
+  /** A soft due date will be missed. Warning (§6.5). */
+  | 'soft_due_date_at_risk'
+  /** A hard due date cannot be met. Alert (§6.7). */
+  | 'hard_due_date_at_risk';
+
+/** Mirrors the notification severities of spec §11. */
+export type DiagnosticSeverity = 'info' | 'warning' | 'alert';
+
+export interface Diagnostic {
+  code: DiagnosticCode;
+  severity: DiagnosticSeverity;
+  occurrenceId: string;
+  taskId: string;
+  message: string;
+  /** Present when the diagnostic explains why placement failed. */
+  reason?: InfeasibilityReason;
+  /** The week the coarse planner assigned, formatted `YYYY-MM-DD`. */
+  estimatedWeek?: string;
+  /** The due date at risk, when there is one. */
+  dueDate?: Instant;
+}

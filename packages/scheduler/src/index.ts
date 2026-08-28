@@ -6,8 +6,9 @@
  * It must never import DB or HTTP code — enforced by lint (`eslint.config.js`)
  * and by `test/purity.test.ts`.
  *
- * M3 delivers the types, the hard-constraint validator and the determinism
- * foundation. Placement and scoring arrive in M4, sequences and capacity in M5.
+ * M3 delivered the types, the hard-constraint validator and the determinism
+ * foundation. M4 adds placement, the modular scoring policy, the horizon model
+ * and the backlog. Sequences and capacity arrive in M5.
  */
 
 export const SCHEDULER_PACKAGE = '@ambitime/scheduler' as const;
@@ -18,3 +19,11 @@ export * from './ordering.js';
 export * from './windows.js';
 export * from './diagnostics.js';
 export * from './validator.js';
+export * from './fixed-point.js';
+export * from './config.js';
+export * from './horizon.js';
+export * from './backlog.js';
+export * from './scoring/policy.js';
+export * from './scoring/default-policy.js';
+export * from './placement/slots.js';
+export * from './placement/solve.js';
