@@ -15,14 +15,23 @@ import { setupTestDatabase, TEST_DATABASE_URL } from './support/database.js';
  * scheduling table without RLS.
  */
 /**
- * Tables the application role may read but never write. `ALTER DEFAULT
- * PRIVILEGES` grants DML on everything by default, so each entry here is a
- * deliberate revoke in migration 0002 — not an oversight.
+ * Write access is granted by `ALTER DEFAULT PRIVILEGES`, so every table is
+ * fully writable unless a migration deliberately revokes something. These two
+ * lists are that deliberation, written down — each entry is a revoke in a
+ * migration, not an oversight, and the tests below hold them to it in both
+ * directions.
  */
+
+/** No INSERT, UPDATE or DELETE. Migration-owned configuration. */
 const READ_ONLY_TABLES = ['app_meta'];
 
-/** Postgres array literal, built in SQL so the list stays a bound parameter. */
-const readOnlyTableList = READ_ONLY_TABLES.join(',');
+/** INSERT only — the command log is append-only (spec §12). */
+const APPEND_ONLY_TABLES = ['commands'];
+
+/** Joined in JS and split in SQL, so the lists stay bound parameters. */
+const readOnlyList = READ_ONLY_TABLES.join(',');
+const appendOnlyList = APPEND_ONLY_TABLES.join(',');
+const restrictedList = [...READ_ONLY_TABLES, ...APPEND_ONLY_TABLES].join(',');
 
 describe('schema-wide guards', () => {
   let handle: DatabaseHandle;
@@ -97,7 +106,7 @@ describe('schema-wide guards', () => {
     expect(missing).toEqual([]);
   });
 
-  it('gives the application role write privileges on every table but the read-only ones', async () => {
+  it('gives the application role full write access to every unrestricted table', async () => {
     const missing = await handle.db.execute<{ table_name: string; privilege: string }>(
       sql`
         select c.relname as table_name, needed.privilege
@@ -106,7 +115,7 @@ describe('schema-wide guards', () => {
          cross join (values ('INSERT'), ('UPDATE'), ('DELETE')) as needed(privilege)
          where n.nspname = 'public'
            and c.relkind = 'r'
-           and c.relname <> all(string_to_array(${readOnlyTableList}, ','))
+           and c.relname <> all(string_to_array(${restrictedList}, ','))
            and not has_table_privilege(${APP_ROLE}, c.oid, needed.privilege)
          order by 1, 2
       `,
@@ -124,13 +133,38 @@ describe('schema-wide guards', () => {
          cross join (values ('INSERT'), ('UPDATE'), ('DELETE')) as granted(privilege)
          where n.nspname = 'public'
            and c.relkind = 'r'
-           and c.relname = any(string_to_array(${readOnlyTableList}, ','))
+           and c.relname = any(string_to_array(${readOnlyList}, ','))
            and has_table_privilege(${APP_ROLE}, c.oid, granted.privilege)
          order by 1, 2
       `,
     );
 
     expect(writable).toEqual([]);
+  });
+
+  it('lets the append-only tables be inserted into but never rewritten', async () => {
+    const wrong = await handle.db.execute<{ table_name: string; privilege: string }>(
+      sql`
+        with target as (
+          select c.oid, c.relname
+            from pg_class c
+            join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'public'
+             and c.relkind = 'r'
+             and c.relname = any(string_to_array(${appendOnlyList}, ','))
+        )
+        select relname as table_name, 'INSERT' as privilege
+          from target where not has_table_privilege(${APP_ROLE}, oid, 'INSERT')
+        union all
+        select relname, granted.privilege
+          from target
+         cross join (values ('UPDATE'), ('DELETE')) as granted(privilege)
+         where has_table_privilege(${APP_ROLE}, oid, granted.privilege)
+         order by 1, 2
+      `,
+    );
+
+    expect(wrong).toEqual([]);
   });
 
   it('keeps a touch_row trigger on every versioned table', async () => {
