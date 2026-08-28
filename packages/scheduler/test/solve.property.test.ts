@@ -5,13 +5,15 @@ import {
   validateSchedule,
   withTuning,
   type FixedBlock,
+  type Placement,
   type Schedulable,
   type ScheduleContext,
+  type SequenceSpec,
 } from '../src/index.js';
 import { at, context, MONDAY_WINDOW, TUESDAY_WINDOW } from './support/fixtures.js';
 
 /**
- * The property suite for M4 (spec §14).
+ * The property suite for the engine (spec §14), extended in M5 with sequences.
  *
  * The headline property is the first one: **whatever the solver returns must
  * pass the M3 validator**. That single assertion covers every hard constraint
@@ -19,8 +21,9 @@ import { at, context, MONDAY_WINDOW, TUESDAY_WINDOW } from './support/fixtures.j
  * missed — over randomised inputs rather than hand-picked ones, and it is the
  * precise statement of "soft constraints never override hard ones".
  *
- * Sequences are excluded: they constrain a group rather than a placement and
- * arrive in M5, so generating them here would assert against unbuilt behaviour.
+ * Sequences get their own scenario generator further down: they constrain a
+ * group rather than a single placement, so they deserve properties stated in
+ * terms of the group.
  */
 
 const WINDOW_START = MONDAY_WINDOW.interval.start;
@@ -298,3 +301,259 @@ function permute<T>(items: readonly T[], seed: readonly number[]): T[] {
   }
   return result;
 }
+
+/**
+ * Sequence scenarios (spec §6.2 rule 5).
+ *
+ * Members share a category, so these exercise real placement rather than the
+ * degenerate "no window could ever hold this" path — that one is covered by
+ * hand in `sequences.test.ts`, where the expected diagnosis can be named.
+ */
+const memberArbitrary = fc.record({
+  durationMin: fc.integer({ min: 15, max: 90 }),
+  cooldownMin: fc.constantFrom(0, 15, 30),
+  position: fc.integer({ min: 1, max: 6 }),
+  priority: fc.option(fc.integer({ min: 1, max: 5 }), { nil: undefined }),
+});
+
+const sequenceScenarioArbitrary = fc
+  .record({
+    sequences: fc.array(
+      fc.record({
+        isOrdered: fc.boolean(),
+        members: fc.array(memberArbitrary, { minLength: 2, maxLength: 4 }),
+      }),
+      { minLength: 1, maxLength: 3 },
+    ),
+    lone: fc.array(
+      fc.record({
+        durationMin: fc.integer({ min: 15, max: 120 }),
+        cooldownMin: fc.constantFrom(0, 15),
+      }),
+      { maxLength: 4 },
+    ),
+    blocks: fc.array(fixedBlockArbitrary, { maxLength: 3 }),
+  })
+  .map(({ sequences, lone, blocks }) => {
+    const schedulables: Schedulable[] = [];
+    const specs: SequenceSpec[] = [];
+
+    sequences.forEach((spec, sequenceIndex) => {
+      const sequenceId = `seq-${sequenceIndex}`;
+      specs.push({ id: sequenceId, isOrdered: spec.isOrdered });
+
+      spec.members.forEach((memberSpec, memberIndex) => {
+        schedulables.push({
+          occurrenceId: `${sequenceId}-m${memberIndex}`,
+          taskId: `${sequenceId}-t${memberIndex}`,
+          calendarId: 'cal-1',
+          categoryId: 'cat-work',
+          durationMin: memberSpec.durationMin,
+          cooldownMin: memberSpec.cooldownMin,
+          sequenceId,
+          sequencePosition: memberSpec.position,
+          ...(memberSpec.priority === undefined ? {} : { priority: memberSpec.priority }),
+        });
+      });
+    });
+
+    lone.forEach((spec, index) => {
+      schedulables.push({
+        occurrenceId: `lone-${index}`,
+        taskId: `lone-t${index}`,
+        calendarId: 'cal-1',
+        categoryId: 'cat-work',
+        durationMin: spec.durationMin,
+        cooldownMin: spec.cooldownMin,
+      });
+    });
+
+    return context({ schedulables, sequences: specs, fixedBlocks: disjoint(blocks) });
+  });
+
+/** The placed members of one sequence, in time order. */
+function membersOf(ctx: ScheduleContext, placements: readonly Placement[], sequenceId: string) {
+  const members = new Map(
+    ctx.schedulables
+      .filter((schedulable) => schedulable.sequenceId === sequenceId)
+      .map((schedulable) => [schedulable.occurrenceId, schedulable]),
+  );
+
+  return placements
+    .filter((placement) => members.has(placement.occurrenceId))
+    .sort((a, b) => a.interval.start - b.interval.start)
+    .map((placement) => ({ placement, schedulable: members.get(placement.occurrenceId)! }));
+}
+
+describe('sequences are placed as indivisible blocks', () => {
+  it('produces a schedule the validator accepts', () => {
+    // Rule 5 in full — contiguous, in order, one window, nothing interleaved —
+    // asserted at once over randomised sequences.
+    fc.assert(
+      fc.property(sequenceScenarioArbitrary, (ctx) => {
+        const result = solve(ctx);
+        expect(validateSchedule(ctx, result.placements).violations).toEqual([]);
+      }),
+      { numRuns: 300 },
+    );
+  });
+
+  it('places members back to back, cooldowns included', () => {
+    fc.assert(
+      fc.property(sequenceScenarioArbitrary, (ctx) => {
+        const result = solve(ctx);
+
+        for (const sequence of ctx.sequences) {
+          const placed = membersOf(ctx, result.placements, sequence.id);
+
+          for (let i = 1; i < placed.length; i += 1) {
+            const previous = placed[i - 1]!.placement;
+            expect(placed[i]!.placement.interval.start).toBe(
+              previous.interval.end + previous.cooldownMin,
+            );
+          }
+        }
+      }),
+      { numRuns: 300 },
+    );
+  });
+
+  it('places every member or none of them', () => {
+    // Half a sequence is not a partial success; it is an invalid schedule.
+    fc.assert(
+      fc.property(sequenceScenarioArbitrary, (ctx) => {
+        const result = solve(ctx);
+        const backlogged = new Set(result.backlog.map((entry) => entry.occurrenceId));
+
+        for (const sequence of ctx.sequences) {
+          const all = ctx.schedulables.filter(
+            (schedulable) => schedulable.sequenceId === sequence.id,
+          );
+          const placed = membersOf(ctx, result.placements, sequence.id).length;
+
+          expect(placed === 0 || placed === all.length).toBe(true);
+          if (placed === 0) {
+            for (const schedulable of all)
+              expect(backlogged.has(schedulable.occurrenceId)).toBe(true);
+          }
+        }
+      }),
+      { numRuns: 300 },
+    );
+  });
+
+  it('keeps ordered members in position order', () => {
+    fc.assert(
+      fc.property(sequenceScenarioArbitrary, (ctx) => {
+        const result = solve(ctx);
+
+        for (const sequence of ctx.sequences) {
+          if (!sequence.isOrdered) continue;
+          const placed = membersOf(ctx, result.placements, sequence.id);
+
+          for (let i = 1; i < placed.length; i += 1) {
+            // Non-decreasing rather than increasing: two members may share a
+            // position, and the id then breaks the tie.
+            expect(placed[i]!.schedulable.sequencePosition).toBeGreaterThanOrEqual(
+              placed[i - 1]!.schedulable.sequencePosition!,
+            );
+          }
+        }
+      }),
+      { numRuns: 300 },
+    );
+  });
+
+  it('never lets a foreign task fall inside a block', () => {
+    fc.assert(
+      fc.property(sequenceScenarioArbitrary, (ctx) => {
+        const result = solve(ctx);
+
+        for (const sequence of ctx.sequences) {
+          const placed = membersOf(ctx, result.placements, sequence.id);
+          if (placed.length === 0) continue;
+
+          const first = placed[0]!.placement;
+          const last = placed[placed.length - 1]!.placement;
+          // The trailing cooldown belongs to the block: a task started inside
+          // it has interrupted the sequence just as surely.
+          const span = { start: first.interval.start, end: last.interval.end + last.cooldownMin };
+          const members = new Set(placed.map((entry) => entry.placement.occurrenceId));
+
+          for (const placement of result.placements) {
+            if (members.has(placement.occurrenceId)) continue;
+            expect(
+              placement.interval.start >= span.end || placement.interval.end <= span.start,
+            ).toBe(true);
+          }
+        }
+      }),
+      { numRuns: 300 },
+    );
+  });
+
+  it('keeps each block inside a single window', () => {
+    fc.assert(
+      fc.property(sequenceScenarioArbitrary, (ctx) => {
+        const result = solve(ctx);
+
+        for (const sequence of ctx.sequences) {
+          const placed = membersOf(ctx, result.placements, sequence.id);
+          if (placed.length === 0) continue;
+
+          const first = placed[0]!.placement;
+          const last = placed[placed.length - 1]!.placement;
+          const containing = ctx.windows.filter(
+            (window) =>
+              first.interval.start >= window.interval.start &&
+              last.interval.end <= window.interval.end,
+          );
+
+          expect(containing.length).toBeGreaterThan(0);
+        }
+      }),
+      { numRuns: 300 },
+    );
+  });
+
+  it('stays deterministic however the members arrive', () => {
+    fc.assert(
+      fc.property(sequenceScenarioArbitrary, fc.array(fc.integer()), (ctx, seed) => {
+        const shuffled: ScheduleContext = {
+          ...ctx,
+          schedulables: permute(ctx.schedulables, seed),
+          sequences: permute(ctx.sequences, seed),
+          windows: permute(ctx.windows, seed),
+        };
+
+        expect(solve(shuffled)).toEqual(solve(ctx));
+      }),
+      { numRuns: 200 },
+    );
+  });
+});
+
+describe('the sequence generator exercises real placement', () => {
+  it('places most of the scenarios it produces', () => {
+    // Guards the properties above against passing vacuously: if the generator
+    // drifted into producing only unplaceable blocks, every "members are
+    // contiguous" assertion would hold over an empty list and prove nothing.
+    const scenarios = fc.sample(sequenceScenarioArbitrary, { numRuns: 200, seed: 20260828 });
+
+    let placedSequences = 0;
+    let totalSequences = 0;
+
+    for (const ctx of scenarios) {
+      const result = solve(ctx);
+      for (const sequence of ctx.sequences) {
+        totalSequences += 1;
+        if (membersOf(ctx, result.placements, sequence.id).length > 0) placedSequences += 1;
+      }
+    }
+
+    expect(totalSequences).toBeGreaterThan(200);
+    // Around 94% place with this seed; the bound is loose enough to survive a
+    // generator tweak but tight enough to catch the properties going hollow.
+    expect(placedSequences / totalSequences).toBeGreaterThan(0.8);
+  });
+});
