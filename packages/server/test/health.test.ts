@@ -14,7 +14,7 @@ describe('GET /api/health', () => {
   });
 
   afterAll(async () => {
-    await handle.close();
+    await handle?.close();
   });
 
   it('reports ok and round-trips a real query to Postgres', async () => {
@@ -28,7 +28,9 @@ describe('GET /api/health', () => {
 
     expect(body.status).toBe('ok');
     expect(body.database.reachable).toBe(true);
-    expect(body.database.schemaVersion).toBe('m0');
+    // Bumped by each milestone's migration; asserting the exact value proves
+    // migrations ran to completion, not just that the table exists.
+    expect(body.database.schemaVersion).toBe('m1');
     expect(Number.isNaN(Date.parse(body.database.serverTime))).toBe(false);
     expect(body.database.latencyMs).toBeGreaterThanOrEqual(0);
   });
