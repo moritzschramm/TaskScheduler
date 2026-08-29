@@ -216,6 +216,43 @@ describe('slot preference (spec §6.5 stage 2)', () => {
     // Earliness favours the shallow morning window; the focus match outweighs it.
     expect(placementOf(result, 'a')?.interval.start).toBe(at('2026-03-23T13:00:00Z'));
   });
+
+  it('pulls a repositioned task to where it was dropped, not to the earliest slot', () => {
+    // §7.3: `MoveTask` sets a floor *and* a bias. The floor alone would leave
+    // this at 11:00 either way; what is under test is the bias, which is the
+    // half that has to work when something else wants the same time.
+    const moved = schedulable({
+      occurrenceId: 'moved',
+      durationMin: 60,
+      manualFloor: at('2026-03-23T11:00:00Z'),
+      manualBias: at('2026-03-23T14:00:00Z'),
+    });
+
+    const result = solve(context({ schedulables: [moved] }));
+
+    expect(placementOf(result, 'moved')?.interval.start).toBe(at('2026-03-23T14:00:00Z'));
+  });
+
+  it('lets a bias lose to a hard constraint, because a bias is not a pin', () => {
+    // An appointment sits exactly where the user dropped the task. §7.3: the
+    // task is delayed, not fixed — it moves, and the floor decides which way.
+    // Floor and bias coincide, as `MoveTask` sets them, so the only direction
+    // left is later.
+    const moved = schedulable({
+      occurrenceId: 'moved',
+      durationMin: 60,
+      manualFloor: at('2026-03-23T14:00:00Z'),
+      manualBias: at('2026-03-23T14:00:00Z'),
+    });
+    const blocked = solve(
+      context({
+        schedulables: [moved],
+        fixedBlocks: [fixedBlock('appt', '2026-03-23T14:00:00Z', '2026-03-23T15:00:00Z')],
+      }),
+    );
+
+    expect(placementOf(blocked, 'moved')?.interval.start).toBe(at('2026-03-23T15:00:00Z'));
+  });
 });
 
 describe('backlog and infeasibility (spec §6.1, §6.7)', () => {

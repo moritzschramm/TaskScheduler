@@ -55,11 +55,16 @@ export interface TuningConfig {
 }
 
 /**
- * Spec §6.5's draft policy.
+ * Spec §6.5's draft policy, plus the bias term of §7.3.
  *
  * `fragmentation` carries a negative weight because §6.5 subtracts it
  * (`0.5·Pr + 0.2·E − 0.3·F`); terms themselves are always non-negative, so the
  * sign lives in one place rather than being an per-term convention.
+ *
+ * `bias` is weighted level with `preferredMatch`, and above `earliness`: a task
+ * the user picked up and dropped somewhere is a more specific instruction than
+ * a standing "mornings, please", and both should outrank the engine's own mild
+ * preference for scheduling early. Like every weight here, a tuning value (§15).
  */
 export const DEFAULT_TUNING: TuningConfig = {
   hardHorizonWeeks: 2,
@@ -80,6 +85,7 @@ export const DEFAULT_TUNING: TuningConfig = {
     preferredMatch: weight(0.5),
     earliness: weight(0.2),
     fragmentation: weight(-0.3),
+    bias: weight(0.5),
   },
 };
 

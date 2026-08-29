@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assertPolicyMatchesWeights,
+  bias,
   constrainedness,
   DEFAULT_TUNING,
   defaultScoringPolicy,
@@ -250,13 +251,38 @@ describe('stage-2 terms (spec §6.5)', () => {
     expect(score).toBe(0);
   });
 
-  it('composes the stage-2 score as 0.5·Pr + 0.2·E − 0.3·F', () => {
+  it('scores the bias 1 exactly on the repositioned time, and decays by the hour', () => {
+    // §7.3's `manual_bias`: where the user actually dropped the task.
+    const start = MONDAY_WINDOW.interval.start;
+    const biased = (manualBias: number, candidateStart: number) =>
+      bias(
+        slotContext({
+          schedulable: schedulable({ occurrenceId: 'a', durationMin: 60, manualBias }),
+          candidate: { start: candidateStart, end: candidateStart + 60 },
+        }),
+      );
+
+    expect(biased(start, start)).toBe(ONE);
+    expect(biased(start, start + 60)).toBe(ONE / 2);
+    // Symmetric: a slot an hour before the preferred time is no better than one
+    // an hour after it.
+    expect(biased(start + 120, start + 60)).toBe(ONE / 2);
+  });
+
+  it('scores nothing for a task nobody repositioned', () => {
+    // The term is additive, so an untouched schedule scores exactly as it did
+    // before the term existed — which is why §6.5's goldens below still hold.
+    expect(bias(slotContext())).toBe(0);
+  });
+
+  it('composes the stage-2 score as 0.5·Pr + 0.2·E − 0.3·F, plus the bias of §7.3', () => {
     const ctx = slotContext();
     const breakdown = explainSlot(defaultScoringPolicy, DEFAULT_TUNING, ctx);
 
     // Fragmentation carries the minus sign in its weight, so terms stay
     // non-negative and no per-term sign convention is needed.
     expect(breakdown['fragmentation']?.weight).toBe(-300_000);
+    expect(breakdown['bias']?.contribution).toBe(0);
     expect(slotScore(defaultScoringPolicy, DEFAULT_TUNING, ctx)).toBe(
       breakdown['preferredMatch']!.contribution +
         breakdown['earliness']!.contribution +

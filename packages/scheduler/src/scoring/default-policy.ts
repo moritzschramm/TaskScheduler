@@ -19,6 +19,9 @@ import type { OrderContext, ScoringPolicy, SlotContext } from './policy.js';
  * Weights live in `TuningConfig`; only the term *functions* are here. Swapping
  * this whole object for another is what §6.5 means by the structure being
  * replaceable, not just the weights.
+ *
+ * One term is added to §6.5's slot draft: `bias`, which is what makes §7.3's
+ * `manual_bias` mean anything. See its doc comment below.
  */
 
 /**
@@ -95,6 +98,32 @@ export function earliness({ candidate, horizon }: SlotContext): Score {
   if (horizonLength <= 0) return ONE;
 
   return inverseRatio(candidate.start - horizon.start, horizonLength);
+}
+
+/**
+ * **B — bias.** How near the candidate is to where the user actually put the
+ * task: spec §7.3's `manual_bias`, the "preferred" half of a manual reposition.
+ *
+ * Not one of §6.5's draft terms, and it has to be one of something: §7.3 sets a
+ * floor *and* a preference, and a preference nothing reads is not a preference.
+ * Without it a repositioned task lands at its floor only because `earliness`
+ * happens to pull it there, which holds until the moment two tasks want the
+ * same slot — and `SwapTasks`, whose whole content is two tasks wanting each
+ * other's, would then be a command that mostly did not swap anything.
+ *
+ * Shaped as `1 / (1 + hours_away)`, §6.5's own normalisation idiom, so a
+ * reposition reads on the same scale as urgency: exactly on it scores 1, an
+ * hour out scores a half, a day out is nearly nothing. Distance is symmetric —
+ * the floor already forbids the early side, so anything the bias still sees
+ * there is a slot the user's own instruction allowed.
+ *
+ * Zero for a task nobody has repositioned, which is nearly all of them, so an
+ * untouched schedule scores exactly as it did before the term existed.
+ */
+export function bias({ schedulable, candidate }: SlotContext): Score {
+  if (schedulable.manualBias === undefined) return 0;
+
+  return reciprocalDecay(Math.abs(candidate.start - schedulable.manualBias), 60);
 }
 
 /**
@@ -185,5 +214,5 @@ function minutesInsidePreferredRange(
 export const defaultScoringPolicy: ScoringPolicy = {
   name: 'spec-6.5-draft',
   orderTerms: { urgency, priority, constrainedness },
-  slotTerms: { preferredMatch, earliness, fragmentation },
+  slotTerms: { preferredMatch, earliness, fragmentation, bias },
 };
