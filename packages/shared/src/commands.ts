@@ -149,8 +149,13 @@ const completeTaskParams = z.object({ taskId: uuid, actualEnd: instant.optional(
 /** Spec §7.2. The sick-day action: everything left today moves to later days. */
 const postponeRestOfDayParams = z.object({ calendarId: uuid, date: civilDate });
 
-/** Spec §7.2. The vacation action, at week grain. */
-const clearWeekParams = z.object({ calendarId: uuid, weekStart: civilDate });
+/**
+ * Spec §7.2. The vacation action, at week grain. `week` is any local date in
+ * the week to clear; the server snaps it to that week's start, since where a
+ * week begins is the user's `firstDayOfWeek` setting (§13) and not the caller's
+ * to decide.
+ */
+const clearWeekParams = z.object({ calendarId: uuid, week: civilDate });
 
 /**
  * The envelope of spec §7.1.
