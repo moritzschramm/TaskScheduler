@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/app.ts"
+    ".": "./src/app.ts",
+    "./auth": "./src/auth/index.ts",
+    "./db": "./src/db/client.ts",
+    "./migrate": "./src/db/migrate.ts",
+    "./schema": "./src/db/schema/index.ts"
   },
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",

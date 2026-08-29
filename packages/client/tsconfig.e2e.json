@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
+    // Node types, because this project reaches the server's runtime: the point
+    // of the smoke test is that both halves are real. Kept out of
+    // `tsconfig.app.json` so nothing the browser ships can quietly acquire them.
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["test/e2e-smoke.test.ts", "src/**/*.ts", "src/**/*.vue", "env.d.ts"]
+}

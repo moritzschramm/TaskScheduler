@@ -11,5 +11,8 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "test/**/*.ts", "env.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "test/**/*.ts", "env.d.ts"],
+  // The smoke test imports the server's runtime and needs Node types; it has
+  // its own project so the browser build never acquires them.
+  "exclude": ["test/e2e-smoke.test.ts"]
 }
