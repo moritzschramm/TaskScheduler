@@ -1,6 +1,7 @@
 export * from './app-meta.js';
 export * from './identity.js';
 export * from './tenancy.js';
+export * from './auth.js';
 export * from './scheduling-enums.js';
 export * from './calendars.js';
 export * from './tasks.js';

@@ -36,6 +36,13 @@
       "when": 1787906986511,
       "tag": "0004_scheduling_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788009140891,
+      "tag": "0005_auth_and_sessions",
+      "breakpoints": true
     }
   ]
 }

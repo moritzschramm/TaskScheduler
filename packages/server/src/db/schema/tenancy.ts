@@ -24,21 +24,41 @@ export const membershipRole = pgEnum('membership_role', ['owner', 'admin', 'memb
  * user" is enforced structurally by the unique index below — there is no second
  * column that could disagree with the first.
  *
- * `name` is a plain identifier, not a display string: the personal tenant is
- * created by a trigger, and the database must not invent user-visible,
- * localisable text (spec §13). The UI labels personal tenants itself.
+ * **The Better Auth `organization` model maps here** (spec §4.2, §10.1), which
+ * is what `slug`, `logo` and `metadata` are for. Personal tenants are
+ * organizations too, so a user always has somewhere to be: the session's active
+ * organization is the active tenant, and it can never be unset for want of a
+ * membership.
+ *
+ * `name` was a plain identifier before Better Auth owned it and is now a
+ * display string, which is the one place this mapping cost something. The
+ * personal tenant is still created by a trigger, and a trigger must not invent
+ * user-visible, localisable text (spec §13) — so it writes the same `personal`
+ * it always did and the UI goes on labelling personal tenants itself.
  */
 export const tenants = pgTable(
   'tenants',
   {
     id: primaryKeyColumn(),
     name: text('name').notNull(),
+    /**
+     * URL-safe handle, unique across tenants. Better Auth requires one; the
+     * column defaults to a generated handle so the code paths that predate it —
+     * the personal-tenant trigger, fixtures — do not have to invent names.
+     */
+    slug: text('slug')
+      .notNull()
+      .default(sql`'t-' || replace(uuidv7()::text, '-', '')`),
+    logo: text('logo'),
+    /** Better Auth stores this as a JSON *string*, not as jsonb. */
+    metadata: text('metadata'),
     personalOwnerId: uuid('personal_owner_id').references(() => users.id, { onDelete: 'cascade' }),
     version: versionColumn(),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
   (table) => [
+    unique('tenants_slug_key').on(table.slug),
     uniqueIndex('tenants_one_personal_per_user')
       .on(table.personalOwnerId)
       .where(sql`${table.personalOwnerId} is not null`),

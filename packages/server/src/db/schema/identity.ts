@@ -13,21 +13,48 @@ import { createdAtColumn, primaryKeyColumn, updatedAtColumn, versionColumn } fro
  * Inserting a row here also creates the user's personal tenant and an `owner`
  * membership in it, via the `create_personal_tenant()` trigger — so the
  * invariant holds regardless of which code path creates the user (spec §4.2).
- * That matters from M8 onwards, when Better Auth writes this table directly.
+ * Better Auth writes this table directly (§10.1), which is exactly the code
+ * path that comment was written for.
+ *
+ * **The Better Auth `user` model maps here** (§10.1). `email`, `email_verified`
+ * and `image` exist because Better Auth requires them; `display_name` carries
+ * its `name`. The address is duplicated with `email_identities` on purpose —
+ * see the note there.
  */
-export const users = pgTable('users', {
-  id: primaryKeyColumn(),
-  /** Free-form display name; neither an identifier nor unique. */
-  displayName: text('display_name'),
-  version: versionColumn(),
-  createdAt: createdAtColumn(),
-  updatedAt: updatedAtColumn(),
-});
+export const users = pgTable(
+  'users',
+  {
+    id: primaryKeyColumn(),
+    /** Free-form display name; neither an identifier nor unique. */
+    displayName: text('display_name'),
+    /**
+     * The address the user signs in with, and the one Better Auth authenticates
+     * against. Unique case-insensitively, like `email_identities`.
+     */
+    email: text('email').notNull(),
+    emailVerified: boolean('email_verified').notNull().default(false),
+    /** Avatar URL. Better Auth's `image`; the app has no opinion about it yet. */
+    image: text('image'),
+    version: versionColumn(),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (table) => [uniqueIndex('users_email_lower_key').on(sql`lower(${table.email})`)],
+);
 
 /**
  * Email → User, many-to-one, exactly one marked primary (spec §4.1). Kept
  * separate from `users` so one human can hold several addresses — work and
  * private — that all resolve to the same principal.
+ *
+ * **On the duplication with `users.email`.** §4.1 wants many addresses per
+ * person; Better Auth requires exactly one, unique, on the user (§10.1). Both
+ * are true here: `users.email` is the *login* address, and this table is the
+ * record of every address the person holds, the primary one being the same
+ * address. The two are kept identical by the `mirror_primary_email` triggers in
+ * migration 0005, in both directions, so neither can quietly become the odd one
+ * out. A view over this table would have been the alternative, and would have
+ * put Better Auth off its supported path for the sake of one column.
  */
 export const emailIdentities = pgTable(
   'email_identities',

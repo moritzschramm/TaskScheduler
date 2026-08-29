@@ -106,7 +106,9 @@ describe('user boundary (RLS on global identity tables)', () => {
     // path; the absence of an INSERT policy is what makes that non-optional.
     const state = await captureSqlState(() =>
       withTenantContext(handle.db, { userId: alice, tenantId: tenantA }, (tx) =>
-        tx.insert(users).values({ displayName: 'Smuggled principal' }),
+        tx
+          .insert(users)
+          .values({ displayName: 'Smuggled principal', email: 'smuggled@example.test' }),
       ),
     );
 

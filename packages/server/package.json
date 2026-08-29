@@ -18,7 +18,9 @@
   "dependencies": {
     "@ambitime/scheduler": "workspace:*",
     "@ambitime/shared": "workspace:*",
+    "@better-auth/sso": "^1.7.2",
     "@hono/node-server": "^2.1.1",
+    "better-auth": "^1.7.2",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.5",
     "postgres": "^3.4.9",

@@ -28,10 +28,29 @@ const READ_ONLY_TABLES = ['app_meta'];
 /** INSERT only — the command log is append-only (spec §12). */
 const APPEND_ONLY_TABLES = ['commands'];
 
+/**
+ * Not reachable from a tenant-scoped request **at all** (migration 0005).
+ *
+ * Password hashes and live session tokens. Every other table is protected by
+ * being filtered; these are protected by not being granted, and then by having
+ * RLS enabled behind that with no policy — so two independent things would have
+ * to be wrong before one leaked. Better Auth reaches them on the system path.
+ */
+const UNREACHABLE_TABLES = [
+  'accounts',
+  'invitations',
+  'sessions',
+  'sso_providers',
+  'verifications',
+];
+
 /** Joined in JS and split in SQL, so the lists stay bound parameters. */
 const readOnlyList = READ_ONLY_TABLES.join(',');
 const appendOnlyList = APPEND_ONLY_TABLES.join(',');
-const restrictedList = [...READ_ONLY_TABLES, ...APPEND_ONLY_TABLES].join(',');
+const unreachableList = UNREACHABLE_TABLES.join(',');
+const restrictedList = [...READ_ONLY_TABLES, ...APPEND_ONLY_TABLES, ...UNREACHABLE_TABLES].join(
+  ',',
+);
 
 describe('schema-wide guards', () => {
   let handle: DatabaseHandle;
@@ -59,6 +78,7 @@ describe('schema-wide guards', () => {
           left join pg_policy p on p.polrelid = c.oid
          where n.nspname = 'public'
            and c.relkind = 'r'
+           and c.relname <> all(string_to_array(${unreachableList}, ','))
          group by c.relname, c.relrowsecurity
          order by c.relname
       `,
@@ -98,6 +118,7 @@ describe('schema-wide guards', () => {
           join pg_namespace n on n.oid = c.relnamespace
          where n.nspname = 'public'
            and c.relkind = 'r'
+           and c.relname <> all(string_to_array(${unreachableList}, ','))
            and not has_table_privilege(${APP_ROLE}, c.oid, 'SELECT')
          order by 1
       `,
@@ -122,6 +143,44 @@ describe('schema-wide guards', () => {
     );
 
     expect(missing).toEqual([]);
+  });
+
+  it('keeps the auth tables out of the application role reach entirely', async () => {
+    // Not "filtered to the right rows" — *no* rows, by two mechanisms. A
+    // session token read through a tenant-scoped request would be a total
+    // compromise of the isolation model, so it gets belt and braces.
+    const reachable = await handle.db.execute<{ table_name: string; privilege: string }>(
+      sql`
+        select c.relname as table_name, granted.privilege
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+         cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) as granted(privilege)
+         where n.nspname = 'public'
+           and c.relkind = 'r'
+           and c.relname = any(string_to_array(${unreachableList}, ','))
+           and has_table_privilege(${APP_ROLE}, c.oid, granted.privilege)
+         order by 1, 2
+      `,
+    );
+
+    expect(reachable).toEqual([]);
+
+    const unguarded = await handle.db.execute<{ table_name: string }>(
+      sql`
+        select c.relname as table_name
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          left join pg_policy p on p.polrelid = c.oid
+         where n.nspname = 'public'
+           and c.relkind = 'r'
+           and c.relname = any(string_to_array(${unreachableList}, ','))
+         group by c.relname, c.relrowsecurity
+        having not c.relrowsecurity or count(p.polname) > 0
+         order by 1
+      `,
+    );
+
+    expect(unguarded).toEqual([]);
   });
 
   it('keeps the read-only tables genuinely read-only', async () => {

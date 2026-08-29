@@ -63,7 +63,7 @@ describe('identity and tenancy constraints', () => {
       const userId = await withSystemPrivileges(handle.db, async (tx) => {
         const [row] = await tx
           .insert(users)
-          .values({ displayName: 'Raw insert' })
+          .values({ displayName: 'Raw insert', email: 'raw-insert@example.test' })
           .returning({ id: users.id });
         return row!.id;
       });
