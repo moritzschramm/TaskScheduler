@@ -1,8 +1,9 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { computeHardHorizon, type Instant } from '@ambitime/scheduler';
-import { taskOccurrences, tasks } from '../../db/schema/index.js';
+import { taskOccurrences } from '../../db/schema/index.js';
 import { lockTask, type CommandContext, type HandlerOutcome } from '../context.js';
 import { calendarTimeZone, requireActive, requireLeaf } from '../entities.js';
+import { updateRow, updateWhere } from '../journal.js';
 import { toIso } from '../../schedule/instants.js';
 import { startOfNextDay, startOfNextWeek } from '../../schedule/local-days.js';
 import type { CompleteTaskParams, DeferTaskParams, MoveTaskParams } from '@ambitime/shared';
@@ -36,10 +37,10 @@ export async function moveTask(
   requireActive(task);
   await requireLeaf(ctx, task);
 
-  await ctx.tx
-    .update(tasks)
-    .set({ manualFloor: params.datetime, manualBias: params.datetime })
-    .where(eq(tasks.id, task.id));
+  await updateRow(ctx, 'tasks', task.id, {
+    manualFloor: params.datetime,
+    manualBias: params.datetime,
+  });
 
   return { calendarIds: [task.calendarId] };
 }
@@ -67,19 +68,19 @@ export async function deferTask(
 
   const timeZone = await calendarTimeZone(ctx, task.calendarId);
 
-  await ctx.tx
-    .update(tasks)
-    .set({
-      manualFloor: toIso(deferFloor(params.target, ctx, timeZone)),
-      // "Sets nothing fixed" (§7.3). An earlier reposition's bias pointed at a
-      // time the user has just rejected, so keeping it would pull the task
-      // straight back to the edge of its new floor.
-      manualBias: null,
-      deferCount: sql`${tasks.deferCount} + 1`,
-      lastDeferReason: params.reason ?? null,
-      lastDeferAt: ctx.nowIso,
-    })
-    .where(eq(tasks.id, task.id));
+  await updateRow(ctx, 'tasks', task.id, {
+    manualFloor: toIso(deferFloor(params.target, ctx, timeZone)),
+    // "Sets nothing fixed" (§7.3). An earlier reposition's bias pointed at a
+    // time the user has just rejected, so keeping it would pull the task
+    // straight back to the edge of its new floor.
+    manualBias: null,
+    // Read from the locked row rather than incremented in SQL, so the journal
+    // records a number it can put back. `lockTask` holds the row, so nothing
+    // can slip between the read and the write (§5.4).
+    deferCount: task.deferCount + 1,
+    lastDeferReason: params.reason ?? null,
+    lastDeferAt: ctx.nowIso,
+  });
 
   return { calendarIds: [task.calendarId] };
 }
@@ -121,15 +122,14 @@ export async function completeTask(
 
   const completedAt = params.actualEnd ?? ctx.nowIso;
 
-  await ctx.tx
-    .update(tasks)
-    .set({ status: 'completed', completedAt, manualFloor: null })
-    .where(eq(tasks.id, task.id));
+  await updateRow(ctx, 'tasks', task.id, { status: 'completed', completedAt, manualFloor: null });
 
-  await ctx.tx
-    .update(taskOccurrences)
-    .set({ status: 'completed', completedAt })
-    .where(and(eq(taskOccurrences.taskId, task.id), eq(taskOccurrences.status, 'pending')));
+  await updateWhere(
+    ctx,
+    'task_occurrences',
+    and(eq(taskOccurrences.taskId, task.id), eq(taskOccurrences.status, 'pending'))!,
+    { status: 'completed', completedAt },
+  );
 
   return { calendarIds: [task.calendarId] };
 }

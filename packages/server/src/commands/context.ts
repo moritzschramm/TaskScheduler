@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { appointments, tasks } from '../db/schema/index.js';
 import { EntityNotFoundError, OptimisticLockError } from './errors.js';
 import type { Appointment, Task } from '../db/schema/index.js';
+import type { RowChange } from './journal.js';
 import type { Transaction } from '../db/client.js';
 import type { Instant, TuningConfig } from '@ambitime/scheduler';
 
@@ -25,6 +26,15 @@ export interface CommandContext {
   config: TuningConfig;
   /** The optimistic lock from the envelope, if the caller supplied one (§5.4). */
   expectedVersion?: number;
+  /**
+   * Every source row this command has changed, before and after (spec §12).
+   *
+   * Handlers do not append to it by hand: they write through `journal.ts`,
+   * which records as it goes. That is what keeps "each command records enough
+   * to reverse it" a property of the mechanism rather than of everyone
+   * remembering.
+   */
+  journal: RowChange[];
 }
 
 /**
@@ -49,6 +59,14 @@ export interface AttentionItem {
 export interface HandlerOutcome {
   calendarIds: string[];
   attention?: AttentionItem[];
+  /**
+   * Set only by `Undo` and `Redo`: the commands this one reversed or replayed.
+   *
+   * The schema comment on `commands` puts it well — undo is itself a command
+   * naming its target, which is what keeps the log an honest record of intent,
+   * including the intent to take something back (§7.5, §12).
+   */
+  targets?: string[];
 }
 
 /**

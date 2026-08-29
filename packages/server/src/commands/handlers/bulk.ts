@@ -3,6 +3,7 @@ import type { Instant, Interval } from '@ambitime/scheduler';
 import { appointments, placements, taskOccurrences, tasks } from '../../db/schema/index.js';
 import type { AttentionItem, CommandContext, HandlerOutcome } from '../context.js';
 import { calendarTimeZone } from '../entities.js';
+import { updateWhere } from '../journal.js';
 import { toIso } from '../../schedule/instants.js';
 import { dayFromParam, weekFromParam } from '../../schedule/local-days.js';
 import type { ClearWeekParams, PostponeRestOfDayParams } from '@ambitime/shared';
@@ -99,10 +100,10 @@ async function reflow(
 
   const taskIds = affected.map((row) => row.taskId);
   if (taskIds.length > 0) {
-    await ctx.tx
-      .update(tasks)
-      .set({ manualFloor: toIso(floor), manualBias: null })
-      .where(inArray(tasks.id, taskIds));
+    await updateWhere(ctx, 'tasks', inArray(tasks.id, taskIds), {
+      manualFloor: toIso(floor),
+      manualBias: null,
+    });
   }
 
   // Appointments that have already finished need nobody's attention.

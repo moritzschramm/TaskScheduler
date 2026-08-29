@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { calendars, taskOccurrences, tasks } from '../db/schema/index.js';
 import { EntityNotFoundError, PreconditionFailedError } from './errors.js';
+import { deleteWhere, insertRow } from './journal.js';
 import type { CommandContext } from './context.js';
 import type { Task } from '../db/schema/index.js';
 
@@ -69,13 +70,7 @@ export async function createInitialOccurrence(
   ctx: CommandContext,
   taskId: string,
 ): Promise<string> {
-  const [row] = await ctx.tx
-    .insert(taskOccurrences)
-    .values({ tenantId: ctx.tenantId, taskId })
-    .returning({ id: taskOccurrences.id });
-
-  if (!row) throw new Error(`Failed to create an occurrence for task ${taskId}`);
-  return row.id;
+  return insertRow(ctx, 'task_occurrences', { tenantId: ctx.tenantId, taskId });
 }
 
 /**
@@ -87,9 +82,11 @@ export async function createInitialOccurrence(
  * a completed occurrence is history, and history is not tidied up.
  */
 export async function retirePendingOccurrences(ctx: CommandContext, taskId: string): Promise<void> {
-  await ctx.tx
-    .delete(taskOccurrences)
-    .where(and(eq(taskOccurrences.taskId, taskId), eq(taskOccurrences.status, 'pending')));
+  await deleteWhere(
+    ctx,
+    'task_occurrences',
+    and(eq(taskOccurrences.taskId, taskId), eq(taskOccurrences.status, 'pending'))!,
+  );
 }
 
 /** The single pending occurrence of a non-recurring task, if it still has one. */

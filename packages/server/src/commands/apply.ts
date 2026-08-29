@@ -8,6 +8,7 @@ import { toInstant, toIso } from '../schedule/instants.js';
 import { CommandValidationError, PreconditionFailedError } from './errors.js';
 import { COMMAND_TARGETS, dispatch } from './registry.js';
 import type { AttentionItem, CommandContext } from './context.js';
+import type { CommandJournal } from './journal.js';
 import type { Database } from '../db/client.js';
 
 /**
@@ -21,7 +22,10 @@ import type { Database } from '../db/client.js';
  *
  * The log is appended last on purpose. It records what happened, so a command
  * that was rejected leaves no trace in it — the audit trail (§12) is a history
- * of the system's state, not of attempts on it.
+ * of the system's state, not of attempts on it. It is also the only point at
+ * which the whole change set is known, and the entry carries it: §12 asks that
+ * each command record enough to reverse itself, and `journal.ts` has been
+ * collecting exactly that while the handler ran.
  */
 
 export interface ApplyOptions {
@@ -73,6 +77,7 @@ export async function applyCommand(
         now,
         nowIso: options.now === undefined ? command.issuedAt : toIso(now),
         config: options.config ?? DEFAULT_TUNING,
+        journal: [],
         ...(command.expectedVersion === undefined
           ? {}
           : { expectedVersion: command.expectedVersion }),
@@ -96,9 +101,15 @@ export async function applyCommand(
         );
       }
 
+      const journal: CommandJournal = {
+        calendarIds,
+        changes: ctx.journal,
+        ...(outcome.targets === undefined ? {} : { targets: outcome.targets }),
+      };
+
       return {
         command,
-        seq: await appendToLog(ctx, command),
+        seq: await appendToLog(ctx, command, journal),
         schedules,
         attention: outcome.attention ?? [],
       };
@@ -144,7 +155,11 @@ function assertVersionHasATarget(command: Command): void {
  * makes a client's retry safe to send: it is either the first application or a
  * clean rejection, never a second set of effects.
  */
-async function appendToLog(ctx: CommandContext, command: Command): Promise<bigint> {
+async function appendToLog(
+  ctx: CommandContext,
+  command: Command,
+  journal: CommandJournal,
+): Promise<bigint> {
   try {
     const [row] = await ctx.tx
       .insert(commands)
@@ -154,6 +169,8 @@ async function appendToLog(ctx: CommandContext, command: Command): Promise<bigin
         actorId: command.actor,
         type: command.type,
         params: command.params,
+        groupId: command.groupId ?? null,
+        inverse: journal,
         expectedVersion: command.expectedVersion ?? null,
         issuedAt: command.issuedAt,
       })

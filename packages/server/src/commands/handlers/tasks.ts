@@ -1,7 +1,6 @@
-import { eq } from 'drizzle-orm';
-import { tasks } from '../../db/schema/index.js';
 import { lockTask, type CommandContext, type HandlerOutcome } from '../context.js';
 import { createInitialOccurrence, requireCalendar, retirePendingOccurrences } from '../entities.js';
+import { insertRow, updateRow } from '../journal.js';
 import type { CreateTaskParams, EditTaskParams } from '@ambitime/shared';
 import type { NewTask } from '../../db/schema/index.js';
 
@@ -42,13 +41,12 @@ export async function createTask(
     sequencePosition: params.sequencePosition,
   };
 
-  const [row] = await ctx.tx.insert(tasks).values(values).returning({ id: tasks.id });
-  if (!row) throw new Error('Insert returned no task');
+  const taskId = await insertRow(ctx, 'tasks', values);
 
   // A brand-new task is a leaf, so it is demand and gets its occurrence. If it
   // was created beneath another task, that other task has just stopped being
   // one.
-  await createInitialOccurrence(ctx, row.id);
+  await createInitialOccurrence(ctx, taskId);
   if (params.parentId !== undefined) await retirePendingOccurrences(ctx, params.parentId);
 
   return { calendarIds: [params.calendarId] };
@@ -88,9 +86,7 @@ export async function editTask(
     values.preferredEndMin = patch.preferredRange?.endMin ?? null;
   }
 
-  if (Object.keys(values).length > 0) {
-    await ctx.tx.update(tasks).set(values).where(eq(tasks.id, task.id));
-  }
+  await updateRow(ctx, 'tasks', task.id, values);
 
   return { calendarIds: [task.calendarId] };
 }
