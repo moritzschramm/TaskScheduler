@@ -113,7 +113,7 @@ export async function insertRow<T extends JournalTable>(
     .values(values as never)
     .returning();
 
-  if (!row) throw new Error(`Insert into ${name} returned no row`);
+  if (!row) throw new Error(`Inserting a row into ${name} returned nothing`);
 
   const id = String((row as RowImage)['id']);
   ctx.journal.push({ table: name, id, before: null, after: image(row as RowImage) });

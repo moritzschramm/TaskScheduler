@@ -6,7 +6,7 @@ import {
   type TuningConfig,
   type ValidationResult,
 } from '@ambitime/scheduler';
-import { newCommand, type CommandDraft } from '@ambitime/shared';
+import { newCommand, type CommandDraft, type CreateTaskParams } from '@ambitime/shared';
 import { applyCommand, type CommandOutcome } from '../../src/commands/index.js';
 import { withSystemPrivileges, withTenantContext } from '../../src/db/context.js';
 import {
@@ -20,11 +20,14 @@ import {
   calendars,
   categories,
   placements,
+  taskOccurrences,
+  tasks,
   tenants,
 } from '../../src/db/schema/index.js';
 import { registerUser } from '../../src/identity/register-user.js';
 import { addMember } from './fixtures.js';
 import type { Database, DatabaseHandle, Transaction } from '../../src/db/client.js';
+import type { Task } from '../../src/db/schema/index.js';
 
 /**
  * The test harness the plan asks M6 for: a tenant context, injected.
@@ -146,6 +149,74 @@ async function createTenant(db: Database, name: string): Promise<string> {
     if (!tenant) throw new Error('Failed to create tenant');
     return tenant.id;
   });
+}
+
+/**
+ * Creates a task through the real command path and hands back its id.
+ *
+ * Nearly every test needs one, and none of them should be reaching into the
+ * tables to insert it: a task that arrived any way other than through a command
+ * is a task the write path never saw (spec §3.2).
+ */
+export async function seedTask(
+  world: World,
+  title: string,
+  params: Partial<CreateTaskParams> = {},
+  options: RunOptions = {},
+): Promise<string> {
+  await world.run(
+    {
+      type: 'CreateTask',
+      params: {
+        calendarId: world.calendarId,
+        title,
+        categoryId: world.categoryId,
+        estimatedDurationMin: 60,
+        ...params,
+      },
+    },
+    options,
+  );
+
+  const [row] = await world.read((tx) =>
+    tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.title, title)).limit(1),
+  );
+
+  if (!row) throw new Error(`Seeded task "${title}" was not found`);
+  return row.id;
+}
+
+/** Where a task currently sits, according to the derived cache. */
+export async function placementOf(world: World, taskId: string): Promise<Placement | undefined> {
+  const [occurrence] = await world.read((tx) =>
+    tx
+      .select({ id: taskOccurrences.id })
+      .from(taskOccurrences)
+      .where(eq(taskOccurrences.taskId, taskId))
+      .orderBy(taskOccurrences.id)
+      .limit(1),
+  );
+  if (!occurrence) return undefined;
+
+  const cached = await world.cachedPlacements();
+  return cached.find((placement) => placement.occurrenceId === occurrence.id);
+}
+
+/** The task row itself, for the assertions that are about source state. */
+export async function taskRow(world: World, taskId: string): Promise<Task> {
+  const [row] = await world.read((tx) =>
+    tx.select().from(tasks).where(eq(tasks.id, taskId)).limit(1),
+  );
+  if (!row) throw new Error(`Task ${taskId} no longer exists`);
+  return row;
+}
+
+/** Whether a task row still exists at all — what undoing a create is about. */
+export async function taskExists(world: World, taskId: string): Promise<boolean> {
+  const [row] = await world.read((tx) =>
+    tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).limit(1),
+  );
+  return row !== undefined;
 }
 
 /** The placement cache, in the engine's own representation. */
