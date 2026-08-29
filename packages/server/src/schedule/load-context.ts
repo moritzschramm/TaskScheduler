@@ -6,6 +6,7 @@ import {
   type CalendarSpec,
   type FixedBlock,
   type Instant,
+  type Interval,
   type Schedulable,
   type ScheduleContext,
   type SequenceSpec,
@@ -60,6 +61,29 @@ export interface LoadContextInput {
   config: TuningConfig;
 }
 
+/**
+ * The part of the hard horizon a task may actually be placed in.
+ *
+ * §6.1 puts the horizon at the current week plus the next, and §6.2 does not
+ * list "not in the past" among the hard constraints — but §7 assumes it
+ * throughout: `PostponeRestOfDay` moves what is on a day "from `now` forward",
+ * `CompleteTask` re-derives "the remainder of the day", and finishing early
+ * "pulls the day forward". A schedule offering Monday 09:00 on Wednesday
+ * afternoon is not one any of those sentences describes.
+ *
+ * The clip is made here rather than in the engine on purpose. The solver is a
+ * pure function of its inputs and the horizon is one of them, so *what is
+ * placeable* is the caller's decision — which also leaves a client free to
+ * re-solve a past week for a what-if without a special mode in the solver.
+ *
+ * Only the start moves. The end still marks where the coarse weekly planner
+ * takes over (§6.1).
+ */
+function placeableHorizon(now: Instant, timeZone: string, config: TuningConfig): Interval {
+  const horizon = computeHardHorizon(now, timeZone, config);
+  return { start: Math.max(horizon.start, now), end: horizon.end };
+}
+
 export class CalendarNotFoundError extends Error {
   constructor(readonly calendarId: string) {
     super(`Calendar ${calendarId} does not exist in this context`);
@@ -84,7 +108,7 @@ export async function loadScheduleContext({
   if (!calendar) throw new CalendarNotFoundError(calendarId);
 
   const spec: CalendarSpec = { id: calendar.id, timeZone: calendar.timeZone };
-  const horizon = computeHardHorizon(now, spec.timeZone, config);
+  const horizon = placeableHorizon(now, spec.timeZone, config);
 
   const [rules, overrides, fixedBlocks, sequenceSpecs, demand] = await Promise.all([
     loadAvailabilityRules(tx, calendarId),
