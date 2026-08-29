@@ -59,7 +59,7 @@ const taskAttributes = {
   cooldownOverrideMin: z.int().nonnegative(),
 } as const;
 
-const createTaskParams = z.object({
+export const createTaskParams = z.object({
   calendarId: uuid,
   title: z.string().min(1),
   notes: z.string().optional(),
@@ -83,7 +83,7 @@ const createTaskParams = z.object({
  * Collapsing "clear" and "leave alone" would make an inherited property
  * impossible to reinstate once overridden.
  */
-const editTaskParams = z.object({
+export const editTaskParams = z.object({
   taskId: uuid,
   patch: z.object({
     title: z.string().min(1).optional(),
@@ -102,7 +102,7 @@ const editTaskParams = z.object({
  * Spec §7.4. `isUnavailability` is deliberately absent: a content-free block is
  * `AddUnavailability` below, which is the same insert with the flag set.
  */
-const addAppointmentParams = z
+export const addAppointmentParams = z
   .object({
     calendarId: uuid,
     title: z.string().min(1),
@@ -116,7 +116,7 @@ const addAppointmentParams = z
     message: 'An appointment must end after it starts',
   });
 
-const editAppointmentParams = z.object({
+export const editAppointmentParams = z.object({
   appointmentId: uuid,
   patch: z.object({
     title: z.string().min(1).optional(),
@@ -135,20 +135,20 @@ const editAppointmentParams = z.object({
  * Spec §7.3. A manual reposition sets a soft not-before *and* a preference for
  * the same datetime, then re-derives. The task is delayed, not fixed.
  */
-const moveTaskParams = z.object({ taskId: uuid, datetime: instant });
+export const moveTaskParams = z.object({ taskId: uuid, datetime: instant });
 
 /** Spec §7.3. Increments `defer_count`; sets nothing fixed. */
-const deferTaskParams = z.object({
+export const deferTaskParams = z.object({
   taskId: uuid,
   target: z.enum(['tomorrow', 'next_week', 'backlog']),
   reason: z.string().optional(),
 });
 
 /** Spec §7.3. `actualEnd` is how a task finishing early pulls the day forward. */
-const completeTaskParams = z.object({ taskId: uuid, actualEnd: instant.optional() });
+export const completeTaskParams = z.object({ taskId: uuid, actualEnd: instant.optional() });
 
 /** Spec §7.2. The sick-day action: everything left today moves to later days. */
-const postponeRestOfDayParams = z.object({ calendarId: uuid, date: civilDate });
+export const postponeRestOfDayParams = z.object({ calendarId: uuid, date: civilDate });
 
 /**
  * Spec §7.2. The vacation action, at week grain. `week` is any local date in
@@ -156,7 +156,7 @@ const postponeRestOfDayParams = z.object({ calendarId: uuid, date: civilDate });
  * week begins is the user's `firstDayOfWeek` setting (§13) and not the caller's
  * to decide.
  */
-const clearWeekParams = z.object({ calendarId: uuid, week: civilDate });
+export const clearWeekParams = z.object({ calendarId: uuid, week: civilDate });
 
 /**
  * Spec §7.3. The estimate was wrong, or the task overran; downstream reflows.
@@ -166,30 +166,30 @@ const clearWeekParams = z.object({ calendarId: uuid, week: civilDate });
  * took longer than I thought" is the sentence a future parser will be given,
  * and history that records it as an edit has thrown that away.
  */
-const extendTaskParams = z.object({
+export const extendTaskParams = z.object({
   taskId: uuid,
   newEstimateMin: taskAttributes.estimatedDurationMin,
 });
 
 /** Spec §7.3. Frees the task's footprint without pretending it was done. */
-const cancelTaskParams = z.object({ taskId: uuid });
+export const cancelTaskParams = z.object({ taskId: uuid });
 
 /**
  * Spec §7.3. Exchange two tasks' time positions, if each fits where the other
  * was; the server falls back to `SwapForward` semantics when they do not.
  */
-const swapTasksParams = z
+export const swapTasksParams = z
   .object({ taskAId: uuid, taskBId: uuid })
   .refine((params) => params.taskAId !== params.taskBId, {
     message: 'A task cannot be swapped with itself',
   });
 
 /** Spec §7.3. "I don't want to work on this now." */
-const swapForwardParams = z.object({ taskId: uuid });
+export const swapForwardParams = z.object({ taskId: uuid });
 
 /** Spec §7.3. Crossing the hard-horizon boundary (§6.1), in either direction. */
-const promoteFromBacklogParams = z.object({ taskId: uuid });
-const moveToBacklogParams = z.object({ taskId: uuid });
+export const promoteFromBacklogParams = z.object({ taskId: uuid });
+export const moveToBacklogParams = z.object({ taskId: uuid });
 
 /**
  * Spec §7.4 — "unavailable 14:00–16:00".
@@ -199,7 +199,7 @@ const moveToBacklogParams = z.object({ taskId: uuid });
  * stored row carries `is_unavailability`, which is what tells a UI to label it
  * itself rather than render an invented title back at the user.
  */
-const addUnavailabilityParams = z
+export const addUnavailabilityParams = z
   .object({ calendarId: uuid, start: instant, end: instant })
   .refine((params) => params.start < params.end, {
     message: 'An unavailability must end after it starts',
@@ -214,8 +214,8 @@ const addUnavailabilityParams = z
  * personal gesture: reaching into a colleague's work because they happened to
  * act more recently is not what anyone means by pressing it.
  */
-const undoParams = z.object({});
-const redoParams = z.object({});
+export const undoParams = z.object({});
+export const redoParams = z.object({});
 
 /**
  * The envelope of spec §7.1.

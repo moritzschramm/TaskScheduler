@@ -1,6 +1,13 @@
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
-import { solve, type Instant, type SolveResult, type TuningConfig } from '@ambitime/scheduler';
+import {
+  solve,
+  type Instant,
+  type ScheduleContext,
+  type SolveResult,
+  type TuningConfig,
+} from '@ambitime/scheduler';
 import { placements, tasks } from '../db/schema/index.js';
+import { assertScheduleHoldsInvariants } from './commit-check.js';
 import { loadScheduleContext, type UnschedulableTask } from './load-context.js';
 import { toRangeLiteral } from './instants.js';
 import type { Transaction } from '../db/client.js';
@@ -23,6 +30,8 @@ export interface DerivedSchedule extends SolveResult {
   calendarId: string;
   /** Leaves the solver was never offered; see `UnschedulableTask`. */
   unschedulable: UnschedulableTask[];
+  /** The context the schedule was derived from, for callers that enrich it. */
+  context: ScheduleContext;
 }
 
 export interface DeriveInput {
@@ -51,6 +60,12 @@ export async function deriveCalendarSchedule({
   const { context, unschedulable } = await loadScheduleContext({ tx, calendarId, now, config });
   const result = solve(context, { config });
 
+  // Spec §3.3's commit-time check, inside the transaction that is about to
+  // persist the result. Today it guards the server's own output and should
+  // never fire; it is here so a client-proposed schedule is a different
+  // argument to the same call rather than a change to the write path.
+  assertScheduleHoldsInvariants({ calendarId, context, placements: result.placements });
+
   const taskByOccurrence = new Map(
     context.schedulables.map((schedulable) => [schedulable.occurrenceId, schedulable.taskId]),
   );
@@ -58,7 +73,7 @@ export async function deriveCalendarSchedule({
   await writePlacements(tx, tenantId, calendarId, result);
   await writeEstimatedWeeks(tx, calendarId, result, taskByOccurrence);
 
-  return { ...result, calendarId, unschedulable };
+  return { ...result, calendarId, unschedulable, context };
 }
 
 /**
