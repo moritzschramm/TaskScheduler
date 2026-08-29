@@ -25,9 +25,12 @@ import type { ClearWeekParams, PostponeRestOfDayParams } from '@ambitime/shared'
 /**
  * `PostponeRestOfDay(calendar, date)` — "not today" (spec §7.2).
  *
- * Only what has not started yet moves. A task already underway at `now` is
- * neither incomplete-and-untouched nor movable in any useful sense, so it keeps
- * its slot.
+ * Everything the day holds moves, **except a task under way right now**. §7.2
+ * says "incomplete, not-yet-started ... from now forward", and startedness is
+ * only observable for the one placement straddling `now`: a slot that passed
+ * without a completion says the work did not happen, not that it began. So that
+ * is the single exclusion, and the rest of the day — this morning included —
+ * clears, which is the only reading under which "not today" means what it says.
  */
 export async function postponeRestOfDay(
   params: PostponeRestOfDayParams,
@@ -59,9 +62,8 @@ export async function clearWeek(
 /**
  * Pushes everything placed in `span` past `floor`.
  *
- * The span is clipped to start at `now`: the past is not reschedulable, and a
- * command issued at noon that moved this morning's finished work would be
- * rewriting history rather than planning.
+ * A span already wholly in the past is a no-op: there is nothing left to
+ * reschedule, and the floor would push work the user never asked about.
  *
  * Any floor those tasks already carried is replaced, which is §7.3's "floor
  * clears on a bulk reschedule" — a task the user had positioned by hand on this
@@ -74,8 +76,7 @@ async function reflow(
   span: Interval,
   floor: Instant,
 ): Promise<HandlerOutcome> {
-  const from = Math.max(span.start, ctx.now);
-  if (from >= span.end) return { calendarIds: [calendarId] };
+  if (span.end <= ctx.now) return { calendarIds: [calendarId] };
 
   const affected = await ctx.tx
     .selectDistinct({ taskId: taskOccurrences.taskId })
@@ -87,9 +88,12 @@ async function reflow(
         eq(placements.calendarId, calendarId),
         eq(taskOccurrences.status, 'pending'),
         eq(tasks.status, 'active'),
-        // Not-yet-started, per §7.2. A block straddling `now` keeps its slot.
-        sql`lower(${placements.during}) >= ${instant(from)}`,
+        sql`lower(${placements.during}) >= ${instant(span.start)}`,
         sql`lower(${placements.during}) < ${instant(span.end)}`,
+        // The one placement under way at `now` keeps its slot (§7.2). Strictly
+        // *under* way: a block starting exactly now has not started yet.
+        sql`not (lower(${placements.during}) < ${instant(ctx.now)}
+                 and upper(${placements.during}) > ${instant(ctx.now)})`,
       ),
     );
 
@@ -101,9 +105,11 @@ async function reflow(
       .where(inArray(tasks.id, taskIds));
   }
 
+  // Appointments that have already finished need nobody's attention.
+  const remaining = { start: Math.max(span.start, ctx.now), end: span.end };
   return {
     calendarIds: [calendarId],
-    attention: await appointmentsIn(ctx, calendarId, { start: from, end: span.end }),
+    attention: await appointmentsIn(ctx, calendarId, remaining),
   };
 }
 
