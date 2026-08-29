@@ -1,9 +1,12 @@
 import type { Command, CommandType } from '@ambitime/shared';
 import type { CommandContext, HandlerOutcome } from './context.js';
-import { addAppointment, editAppointment } from './handlers/appointments.js';
+import { addAppointment, addUnavailability, editAppointment } from './handlers/appointments.js';
 import { clearWeek, postponeRestOfDay } from './handlers/bulk.js';
 import { completeTask, deferTask, moveTask } from './handlers/manual.js';
 import { createTask, editTask } from './handlers/tasks.js';
+import { cancelTask, extendTask, moveToBacklog, promoteFromBacklog } from './handlers/lifecycle.js';
+import { swapForward, swapTasks } from './handlers/swap.js';
+import { redo, undo } from './handlers/history.js';
 
 /**
  * The command vocabulary, bound to the code that carries each one out.
@@ -34,6 +37,24 @@ export function dispatch(command: Command, ctx: CommandContext): Promise<Handler
       return postponeRestOfDay(command.params, ctx);
     case 'ClearWeek':
       return clearWeek(command.params, ctx);
+    case 'ExtendTask':
+      return extendTask(command.params, ctx);
+    case 'CancelTask':
+      return cancelTask(command.params, ctx);
+    case 'SwapTasks':
+      return swapTasks(command.params, ctx);
+    case 'SwapForward':
+      return swapForward(command.params, ctx);
+    case 'PromoteFromBacklog':
+      return promoteFromBacklog(command.params, ctx);
+    case 'MoveToBacklog':
+      return moveToBacklog(command.params, ctx);
+    case 'AddUnavailability':
+      return addUnavailability(command.params, ctx);
+    case 'Undo':
+      return undo(command.params, ctx);
+    case 'Redo':
+      return redo(command.params, ctx);
   }
 }
 
@@ -56,4 +77,17 @@ export const COMMAND_TARGETS: Readonly<Record<CommandType, 'task' | 'appointment
   CompleteTask: 'task',
   PostponeRestOfDay: null,
   ClearWeek: null,
+  ExtendTask: 'task',
+  CancelTask: 'task',
+  // A swap names two tasks, so one version could only ever guard one of them —
+  // and a lock that covers half of what a command touches is worse than none.
+  SwapTasks: null,
+  SwapForward: 'task',
+  PromoteFromBacklog: 'task',
+  MoveToBacklog: 'task',
+  AddUnavailability: null,
+  // Undo names no entity at all: what it reverses is decided by the log, and a
+  // version supplied against "whatever I did last" guards nothing.
+  Undo: null,
+  Redo: null,
 };

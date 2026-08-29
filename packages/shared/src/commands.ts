@@ -291,6 +291,8 @@ export type SwapForwardParams = z.infer<typeof swapForwardParams>;
 export type PromoteFromBacklogParams = z.infer<typeof promoteFromBacklogParams>;
 export type MoveToBacklogParams = z.infer<typeof moveToBacklogParams>;
 export type AddUnavailabilityParams = z.infer<typeof addUnavailabilityParams>;
+export type UndoParams = z.infer<typeof undoParams>;
+export type RedoParams = z.infer<typeof redoParams>;
 
 /** Every command type, for exhaustiveness checks and registry guards. */
 export const COMMAND_TYPES = commandSchema.options.map(
