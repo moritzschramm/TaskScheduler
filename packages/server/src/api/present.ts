@@ -5,7 +5,8 @@ import { toIso } from '../schedule/instants.js';
 import type { CapacityCell, Instant } from '@ambitime/scheduler';
 import type { DerivedSchedule } from '../schedule/derive.js';
 import type { Transaction } from '../db/client.js';
-import type { Schedule } from '@ambitime/shared';
+import type { Schedule, TaskNode } from '@ambitime/shared';
+import type { TaskTreeNode } from '../tasks/task-tree.js';
 
 /**
  * Turning what the engine produced into what a client can draw (spec §3.1).
@@ -121,4 +122,49 @@ async function titlesOf(tx: Transaction, taskIds: string[]): Promise<Map<string,
     .where(inArray(tasks.id, taskIds));
 
   return new Map(rows.map((row) => [row.id, row.title]));
+}
+
+/**
+ * A task tree node, trimmed to the fields the API promises.
+ *
+ * The CTE returns more than the contract does — the preferred-range columns
+ * among them — and passing rows through untouched would make every column an
+ * accidental part of the contract.
+ */
+export function presentTaskNode(node: TaskTreeNode): TaskNode {
+  return {
+    id: node.id,
+    parentId: node.parentId,
+    title: node.title,
+    depth: node.depth,
+    path: node.path,
+    isLeaf: node.isLeaf,
+    status: node.status,
+    estimatedDurationMin: node.estimatedDurationMin,
+    ownCategoryId: node.ownCategoryId,
+    effectiveCategoryId: node.effectiveCategoryId,
+    ownPriority: node.ownPriority,
+    effectivePriority: node.effectivePriority,
+    ownDueDate: isoOrNull(node.ownDueDate),
+    effectiveDueDate: isoOrNull(node.effectiveDueDate),
+    ownDueKind: node.ownDueKind,
+    effectiveDueKind: node.effectiveDueKind,
+    ownFocusLevel: node.ownFocusLevel,
+    effectiveFocusLevel: node.effectiveFocusLevel,
+    ownCooldownOverrideMin: node.ownCooldownOverrideMin,
+    effectiveCooldownOverrideMin: node.effectiveCooldownOverrideMin,
+  };
+}
+
+/**
+ * Postgres's `timestamptz` text, as ISO-8601.
+ *
+ * The task tree is a hand-written CTE read through `execute`, so its timestamps
+ * arrive in the driver's own format (`2026-04-01 12:00:00+00`) rather than
+ * through Drizzle's column mapping. Normalised here, at the presentation
+ * boundary, rather than in the CTE — M2 owns that query's shape, and the API
+ * owns the format it promises.
+ */
+function isoOrNull(value: string | null): string | null {
+  return value === null ? null : new Date(value).toISOString();
 }

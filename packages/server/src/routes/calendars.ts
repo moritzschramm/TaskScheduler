@@ -7,7 +7,8 @@ import { appointments, calendars } from '../db/schema/index.js';
 import { requireContext } from '../auth/middleware.js';
 import { withRequestContext } from '../auth/context.js';
 import { toApiFailure, toValidationFailure } from '../api/errors.js';
-import { presentCapacityCell, presentSchedule } from '../api/present.js';
+import { presentCapacityCell, presentSchedule, presentTaskNode } from '../api/present.js';
+import { readCalendarTaskTree } from '../tasks/task-tree.js';
 import { deriveCalendarSchedule } from '../schedule/derive.js';
 import { isoText, toInstant, toInstantCeil } from '../schedule/instants.js';
 import type { AppEnv } from '../app.js';
@@ -112,6 +113,20 @@ export function calendarRoutes(auth: Auth, clock: Clock) {
         const failure = toApiFailure(error);
         return c.json(failure.body, failure.status);
       }
+    })
+
+    .get('/calendars/:calendarId/tasks', requireContext(auth), async (c) => {
+      const context = c.get('context');
+      const calendarId = c.req.param('calendarId');
+
+      // Source, not derived: the panel has to show tasks that were never
+      // placed — a parent, something completed, something with no estimate
+      // yet — and the schedule by definition contains none of those.
+      const tasks = await withRequestContext(c.get('db'), context, (tx) =>
+        readCalendarTaskTree(tx, calendarId),
+      );
+
+      return c.json({ calendarId, tasks: tasks.map(presentTaskNode) }, 200);
     })
 
     .get('/calendars/:calendarId/capacity', requireContext(auth), async (c) => {

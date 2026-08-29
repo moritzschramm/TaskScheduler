@@ -209,6 +209,44 @@ export const capacityResponseSchema = z.object({
   cells: z.array(capacityCellSchema),
 });
 
+/**
+ * A task as the task panel sees it (spec §4.4).
+ *
+ * Carries **both** the value a task sets itself and the value it ends up with,
+ * because the difference is the whole of §4.4's inheritance and a panel that
+ * showed only one of them could not say whether a property was chosen here or
+ * came from an ancestor. M11's override affordance needs exactly this pair.
+ */
+export const taskNodeSchema = z.object({
+  id: uuid,
+  parentId: uuid.nullable(),
+  title: z.string(),
+  depth: z.int().min(1).max(5),
+  /** Ancestor ids from the root down to and including this task. */
+  path: z.array(uuid),
+  /** Only leaves are placed; a parent rolls up from its children (§4.4). */
+  isLeaf: z.boolean(),
+  status: z.enum(['active', 'completed', 'cancelled']),
+  estimatedDurationMin: z.int().nullable(),
+  ownCategoryId: uuid.nullable(),
+  effectiveCategoryId: uuid.nullable(),
+  ownPriority: z.int().nullable(),
+  effectivePriority: z.int().nullable(),
+  ownDueDate: instant.nullable(),
+  effectiveDueDate: instant.nullable(),
+  ownDueKind: z.enum(['soft', 'hard']).nullable(),
+  effectiveDueKind: z.enum(['soft', 'hard']).nullable(),
+  ownFocusLevel: z.int().nullable(),
+  effectiveFocusLevel: z.int().nullable(),
+  ownCooldownOverrideMin: z.int().nullable(),
+  effectiveCooldownOverrideMin: z.int().nullable(),
+});
+
+export const taskListSchema = z.object({
+  calendarId: uuid,
+  tasks: z.array(taskNodeSchema),
+});
+
 export const notificationSchema = z.object({
   id: uuid,
   type: z.string(),
@@ -286,3 +324,5 @@ export type CapacityCell = z.infer<typeof capacityCellSchema>;
 export type FixedBlock = z.infer<typeof fixedBlockSchema>;
 export type CalendarSummary = z.infer<typeof calendarSummarySchema>;
 export type Notification = z.infer<typeof notificationSchema>;
+
+export type TaskNode = z.infer<typeof taskNodeSchema>;
