@@ -290,7 +290,7 @@ describe('identity and tenancy constraints', () => {
         .where(eq(tenants.id, tenantId));
 
       expect(after?.version).toBe((before?.version ?? 0) + 1);
-      expect(Date.parse(after!.updatedAt)).toBeGreaterThanOrEqual(Date.parse(before!.updatedAt));
+      expect(after!.updatedAt.getTime()).toBeGreaterThanOrEqual(before!.updatedAt.getTime());
     });
 
     it('ignores a version supplied by the caller', async () => {

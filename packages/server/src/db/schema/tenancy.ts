@@ -9,7 +9,12 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { createdAtColumn, primaryKeyColumn, updatedAtColumn, versionColumn } from './columns.js';
+import {
+  createdAtDateColumn,
+  primaryKeyColumn,
+  updatedAtDateColumn,
+  versionColumn,
+} from './columns.js';
 import { users } from './identity.js';
 
 /** Coarse RBAC roles (spec §10.2); maps to the Better Auth organization plugin. */
@@ -54,8 +59,8 @@ export const tenants = pgTable(
     metadata: text('metadata'),
     personalOwnerId: uuid('personal_owner_id').references(() => users.id, { onDelete: 'cascade' }),
     version: versionColumn(),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
+    createdAt: createdAtDateColumn(),
+    updatedAt: updatedAtDateColumn(),
   },
   (table) => [
     unique('tenants_slug_key').on(table.slug),
@@ -78,8 +83,8 @@ export const memberships = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     role: membershipRole('role').notNull().default('member'),
     version: versionColumn(),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
+    createdAt: createdAtDateColumn(),
+    updatedAt: updatedAtDateColumn(),
   },
   (table) => [
     // Also the target of `team_memberships`' composite FK: you cannot be on a
@@ -98,8 +103,8 @@ export const groups = pgTable(
       .references(() => tenants.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     version: versionColumn(),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
+    createdAt: createdAtDateColumn(),
+    updatedAt: updatedAtDateColumn(),
   },
   (table) => [
     unique('groups_id_tenant_key').on(table.id, table.tenantId),
@@ -117,8 +122,8 @@ export const teams = pgTable(
       .references(() => tenants.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     version: versionColumn(),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
+    createdAt: createdAtDateColumn(),
+    updatedAt: updatedAtDateColumn(),
   },
   (table) => [
     unique('teams_id_tenant_key').on(table.id, table.tenantId),
@@ -144,7 +149,7 @@ export const teamGroups = pgTable(
       .references(() => tenants.id, { onDelete: 'cascade' }),
     teamId: uuid('team_id').notNull(),
     groupId: uuid('group_id').notNull(),
-    createdAt: createdAtColumn(),
+    createdAt: createdAtDateColumn(),
   },
   (table) => [
     primaryKey({ columns: [table.teamId, table.groupId] }),
@@ -179,8 +184,8 @@ export const teamMemberships = pgTable(
     teamId: uuid('team_id').notNull(),
     userId: uuid('user_id').notNull(),
     version: versionColumn(),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
+    createdAt: createdAtDateColumn(),
+    updatedAt: updatedAtDateColumn(),
   },
   (table) => [
     unique('team_memberships_team_user_key').on(table.teamId, table.userId),

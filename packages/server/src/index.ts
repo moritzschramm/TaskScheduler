@@ -1,13 +1,22 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
+import { createAuth } from './auth/auth.js';
 import { createDatabase } from './db/client.js';
 import { loadEnv } from './env.js';
 
 const env = loadEnv();
 const { db, close } = createDatabase(env.DATABASE_URL);
 
+const auth = createAuth({
+  db,
+  secret: env.BETTER_AUTH_SECRET,
+  baseURL: env.BETTER_AUTH_URL,
+  trustedOrigins: env.corsOrigins,
+});
+
 const app = createApp({
   db,
+  auth,
   corsOrigins: env.corsOrigins,
   requestLogging: env.NODE_ENV !== 'test',
 });

@@ -24,3 +24,24 @@ export const createdAtColumn = () =>
 /** Bumped by the `touch_row()` trigger alongside `version`. */
 export const updatedAtColumn = () =>
   timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow();
+
+/**
+ * The same two columns, presented to JavaScript as `Date` rather than as an
+ * ISO string.
+ *
+ * Used only by the tables Better Auth reads and writes (spec §10.1): `users`,
+ * `tenants`, `memberships`, and the four it owns outright. Its adapter hands
+ * the driver `Date` objects and converts what comes back into `Date` either
+ * way, so a string-mode column would be handed a value it cannot serialise.
+ *
+ * The stored type is identical — `timestamp with time zone`, UTC, per §5.1.
+ * What differs is the representation this side of the driver, and it differs
+ * for exactly the tables a library owns. Everything the app itself reads
+ * timestamps out of stays on strings, which is what the scheduler's
+ * `toInstant` expects.
+ */
+export const createdAtDateColumn = () =>
+  timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
+
+export const updatedAtDateColumn = () =>
+  timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();

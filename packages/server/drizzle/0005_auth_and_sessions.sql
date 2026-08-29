@@ -245,3 +245,11 @@ CREATE TRIGGER email_identities_mirror_user
   AFTER INSERT OR UPDATE OF email, is_primary ON email_identities
   FOR EACH ROW
   EXECUTE FUNCTION mirror_user_email_from_primary();
+--> statement-breakpoint
+
+
+-- ---------------------------------------------------------------------------
+-- 4. Schema version (spec §5.1)
+-- ---------------------------------------------------------------------------
+
+UPDATE app_meta SET value = 'm8', updated_at = now() WHERE key = 'schema_version';

@@ -1,6 +1,13 @@
 import { sql } from 'drizzle-orm';
 import { boolean, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
-import { createdAtColumn, primaryKeyColumn, updatedAtColumn, versionColumn } from './columns.js';
+import {
+  createdAtColumn,
+  createdAtDateColumn,
+  primaryKeyColumn,
+  updatedAtColumn,
+  updatedAtDateColumn,
+  versionColumn,
+} from './columns.js';
 
 /**
  * The global authentication principal — one row per human (spec §4.1).
@@ -36,8 +43,9 @@ export const users = pgTable(
     /** Avatar URL. Better Auth's `image`; the app has no opinion about it yet. */
     image: text('image'),
     version: versionColumn(),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
+    // Date-mode: Better Auth writes this table (§10.1). See `columns.ts`.
+    createdAt: createdAtDateColumn(),
+    updatedAt: updatedAtDateColumn(),
   },
   (table) => [uniqueIndex('users_email_lower_key').on(sql`lower(${table.email})`)],
 );

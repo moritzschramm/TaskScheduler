@@ -1,5 +1,5 @@
 import { index, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
-import { createdAtColumn, primaryKeyColumn, updatedAtColumn } from './columns.js';
+import { createdAtDateColumn, primaryKeyColumn, updatedAtDateColumn } from './columns.js';
 import { tenants } from './tenancy.js';
 import { users } from './identity.js';
 
@@ -19,10 +19,11 @@ import { users } from './identity.js';
  * policies, which is the same arrangement `withSystemPrivileges` describes for
  * everything else that cannot be tenant-scoped.
  *
- * Timestamps are `mode: 'string'` like every other table here (§5.1). Better
- * Auth hands the driver `Date` objects, which serialise correctly, and converts
- * what comes back into `Date` itself — so one convention holds across the
- * schema rather than two.
+ * Timestamps are `mode: 'date'`, which is the one place this schema departs
+ * from the ISO strings everything else uses (§5.1). Better Auth's adapter hands
+ * the driver `Date` objects and converts what comes back into `Date` either
+ * way; the stored type is the same `timestamp with time zone` regardless. See
+ * `createdAtDateColumn` in `columns.ts`.
  */
 
 /**
@@ -42,7 +43,7 @@ export const sessions = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** The opaque bearer value in the session cookie. */
     token: text('token').notNull(),
-    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
     /** The active tenant (§9). NULL until the first context is chosen. */
@@ -51,8 +52,8 @@ export const sessions = pgTable(
     }),
     /** Reserved by the organization plugin; teams are a deferred feature (§4.2). */
     activeTeamId: uuid('active_team_id'),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
+    createdAt: createdAtDateColumn(),
+    updatedAt: updatedAtDateColumn(),
   },
   (table) => [
     unique('sessions_token_key').on(table.token),
@@ -84,17 +85,17 @@ export const accounts = pgTable(
     idToken: text('id_token'),
     accessTokenExpiresAt: timestamp('access_token_expires_at', {
       withTimezone: true,
-      mode: 'string',
+      mode: 'date',
     }),
     refreshTokenExpiresAt: timestamp('refresh_token_expires_at', {
       withTimezone: true,
-      mode: 'string',
+      mode: 'date',
     }),
     scope: text('scope'),
     /** Hashed by Better Auth (scrypt); never a plaintext value. */
     password: text('password'),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
+    createdAt: createdAtDateColumn(),
+    updatedAt: updatedAtDateColumn(),
   },
   (table) => [
     unique('accounts_issuer_account_key').on(table.issuer, table.accountId),
@@ -109,9 +110,9 @@ export const verifications = pgTable(
     id: primaryKeyColumn(),
     identifier: text('identifier').notNull(),
     value: text('value').notNull(),
-    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+    createdAt: createdAtDateColumn(),
+    updatedAt: updatedAtDateColumn(),
   },
   (table) => [index('verifications_identifier_idx').on(table.identifier)],
 );
@@ -134,11 +135,11 @@ export const invitations = pgTable(
     role: text('role'),
     teamId: uuid('team_id'),
     status: text('status').notNull().default('pending'),
-    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
     inviterId: uuid('inviter_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    createdAt: createdAtColumn(),
+    createdAt: createdAtDateColumn(),
   },
   (table) => [index('invitations_organization_idx').on(table.organizationId)],
 );
@@ -165,8 +166,8 @@ export const ssoProviders = pgTable(
     samlConfig: text('saml_config'),
     userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
     organizationId: uuid('organization_id').references(() => tenants.id, { onDelete: 'cascade' }),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
+    createdAt: createdAtDateColumn(),
+    updatedAt: updatedAtDateColumn(),
   },
   (table) => [
     unique('sso_providers_provider_id_key').on(table.providerId),

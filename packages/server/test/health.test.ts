@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { healthErrorSchema, healthResponseSchema } from '@ambitime/shared';
-import { createApp } from '../src/app.js';
+import type { createApp } from '../src/app.js';
 import { createDatabase, type DatabaseHandle } from '../src/db/client.js';
 import { setupTestDatabase } from './support/database.js';
+import { createTestApp } from './support/auth.js';
 
 describe('GET /api/health', () => {
   let handle: DatabaseHandle;
@@ -10,7 +11,7 @@ describe('GET /api/health', () => {
 
   beforeAll(async () => {
     handle = await setupTestDatabase();
-    app = createApp({ db: handle.db, requestLogging: false });
+    app = createTestApp(handle.db).app;
   });
 
   afterAll(async () => {
@@ -30,7 +31,7 @@ describe('GET /api/health', () => {
     expect(body.database.reachable).toBe(true);
     // Bumped by each milestone's migration; asserting the exact value proves
     // migrations ran to completion, not just that the table exists.
-    expect(body.database.schemaVersion).toBe('m2');
+    expect(body.database.schemaVersion).toBe('m8');
     expect(Number.isNaN(Date.parse(body.database.serverTime))).toBe(false);
     expect(body.database.latencyMs).toBeGreaterThanOrEqual(0);
   });
@@ -40,7 +41,7 @@ describe('GET /api/health', () => {
       max: 1,
       connect_timeout: 1,
     });
-    const failingApp = createApp({ db: unreachable.db, requestLogging: false });
+    const failingApp = createTestApp(unreachable.db).app;
 
     const response = await failingApp.request('/api/health');
 
