@@ -1,10 +1,13 @@
-import { eq } from 'drizzle-orm';
-import { appointments } from '../../db/schema/index.js';
 import { lockAppointment, type CommandContext, type HandlerOutcome } from '../context.js';
 import { requireCalendar } from '../entities.js';
+import { insertRow, updateRow } from '../journal.js';
 import { PreconditionFailedError } from '../errors.js';
 import { toInstant, toInstantCeil, toRangeLiteral } from '../../schedule/instants.js';
-import type { AddAppointmentParams, EditAppointmentParams } from '@ambitime/shared';
+import type {
+  AddAppointmentParams,
+  AddUnavailabilityParams,
+  EditAppointmentParams,
+} from '@ambitime/shared';
 import type { NewAppointment } from '../../db/schema/index.js';
 
 /**
@@ -14,9 +17,9 @@ import type { NewAppointment } from '../../db/schema/index.js';
  * (§6.2 rule 2). Nothing here consults the solver — it changes the source and
  * lets re-derivation work out what that costs.
  *
- * `AddUnavailability`, the content-free block, is the same insert with
- * `is_unavailability` set, and is M7's command. The column already defaults to
- * false, so adding it stays additive.
+ * `AddUnavailability` is the same insert with `is_unavailability` set. The
+ * engine does not distinguish the two — both are simply time already taken
+ * (§7.4) — so nothing downstream of here has a branch for it.
  */
 
 /** SQLSTATE for a GiST exclusion constraint — here, two overlapping blocks. */
@@ -38,7 +41,36 @@ export async function addAppointment(
     isInternal: params.isInternal,
   };
 
-  await insertingBlock(() => ctx.tx.insert(appointments).values(values), params.calendarId);
+  await insertingBlock(() => insertRow(ctx, 'appointments', values), params.calendarId);
+  return { calendarIds: [params.calendarId] };
+}
+
+/**
+ * `AddUnavailability(calendar, [start, end))` — a content-free hard block
+ * (spec §7.4).
+ *
+ * The title is stored empty rather than filled with something like
+ * "Unavailable". The column cannot be null, but inventing text would put words
+ * in the user's calendar that they never wrote, and a later export or a shared
+ * view would show them as if they had. `is_unavailability` carries the meaning;
+ * a UI that renders one supplies its own label, in its own language.
+ */
+export async function addUnavailability(
+  params: AddUnavailabilityParams,
+  ctx: CommandContext,
+): Promise<HandlerOutcome> {
+  await requireCalendar(ctx, params.calendarId);
+
+  const values: NewAppointment = {
+    tenantId: ctx.tenantId,
+    calendarId: params.calendarId,
+    ownerId: ctx.actorId,
+    title: '',
+    during: interval(params.start, params.end),
+    isUnavailability: true,
+  };
+
+  await insertingBlock(() => insertRow(ctx, 'appointments', values), params.calendarId);
   return { calendarIds: [params.calendarId] };
 }
 
@@ -57,12 +89,10 @@ export async function editAppointment(
     values.during = interval(patch.interval.start, patch.interval.end);
   }
 
-  if (Object.keys(values).length > 0) {
-    await insertingBlock(
-      () => ctx.tx.update(appointments).set(values).where(eq(appointments.id, appointment.id)),
-      appointment.calendarId,
-    );
-  }
+  await insertingBlock(
+    () => updateRow(ctx, 'appointments', appointment.id, values),
+    appointment.calendarId,
+  );
 
   return { calendarIds: [appointment.calendarId] };
 }
