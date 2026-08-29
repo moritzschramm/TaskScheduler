@@ -1,0 +1,202 @@
+import { Hono } from 'hono';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
+import { and, eq, ne, sql } from 'drizzle-orm';
+import { computeCapacity, DEFAULT_TUNING } from '@ambitime/scheduler';
+import { appointments, calendars } from '../db/schema/index.js';
+import { requireContext } from '../auth/middleware.js';
+import { withRequestContext } from '../auth/context.js';
+import { toApiFailure, toValidationFailure } from '../api/errors.js';
+import { presentCapacityCell, presentSchedule } from '../api/present.js';
+import { deriveCalendarSchedule } from '../schedule/derive.js';
+import { isoText, toInstant, toInstantCeil } from '../schedule/instants.js';
+import type { AppEnv } from '../app.js';
+import type { Auth } from '../auth/auth.js';
+import type { Transaction } from '../db/client.js';
+import type { Clock } from '../app.js';
+
+/**
+ * Reads over the derived schedule (spec §3.4, §6.1, §6.6).
+ *
+ * **Every one of these re-derives.** The placement cache exists and is
+ * up to date, but reading it directly would answer a different question:
+ * "where was everything when the last command ran", not "where is everything
+ * now". `now` moves continuously, and the horizon moves with it, so a read at
+ * 4pm must not hand back a morning's answer including slots that have passed.
+ *
+ * Re-derivation is cheap — §3.3 says so and means it, a greedy pass over a
+ * fortnight — and it keeps the same property the write path has: the schedule
+ * is a function of the source, computed the same way whoever asks.
+ *
+ * The cache is still written on the way through, which is what §3.4 wants it
+ * for: a baseline for change detection, not a source of truth.
+ */
+export function calendarRoutes(auth: Auth, clock: Clock) {
+  const range = z.object({
+    from: z.iso.datetime({ offset: true }).optional(),
+    to: z.iso.datetime({ offset: true }).optional(),
+  });
+
+  return new Hono<AppEnv>()
+    .get('/calendars', requireContext(auth), async (c) => {
+      const context = c.get('context');
+
+      const rows = await withRequestContext(c.get('db'), context, (tx) =>
+        tx
+          .select({ id: calendars.id, name: calendars.name, timezone: calendars.timezone })
+          .from(calendars)
+          .orderBy(calendars.name),
+      );
+
+      return c.json({ calendars: rows }, 200);
+    })
+
+    .get(
+      '/calendars/:calendarId/schedule',
+      requireContext(auth),
+      zValidator('query', range, validationHook),
+      async (c) => {
+        const context = c.get('context');
+        const calendarId = c.req.param('calendarId');
+        const { from, to } = c.req.valid('query');
+
+        try {
+          const body = await withRequestContext(c.get('db'), context, async (tx) => {
+            const derived = await deriveCalendarSchedule({
+              tx,
+              tenantId: context.tenantId,
+              calendarId,
+              now: nowOf(clock),
+              config: DEFAULT_TUNING,
+            });
+
+            const window = {
+              start: from === undefined ? derived.horizon.start : toInstant(from),
+              end: to === undefined ? derived.horizon.end : toInstantCeil(to),
+            };
+
+            return {
+              schedule: await presentSchedule({ tx, schedule: derived }),
+              fixedBlocks: await readFixedBlocks(tx, calendarId, window),
+            };
+          });
+
+          return c.json(body, 200);
+        } catch (error) {
+          const failure = toApiFailure(error);
+          return c.json(failure.body, failure.status);
+        }
+      },
+    )
+
+    .get('/calendars/:calendarId/backlog', requireContext(auth), async (c) => {
+      const context = c.get('context');
+      const calendarId = c.req.param('calendarId');
+
+      try {
+        const body = await withRequestContext(c.get('db'), context, async (tx) => {
+          const derived = await deriveCalendarSchedule({
+            tx,
+            tenantId: context.tenantId,
+            calendarId,
+            now: nowOf(clock),
+            config: DEFAULT_TUNING,
+          });
+
+          const presented = await presentSchedule({ tx, schedule: derived });
+          return { calendarId, entries: presented.backlog };
+        });
+
+        return c.json(body, 200);
+      } catch (error) {
+        const failure = toApiFailure(error);
+        return c.json(failure.body, failure.status);
+      }
+    })
+
+    .get('/calendars/:calendarId/capacity', requireContext(auth), async (c) => {
+      const context = c.get('context');
+      const calendarId = c.req.param('calendarId');
+
+      try {
+        const body = await withRequestContext(c.get('db'), context, async (tx) => {
+          const derived = await deriveCalendarSchedule({
+            tx,
+            tenantId: context.tenantId,
+            calendarId,
+            now: nowOf(clock),
+            config: DEFAULT_TUNING,
+          });
+
+          // Capacity is computed from the *same* derived result, so the
+          // utilization a user sees and the schedule they are looking at
+          // cannot disagree (§6.6).
+          const report = computeCapacity({
+            context: derived.context,
+            placements: derived.placements,
+            backlog: derived.backlog,
+            config: DEFAULT_TUNING,
+          });
+
+          return { calendarId, cells: report.cells.map(presentCapacityCell) };
+        });
+
+        return c.json(body, 200);
+      } catch (error) {
+        const failure = toApiFailure(error);
+        return c.json(failure.body, failure.status);
+      }
+    });
+}
+
+/**
+ * `now`, from the injected clock.
+ *
+ * Injected rather than read from `Date` directly, and deliberately **not**
+ * overridable by anything on the request. A caller that could set `now` could
+ * ask what the schedule looks like next Tuesday and be told it as though it
+ * were true, or place work in the past. Tests pin it by constructing the app
+ * with a different clock, which is a compile-time seam rather than a runtime
+ * one that could be left open in production.
+ */
+function nowOf(clock: Clock): number {
+  return toInstant(clock().toISOString());
+}
+
+async function readFixedBlocks(
+  tx: Transaction,
+  calendarId: string,
+  window: { start: number; end: number },
+) {
+  const rows = await tx
+    .select({
+      appointmentId: appointments.id,
+      title: appointments.title,
+      start: isoText(sql`lower(${appointments.during})`),
+      end: isoText(sql`upper(${appointments.during})`),
+      isUnavailability: appointments.isUnavailability,
+      isInternal: appointments.isInternal,
+      status: appointments.status,
+    })
+    .from(appointments)
+    .where(
+      and(
+        eq(appointments.calendarId, calendarId),
+        ne(appointments.status, 'cancelled'),
+        sql`${appointments.during} && tstzrange(to_timestamp(${window.start * 60}), to_timestamp(${window.end * 60}), '[)')`,
+      ),
+    )
+    .orderBy(sql`lower(${appointments.during})`);
+
+  return rows;
+}
+
+function validationHook(
+  result: { success: boolean; error?: z.core.$ZodError },
+  c: { json: (body: unknown, status: 400) => Response },
+) {
+  if (result.success || !result.error) return undefined;
+
+  const failure = toValidationFailure(result.error);
+  return c.json(failure.body, 400);
+}

@@ -39,9 +39,14 @@ export interface Signed {
 
 export const TEST_PASSWORD = 'correct-horse-battery-staple';
 
-export function createTestApp(db: Database): TestApp {
+export function createTestApp(db: Database, clock?: () => Date): TestApp {
   const auth = createAuth({ db, secret: TEST_AUTH_SECRET, baseURL: TEST_BASE_URL });
-  const app = createApp({ db, auth, requestLogging: false });
+  const app = createApp({
+    db,
+    auth,
+    requestLogging: false,
+    ...(clock === undefined ? {} : { clock }),
+  });
 
   const post = async (path: string, body: unknown, cookie?: string): Promise<Response> =>
     await app.request(path, {

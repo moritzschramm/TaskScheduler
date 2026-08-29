@@ -134,7 +134,8 @@ export const backlogEntrySchema = z.object({
 
 export const diagnosticSchema = z.object({
   code: z.string(),
-  severity: z.enum(['info', 'warning', 'error']),
+  /** §6.5's own scale: warning versus alert is the soft/hard due-date split. */
+  severity: z.enum(['info', 'warning', 'alert']),
   occurrenceId: uuid,
   taskId: uuid,
   message: z.string(),
@@ -278,3 +279,10 @@ export const errorResponseSchema = z.object({
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
+
+export type ScheduledBlock = z.infer<typeof scheduledBlockSchema>;
+export type BacklogEntry = z.infer<typeof backlogEntrySchema>;
+export type CapacityCell = z.infer<typeof capacityCellSchema>;
+export type FixedBlock = z.infer<typeof fixedBlockSchema>;
+export type CalendarSummary = z.infer<typeof calendarSummarySchema>;
+export type Notification = z.infer<typeof notificationSchema>;
