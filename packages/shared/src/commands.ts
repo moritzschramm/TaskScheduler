@@ -18,7 +18,9 @@ import { uuidv7 } from './uuid.js';
  * parser's target. `CreateTask`, `EditTask` and `EditAppointment` are not named
  * in §7 and follow the obvious convention.
  *
- * Milestone M6 covers this set; the rest of §7.3–7.5 arrives in M7.
+ * `Undo` and `Redo` are commands like any other (§7.5): they are appended to
+ * the log alongside what they reversed, so the history stays an honest record
+ * of intent — including the intent to take something back.
  */
 
 const uuid = z.uuid();
@@ -98,8 +100,7 @@ const editTaskParams = z.object({
 
 /**
  * Spec §7.4. `isUnavailability` is deliberately absent: a content-free block is
- * `AddUnavailability`, its own command in M7. The column exists and defaults to
- * false, so adding that command stays additive.
+ * `AddUnavailability` below, which is the same insert with the flag set.
  */
 const addAppointmentParams = z
   .object({
@@ -158,6 +159,65 @@ const postponeRestOfDayParams = z.object({ calendarId: uuid, date: civilDate });
 const clearWeekParams = z.object({ calendarId: uuid, week: civilDate });
 
 /**
+ * Spec §7.3. The estimate was wrong, or the task overran; downstream reflows.
+ *
+ * Distinct from `EditTask` with a duration patch even though the write is the
+ * same one, because the *intent* differs and the log is read by people: "this
+ * took longer than I thought" is the sentence a future parser will be given,
+ * and history that records it as an edit has thrown that away.
+ */
+const extendTaskParams = z.object({
+  taskId: uuid,
+  newEstimateMin: taskAttributes.estimatedDurationMin,
+});
+
+/** Spec §7.3. Frees the task's footprint without pretending it was done. */
+const cancelTaskParams = z.object({ taskId: uuid });
+
+/**
+ * Spec §7.3. Exchange two tasks' time positions, if each fits where the other
+ * was; the server falls back to `SwapForward` semantics when they do not.
+ */
+const swapTasksParams = z
+  .object({ taskAId: uuid, taskBId: uuid })
+  .refine((params) => params.taskAId !== params.taskBId, {
+    message: 'A task cannot be swapped with itself',
+  });
+
+/** Spec §7.3. "I don't want to work on this now." */
+const swapForwardParams = z.object({ taskId: uuid });
+
+/** Spec §7.3. Crossing the hard-horizon boundary (§6.1), in either direction. */
+const promoteFromBacklogParams = z.object({ taskId: uuid });
+const moveToBacklogParams = z.object({ taskId: uuid });
+
+/**
+ * Spec §7.4 — "unavailable 14:00–16:00".
+ *
+ * No title and no notes: the block is *content-free* by definition, and a
+ * command that accepted a title would be `AddAppointment` wearing a flag. The
+ * stored row carries `is_unavailability`, which is what tells a UI to label it
+ * itself rather than render an invented title back at the user.
+ */
+const addUnavailabilityParams = z
+  .object({ calendarId: uuid, start: instant, end: instant })
+  .refine((params) => params.start < params.end, {
+    message: 'An unavailability must end after it starts',
+  });
+
+/**
+ * Spec §7.5. No parameters: undo means "the last thing I did", and letting a
+ * caller name an arbitrary target would make it something else — a selective
+ * revert, which reverses changes later commands were built on.
+ *
+ * "The last thing I did" is per actor. The log is the tenant's, but undo is a
+ * personal gesture: reaching into a colleague's work because they happened to
+ * act more recently is not what anyone means by pressing it.
+ */
+const undoParams = z.object({});
+const redoParams = z.object({});
+
+/**
  * The envelope of spec §7.1.
  *
  * `expectedVersion` is the optimistic lock (§5.4) on the entity the command
@@ -170,6 +230,17 @@ const envelope = {
   actor: uuid,
   tenantId: uuid,
   expectedVersion: z.int().positive().optional(),
+  /**
+   * Ties several commands into one atomic unit of history (§7.5): undo reverses
+   * the whole group or none of it. Absent for a standalone command, which is
+   * almost all of them — the bulk actions of §7.2 are single commands that
+   * happen to touch many rows, and are already atomic by virtue of being one.
+   *
+   * Not in §7.1's envelope sketch, but §7.5 requires command groups to exist
+   * and the log has carried the column since the schema was laid down. A caller
+   * that never sets it gets exactly the behaviour §7.1 describes.
+   */
+  groupId: uuid.optional(),
   issuedAt: instant,
 } as const;
 
@@ -187,6 +258,15 @@ export const commandSchema = z.discriminatedUnion('type', [
   command('CompleteTask', completeTaskParams),
   command('PostponeRestOfDay', postponeRestOfDayParams),
   command('ClearWeek', clearWeekParams),
+  command('ExtendTask', extendTaskParams),
+  command('CancelTask', cancelTaskParams),
+  command('SwapTasks', swapTasksParams),
+  command('SwapForward', swapForwardParams),
+  command('PromoteFromBacklog', promoteFromBacklogParams),
+  command('MoveToBacklog', moveToBacklogParams),
+  command('AddUnavailability', addUnavailabilityParams),
+  command('Undo', undoParams),
+  command('Redo', redoParams),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -204,6 +284,13 @@ export type DeferTaskParams = z.infer<typeof deferTaskParams>;
 export type CompleteTaskParams = z.infer<typeof completeTaskParams>;
 export type PostponeRestOfDayParams = z.infer<typeof postponeRestOfDayParams>;
 export type ClearWeekParams = z.infer<typeof clearWeekParams>;
+export type ExtendTaskParams = z.infer<typeof extendTaskParams>;
+export type CancelTaskParams = z.infer<typeof cancelTaskParams>;
+export type SwapTasksParams = z.infer<typeof swapTasksParams>;
+export type SwapForwardParams = z.infer<typeof swapForwardParams>;
+export type PromoteFromBacklogParams = z.infer<typeof promoteFromBacklogParams>;
+export type MoveToBacklogParams = z.infer<typeof moveToBacklogParams>;
+export type AddUnavailabilityParams = z.infer<typeof addUnavailabilityParams>;
 
 /** Every command type, for exhaustiveness checks and registry guards. */
 export const COMMAND_TYPES = commandSchema.options.map(

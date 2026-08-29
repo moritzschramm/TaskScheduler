@@ -51,18 +51,47 @@ describe('the command envelope (spec §7.1)', () => {
     );
   });
 
-  it('covers exactly the M6 command set', () => {
+  it('covers exactly the §7 command vocabulary', () => {
     expect([...COMMAND_TYPES].sort()).toEqual([
       'AddAppointment',
+      'AddUnavailability',
+      'CancelTask',
       'ClearWeek',
       'CompleteTask',
       'CreateTask',
       'DeferTask',
       'EditAppointment',
       'EditTask',
+      'ExtendTask',
       'MoveTask',
+      'MoveToBacklog',
       'PostponeRestOfDay',
+      'PromoteFromBacklog',
+      'Redo',
+      'SwapForward',
+      'SwapTasks',
+      'Undo',
     ]);
+  });
+
+  it('carries an optional group id, which is what undo reverses atomically', () => {
+    const group = '018f3a2b-0000-7000-8000-00000000000a';
+    const command = commandSchema.parse(
+      newCommand({
+        type: 'MoveTask',
+        actor: ACTOR,
+        tenantId: TENANT,
+        groupId: group,
+        params: { taskId: TASK, datetime: '2026-03-23T09:00:00Z' },
+      }),
+    );
+
+    expect(command.groupId).toBe(group);
+    // Absent is the normal case: a standalone command is its own unit.
+    expect(
+      commandSchema.parse(newCommand({ type: 'Undo', actor: ACTOR, tenantId: TENANT, params: {} }))
+        .groupId,
+    ).toBeUndefined();
   });
 });
 
@@ -103,6 +132,31 @@ describe('params the schema refuses to represent', () => {
 
   it('will not take a defer target outside the three the spec names', () => {
     expect(parse('DeferTask', { taskId: TASK, target: 'never' }).success).toBe(false);
+  });
+
+  it('will not take a swap of a task with itself', () => {
+    expect(parse('SwapTasks', { taskAId: TASK, taskBId: TASK }).success).toBe(false);
+    expect(parse('SwapTasks', { taskAId: TASK, taskBId: ACTOR }).success).toBe(true);
+  });
+
+  it('will not take a new estimate of zero minutes', () => {
+    expect(parse('ExtendTask', { taskId: TASK, newEstimateMin: 0 }).success).toBe(false);
+    expect(parse('ExtendTask', { taskId: TASK, newEstimateMin: 90 }).success).toBe(true);
+  });
+
+  it('will not take a title on an unavailability, which is content-free (§7.4)', () => {
+    const params = {
+      calendarId: TENANT,
+      start: '2026-03-23T13:00:00Z',
+      end: '2026-03-23T15:00:00Z',
+    };
+
+    expect(parse('AddUnavailability', params).success).toBe(true);
+    // Zod strips it rather than failing, which is the point: there is nowhere
+    // for a title to go, so a caller cannot smuggle one into the block.
+    expect(parse('AddUnavailability', { ...params, title: 'Dentist' }).data?.params).toEqual(
+      params,
+    );
   });
 
   it('distinguishes clearing a field from leaving it alone', () => {
