@@ -662,6 +662,130 @@ describe('seed via the API, render the client', () => {
       expect(wrapper.find('[data-testid="schedule-diverged"]').exists()).toBe(false);
     });
   });
+
+  /**
+   * Plan M13: the engine's signals, on screen.
+   *
+   * The distinction §6.5 and §6.7 draw — soft warns, hard alerts — has to
+   * survive all the way to the markup, because a centre that showed both the
+   * same way would throw away the care the engine took to tell them apart.
+   */
+  describe('signals', () => {
+    const openCalendar = async (email: string) => {
+      await signIn(email, PASSWORD);
+      await loadSession();
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+      return wrapper;
+    };
+
+    it('shows a hard-due alert above a soft-due warning, and dismisses them', async () => {
+      const email = `signals-${Date.now()}@example.test`;
+      const { calendarId, categoryId, command } = await seed(email);
+
+      // Neither can finish by 09:30 Berlin from a 09:00 start, so both are at
+      // risk in exactly the same way and only `due_kind` differs.
+      for (const kind of ['soft', 'hard'] as const) {
+        await command({
+          type: 'CreateTask',
+          params: {
+            calendarId,
+            title: `${kind} deadline`,
+            categoryId,
+            estimatedDurationMin: 60,
+            dueDate: { date: '2026-03-23T08:30:00Z', kind },
+          },
+        });
+      }
+
+      const wrapper = await openCalendar(email);
+      await waitFor(() => wrapper.findAll('[data-testid="notification"]').length >= 2);
+
+      const severities = wrapper
+        .findAll('[data-testid="notification"]')
+        .map((row) => row.attributes('data-severity'));
+
+      // Alerts first: they are the ones that demand attention now.
+      expect(severities[0]).toBe('alert');
+      expect(severities).toContain('warning');
+      expect(wrapper.find('[data-testid="alert-count"]').text()).toContain('1');
+
+      await wrapper.find('[data-testid="dismiss-all"]').trigger('click');
+      await settle();
+
+      expect(wrapper.find('[data-testid="no-signals"]').exists()).toBe(true);
+    });
+
+    it('shows the per-category utilization indicator (§6.6)', async () => {
+      const email = `capacity-${Date.now()}@example.test`;
+      const { calendarId, categoryId, command } = await seed(email);
+
+      // Far more than one week of the category's windows can hold, and all of
+      // it *due* that week — which is what makes the week overcommitted rather
+      // than merely full. Demand counts the week a task is due as well as the
+      // week it landed in (§6.6), so work pushed out still counts against the
+      // week that could not absorb it; otherwise utilization would fall back to
+      // 1.0 the moment a week overflowed and the signal could never fire.
+      for (let index = 0; index < 12; index += 1) {
+        await command({
+          type: 'CreateTask',
+          params: {
+            calendarId,
+            title: `Bulk ${index}`,
+            categoryId,
+            estimatedDurationMin: 480,
+            dueDate: { date: '2026-03-27T16:00:00Z', kind: 'soft' },
+          },
+        });
+      }
+
+      const wrapper = await openCalendar(email);
+      await waitFor(() => wrapper.findAll('[data-testid="capacity-cell"]').length > 0);
+
+      const cells = wrapper.findAll('[data-testid="capacity-cell"]');
+      expect(cells.some((cell) => cell.attributes('data-status') === 'overcommitted')).toBe(true);
+
+      // §6.6 wants the *indicator* as well as the backlog notification, and the
+      // backlog notification is informational rather than an alert.
+      const backlog = wrapper
+        .findAll('[data-testid="notification"]')
+        .filter((row) => row.attributes('data-type') === 'backlog_added');
+      expect(backlog.length).toBeGreaterThan(0);
+      expect(backlog.every((row) => row.attributes('data-severity') === 'info')).toBe(true);
+    });
+
+    it('surfaces the chronic-postponement signal (§6.6)', async () => {
+      const email = `chronic-${Date.now()}@example.test`;
+      const { calendarId, categoryId, command } = await seed(email);
+
+      const created = (await command({
+        type: 'CreateTask',
+        params: { calendarId, title: 'Keeps slipping', categoryId, estimatedDurationMin: 60 },
+      })) as CommandBody;
+      const taskId = created.created.find((row) => row.entity === 'task')!.id;
+
+      for (let index = 0; index < 5; index += 1) {
+        await command({ type: 'DeferTask', params: { taskId, target: 'tomorrow' } });
+      }
+
+      const wrapper = await openCalendar(email);
+      await waitFor(() =>
+        wrapper
+          .findAll('[data-testid="notification"]')
+          .some((row) => row.attributes('data-type') === 'chronic_postponement'),
+      );
+
+      const chronic = wrapper
+        .findAll('[data-testid="notification"]')
+        .find((row) => row.attributes('data-type') === 'chronic_postponement')!;
+      expect(chronic.text()).toContain('Keeps slipping');
+    });
+  });
 });
 
 /** The task list as the server reports it, for assertions the DOM cannot make. */
@@ -795,13 +919,15 @@ async function seed(email: string): Promise<Seeded> {
     },
   });
 
-  return { cookie, calendarId, categoryId };
+  return { cookie, calendarId, categoryId, command };
 }
 
 interface Seeded {
   cookie: string;
   calendarId: string;
   categoryId: string;
+  /** Issues further commands as the seeded user, before the client signs in. */
+  command: (body: unknown) => Promise<CommandBody>;
 }
 
 interface CommandBody {

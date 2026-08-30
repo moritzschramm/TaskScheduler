@@ -1,5 +1,6 @@
 import {
   backlogResponseSchema,
+  notificationListSchema,
   calendarListSchema,
   capacityResponseSchema,
   scheduleResponseSchema,
@@ -8,6 +9,7 @@ import {
   type CalendarSummary,
   type CapacityCell,
   type FixedBlock,
+  type Notification,
   type Schedule,
   type TaskNode,
 } from '@ambitime/shared';
@@ -55,4 +57,10 @@ export async function fetchTasks(calendarId: string): Promise<TaskNode[]> {
 export async function fetchCapacity(calendarId: string): Promise<CapacityCell[]> {
   const response = await api.api.calendars[':calendarId'].capacity.$get({ param: { calendarId } });
   return capacityResponseSchema.parse(await expectOk(response)).cells;
+}
+
+/** The engine's signals for the signed-in user (spec §11). */
+export async function fetchNotifications(): Promise<Notification[]> {
+  const response = await api.api.notifications.$get();
+  return notificationListSchema.parse(await expectOk(response)).notifications;
 }

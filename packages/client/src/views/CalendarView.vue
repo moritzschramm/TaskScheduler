@@ -3,10 +3,12 @@ import { computed, onMounted, ref, watch } from 'vue';
 import type { BacklogEntry, CalendarSummary, TaskNode } from '@ambitime/shared';
 import { wallClockToInstant, type ScheduleContext } from '@ambitime/scheduler';
 import type { CivilDate } from '@ambitime/scheduler';
+import NotificationCentre from '@/components/NotificationCentre.vue';
 import UndoRedo from '@/components/UndoRedo.vue';
 import AppointmentEditor from '@/components/calendar/AppointmentEditor.vue';
 import WeekGrid from '@/components/calendar/WeekGrid.vue';
 import BacklogPanel from '@/components/panels/BacklogPanel.vue';
+import CapacityPanel from '@/components/panels/CapacityPanel.vue';
 import TaskListPanel from '@/components/panels/TaskListPanel.vue';
 import TaskActions from '@/components/tasks/TaskActions.vue';
 import TaskEditor from '@/components/tasks/TaskEditor.vue';
@@ -14,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import {
   fetchBacklog,
   fetchCalendars,
+  fetchCapacity,
+  fetchNotifications,
   fetchSchedule,
   fetchTasks,
   type ScheduleView,
@@ -24,10 +28,12 @@ import { optimisticBlocks, schedulesAgree } from '@/lib/optimistic';
 import { now } from '@/lib/clock';
 import { addDays, formatCivilDate, localDate, toIso, weekDays } from '@/lib/time';
 import type {
+  CapacityCell,
   Category,
   CommandRequest,
   FixedBlock,
   HistoryView,
+  Notification,
   ScheduledBlock,
 } from '@ambitime/shared';
 import type { GridBlock } from '@/lib/grid';
@@ -58,6 +64,8 @@ const backlog = ref<BacklogEntry[]>([]);
 const tasks = ref<TaskNode[]>([]);
 const categories = ref<Category[]>([]);
 const history = ref<HistoryView | null>(null);
+const notifications = ref<Notification[]>([]);
+const capacity = ref<CapacityCell[]>([]);
 
 /**
  * The solver's input, held so a gesture can be answered without asking.
@@ -116,18 +124,23 @@ async function load() {
     const id = selectedId.value;
     if (id === null) return;
 
-    const [schedule, entries, taskList, configuration, log, context] = await Promise.all([
-      fetchSchedule(id),
-      fetchBacklog(id),
-      fetchTasks(id),
-      fetchConfiguration(id),
-      fetchHistory(),
-      fetchContext(id),
-    ]);
+    const [schedule, entries, taskList, configuration, log, context, signals, cells] =
+      await Promise.all([
+        fetchSchedule(id),
+        fetchBacklog(id),
+        fetchTasks(id),
+        fetchConfiguration(id),
+        fetchHistory(),
+        fetchContext(id),
+        fetchNotifications(),
+        fetchCapacity(id),
+      ]);
 
     categories.value = configuration.categories;
     history.value = log;
     engineContext.value = context;
+    notifications.value = signals;
+    capacity.value = cells;
 
     view.value = schedule;
     backlog.value = entries;
@@ -369,6 +382,11 @@ watch(selectedId, load);
         @move-block="moveBlock"
         @postpone-day="postponeDay"
       />
+
+      <div class="grid gap-8 lg:grid-cols-[2fr_1fr]">
+        <NotificationCentre :notifications="notifications" :submit="submit" />
+        <CapacityPanel :cells="capacity" :categories="categories" />
+      </div>
 
       <div class="grid gap-8 lg:grid-cols-[2fr_1fr]">
         <TaskListPanel
