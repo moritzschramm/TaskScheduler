@@ -3,6 +3,7 @@ import {
   addAppointmentParams,
   addUnavailabilityParams,
   cancelTaskParams,
+  clearFloorParams,
   clearWeekParams,
   completeTaskParams,
   configureCalendarParams,
@@ -83,6 +84,7 @@ export const commandRequestSchema = z.discriminatedUnion('type', [
   request('AddAppointment', addAppointmentParams),
   request('EditAppointment', editAppointmentParams),
   request('MoveTask', moveTaskParams),
+  request('ClearFloor', clearFloorParams),
   request('DeferTask', deferTaskParams),
   request('CompleteTask', completeTaskParams),
   request('PostponeRestOfDay', postponeRestOfDayParams),
@@ -342,12 +344,44 @@ export const taskNodeSchema = z.object({
   effectiveFocusLevel: z.int().nullable(),
   ownCooldownOverrideMin: z.int().nullable(),
   effectiveCooldownOverrideMin: z.int().nullable(),
+  /**
+   * The soft not-before a manual reposition left behind (§7.3).
+   *
+   * Read models mostly carry what a task *is*; this one carries something that
+   * was done to it, because a floor is invisible in the schedule — a task
+   * sitting at 14:00 looks the same whether it chose to or was told to — and a
+   * user cannot reset what they cannot see.
+   */
+  manualFloor: instant.nullable(),
+  manualBias: instant.nullable(),
 });
 
 export const taskListSchema = z.object({
   calendarId: uuid,
   tasks: z.array(taskNodeSchema),
 });
+
+/**
+ * What the undo and redo controls need (spec §7.5, §12).
+ *
+ * The command types rather than prose: a label is a translation decision, and
+ * the vocabulary here is the same one the log records and a future parser
+ * emits. One entry per *unit* of history, since a group of commands is undone
+ * whole or not at all.
+ */
+export const historySchema = z.object({
+  /** The command types of the next unit `Undo` would reverse, or `null`. */
+  undoable: z.array(z.string()).nullable(),
+  /** The same for `Redo`. */
+  redoable: z.array(z.string()).nullable(),
+  /**
+   * The window filled up, so an empty `undoable` means "no further back than
+   * this" rather than "nothing was ever done".
+   */
+  truncated: z.boolean(),
+});
+
+export type HistoryView = z.infer<typeof historySchema>;
 
 export const notificationSchema = z.object({
   id: uuid,

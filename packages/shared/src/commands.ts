@@ -138,6 +138,21 @@ export const editAppointmentParams = z.object({
  */
 export const moveTaskParams = z.object({ taskId: uuid, datetime: instant });
 
+/**
+ * `ClearFloor(task)` — the "explicit user reset" of spec §7.3.
+ *
+ * §7.3 lists three ways a manual floor goes away: completion, a bulk
+ * reschedule, and a user resetting it. The first two happen as side effects of
+ * other commands; the third has no command of its own in §7, and without one a
+ * floor set by a mistaken drag can only be replaced, never removed — the task
+ * would stay "not before Thursday" for ever, with the reason long forgotten.
+ *
+ * Clears the bias with it. They are set together by `MoveTask` and mean one
+ * thing between them; a bias surviving its floor would keep pulling the task
+ * towards a time the user has just said they no longer care about.
+ */
+export const clearFloorParams = z.object({ taskId: uuid });
+
 /** Spec §7.3. Increments `defer_count`; sets nothing fixed. */
 export const deferTaskParams = z.object({
   taskId: uuid,
@@ -420,6 +435,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   command('AddAppointment', addAppointmentParams),
   command('EditAppointment', editAppointmentParams),
   command('MoveTask', moveTaskParams),
+  command('ClearFloor', clearFloorParams),
   command('DeferTask', deferTaskParams),
   command('CompleteTask', completeTaskParams),
   command('PostponeRestOfDay', postponeRestOfDayParams),
@@ -456,6 +472,7 @@ export type EditTaskParams = z.infer<typeof editTaskParams>;
 export type AddAppointmentParams = z.infer<typeof addAppointmentParams>;
 export type EditAppointmentParams = z.infer<typeof editAppointmentParams>;
 export type MoveTaskParams = z.infer<typeof moveTaskParams>;
+export type ClearFloorParams = z.infer<typeof clearFloorParams>;
 export type DeferTaskParams = z.infer<typeof deferTaskParams>;
 export type CompleteTaskParams = z.infer<typeof completeTaskParams>;
 export type PostponeRestOfDayParams = z.infer<typeof postponeRestOfDayParams>;

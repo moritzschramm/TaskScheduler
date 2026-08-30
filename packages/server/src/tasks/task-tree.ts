@@ -41,6 +41,9 @@ export interface TaskTreeNode extends Record<string, unknown> {
   effectiveFocusLevel: number | null;
   ownCooldownOverrideMin: number | null;
   effectiveCooldownOverrideMin: number | null;
+  /** Not inherited: a floor is something done to one task (spec §7.3). */
+  manualFloor: string | null;
+  manualBias: string | null;
 }
 
 /**
@@ -90,7 +93,9 @@ const selectedColumns = sql`
   n.focus_level          as "ownFocusLevel",
   n.effective_focus_level as "effectiveFocusLevel",
   n.cooldown_override_min as "ownCooldownOverrideMin",
-  n.effective_cooldown_override_min as "effectiveCooldownOverrideMin"
+  n.effective_cooldown_override_min as "effectiveCooldownOverrideMin",
+  n.manual_floor         as "manualFloor",
+  n.manual_bias          as "manualBias"
 `;
 
 /**
@@ -114,7 +119,7 @@ export async function readCalendarTaskTree(
     with recursive tree as (
       select
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
-        t.version, t.estimated_duration_min,
+        t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
@@ -135,7 +140,7 @@ export async function readCalendarTaskTree(
 
       select
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
-        t.version, t.estimated_duration_min,
+        t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
@@ -208,7 +213,7 @@ export async function readTaskSubtree(
     tree as (
       select
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
-        t.version, t.estimated_duration_min,
+        t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
@@ -225,7 +230,7 @@ export async function readTaskSubtree(
 
       select
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
-        t.version, t.estimated_duration_min,
+        t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,

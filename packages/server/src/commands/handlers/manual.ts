@@ -6,7 +6,12 @@ import { calendarTimeZone, requireActive, requireLeaf } from '../entities.js';
 import { updateRow, updateWhere } from '../journal.js';
 import { toIso } from '../../schedule/instants.js';
 import { startOfNextDay, startOfNextWeek } from '../../schedule/local-days.js';
-import type { CompleteTaskParams, DeferTaskParams, MoveTaskParams } from '@ambitime/shared';
+import type {
+  ClearFloorParams,
+  CompleteTaskParams,
+  DeferTaskParams,
+  MoveTaskParams,
+} from '@ambitime/shared';
 
 /**
  * Single-task manual actions (spec §7.3).
@@ -41,6 +46,30 @@ export async function moveTask(
     manualFloor: params.datetime,
     manualBias: params.datetime,
   });
+
+  return { calendarIds: [task.calendarId] };
+}
+
+/**
+ * `ClearFloor(task)` — the "explicit user reset" of spec §7.3.
+ *
+ * The floor and the bias go together, because `MoveTask` sets them together
+ * and they mean one thing between them: "not before here, and here if you can".
+ * A bias surviving its floor would keep pulling the task towards a time the
+ * user has just said they no longer care about.
+ *
+ * Deliberately **not** a defer: `defer_count` is untouched. Removing a
+ * constraint is not postponing anything, and counting it would feed the
+ * chronic-postponement signal (§6.6) with the opposite of what it measures.
+ */
+export async function clearFloor(
+  params: ClearFloorParams,
+  ctx: CommandContext,
+): Promise<HandlerOutcome> {
+  const task = await lockTask(ctx, params.taskId);
+  requireActive(task);
+
+  await updateRow(ctx, 'tasks', task.id, { manualFloor: null, manualBias: null });
 
   return { calendarIds: [task.calendarId] };
 }

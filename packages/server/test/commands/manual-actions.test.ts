@@ -7,6 +7,8 @@ import { resetDomainTables, setupTestDatabase } from '../support/database.js';
 import {
   createWorld,
   MONDAY_0900,
+  seedTask,
+  taskRow,
   validatePersistedSchedule,
   type World,
 } from '../support/world.js';
@@ -324,5 +326,94 @@ describe('CompleteTask (spec §7.3)', () => {
     await expect(world.run({ type: 'CompleteTask', params: { taskId } })).rejects.toBeInstanceOf(
       PreconditionFailedError,
     );
+  });
+});
+
+/**
+ * Spec §7.3's third way a floor goes away.
+ *
+ * "**Floor clears** on completion, on explicit user reset, or on a bulk
+ * reschedule." The first and third are side effects of other commands; the
+ * third — the reset — had no command at all until M12, which meant a floor left
+ * by a mistaken drag could be replaced but never removed.
+ */
+describe('ClearFloor', () => {
+  let handle: DatabaseHandle;
+  let world: World;
+
+  beforeAll(async () => {
+    handle = await setupTestDatabase();
+  });
+
+  afterAll(async () => {
+    await handle?.close();
+  });
+
+  beforeEach(async () => {
+    await resetDomainTables(handle);
+    world = await createWorld(handle);
+  });
+
+  it('removes the floor and the bias a reposition left behind', async () => {
+    const taskId = await seedTask(world, 'Report');
+    await world.run({
+      type: 'MoveTask',
+      params: { taskId, datetime: '2026-03-24T13:00:00Z' },
+    });
+
+    const moved = await taskRow(world, taskId);
+    expect(moved.manualFloor).not.toBeNull();
+    expect(moved.manualBias).not.toBeNull();
+
+    await world.run({ type: 'ClearFloor', params: { taskId } });
+
+    // Both, together: `MoveTask` sets them as one statement — "not before here,
+    // and here if you can" — and a bias outliving its floor would go on pulling
+    // the task towards a time the user has just disowned.
+    const cleared = await taskRow(world, taskId);
+    expect(cleared.manualFloor).toBeNull();
+    expect(cleared.manualBias).toBeNull();
+  });
+
+  it('lets the task fall back to where the solver would have put it', async () => {
+    const taskId = await seedTask(world, 'Report');
+    const original = (await world.cachedPlacements())[0]?.interval.start;
+
+    await world.run({
+      type: 'MoveTask',
+      params: { taskId, datetime: '2026-03-25T13:00:00Z' },
+    });
+    expect((await world.cachedPlacements())[0]?.interval.start).not.toBe(original);
+
+    await world.run({ type: 'ClearFloor', params: { taskId } });
+
+    expect((await world.cachedPlacements())[0]?.interval.start).toBe(original);
+  });
+
+  it('does not count as a deferral', async () => {
+    const taskId = await seedTask(world, 'Report');
+    await world.run({ type: 'DeferTask', params: { taskId, target: 'tomorrow' } });
+    expect((await taskRow(world, taskId)).deferCount).toBe(1);
+
+    await world.run({ type: 'ClearFloor', params: { taskId } });
+
+    // Removing a constraint is not postponing anything. Counting it would feed
+    // the chronic-postponement signal (§6.6) with the opposite of what it
+    // measures.
+    expect((await taskRow(world, taskId)).deferCount).toBe(1);
+  });
+
+  it('is undoable, floor and all', async () => {
+    const taskId = await seedTask(world, 'Report');
+    await world.run({
+      type: 'MoveTask',
+      params: { taskId, datetime: '2026-03-24T13:00:00Z' },
+    });
+    const floored = await taskRow(world, taskId);
+
+    await world.run({ type: 'ClearFloor', params: { taskId } });
+    await world.run({ type: 'Undo', params: {} });
+
+    expect((await taskRow(world, taskId)).manualFloor).toBe(floored.manualFloor);
   });
 });

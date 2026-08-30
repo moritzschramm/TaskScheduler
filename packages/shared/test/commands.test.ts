@@ -62,6 +62,7 @@ describe('the command envelope (spec §7.1)', () => {
       'AddAppointment',
       'AddUnavailability',
       'CancelTask',
+      'ClearFloor',
       'ClearWeek',
       'CompleteTask',
       'ConfigureCalendar',

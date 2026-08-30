@@ -10,6 +10,7 @@ import { toApiFailure, toValidationFailure } from '../api/errors.js';
 import { presentCapacityCell, presentSchedule, presentTaskNode } from '../api/present.js';
 import { readCalendarTaskTree } from '../tasks/task-tree.js';
 import { readCalendarConfiguration } from '../configuration/read.js';
+import { readHistory } from '../commands/history.js';
 import { deriveCalendarSchedule } from '../schedule/derive.js';
 import { isoText, toInstant, toInstantCeil } from '../schedule/instants.js';
 import type { AppEnv } from '../app.js';
@@ -153,6 +154,43 @@ export function calendarRoutes(auth: Auth, clock: Clock) {
           const failure = toApiFailure(error);
           return c.json(failure.body, failure.status);
         }
+      })
+
+      /**
+       * What undo and redo would do next (spec §7.5).
+       *
+       * Not per calendar: undo is a personal gesture over the actor's own command
+       * log, and what it reverses may have touched any calendar — or, for a
+       * configuration change, none in particular.
+       */
+      .get('/history', requireContext(auth), async (c) => {
+        const context = c.get('context');
+
+        const history = await withRequestContext(c.get('db'), context, (tx) =>
+          readHistory({
+            tx,
+            tenantId: context.tenantId,
+            actorId: context.userId,
+            now: nowOf(clock),
+            nowIso: clock().toISOString(),
+            config: DEFAULT_TUNING,
+            journal: [],
+          }),
+        );
+
+        const typesOf = (units: { entries: { type: string }[] }[]): string[] | null => {
+          const last = units[units.length - 1];
+          return last === undefined ? null : last.entries.map((entry) => entry.type);
+        };
+
+        return c.json(
+          {
+            undoable: typesOf(history.undoable),
+            redoable: typesOf(history.redoable),
+            truncated: history.truncated,
+          },
+          200,
+        );
       })
 
       .get('/calendars/:calendarId/capacity', requireContext(auth), async (c) => {

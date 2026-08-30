@@ -159,6 +159,8 @@ export function presentTaskNode(node: TaskTreeNode): TaskNode {
     effectiveFocusLevel: node.effectiveFocusLevel,
     ownCooldownOverrideMin: node.ownCooldownOverrideMin,
     effectiveCooldownOverrideMin: node.effectiveCooldownOverrideMin,
+    manualFloor: isoOrNull(node.manualFloor),
+    manualBias: isoOrNull(node.manualBias),
   };
 }
 

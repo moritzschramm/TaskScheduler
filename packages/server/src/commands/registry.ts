@@ -2,7 +2,7 @@ import type { Command, CommandType } from '@ambitime/shared';
 import type { CommandContext, HandlerOutcome } from './context.js';
 import { addAppointment, addUnavailability, editAppointment } from './handlers/appointments.js';
 import { clearWeek, postponeRestOfDay } from './handlers/bulk.js';
-import { completeTask, deferTask, moveTask } from './handlers/manual.js';
+import { clearFloor, completeTask, deferTask, moveTask } from './handlers/manual.js';
 import { createTask, editTask } from './handlers/tasks.js';
 import { cancelTask, extendTask, moveToBacklog, promoteFromBacklog } from './handlers/lifecycle.js';
 import { swapForward, swapTasks } from './handlers/swap.js';
@@ -41,6 +41,8 @@ export function dispatch(command: Command, ctx: CommandContext): Promise<Handler
       return editAppointment(command.params, ctx);
     case 'MoveTask':
       return moveTask(command.params, ctx);
+    case 'ClearFloor':
+      return clearFloor(command.params, ctx);
     case 'DeferTask':
       return deferTask(command.params, ctx);
     case 'CompleteTask':
@@ -110,6 +112,7 @@ export const COMMAND_TARGETS: Readonly<
   AddAppointment: null,
   EditAppointment: 'appointment',
   MoveTask: 'task',
+  ClearFloor: 'task',
   DeferTask: 'task',
   CompleteTask: 'task',
   PostponeRestOfDay: null,
