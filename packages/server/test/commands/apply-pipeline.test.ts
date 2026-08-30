@@ -108,26 +108,34 @@ describe('the single write path', () => {
 
   it('recomputes the placement cache rather than editing it', async () => {
     const taskId = await createTask('Recomputed');
-    const before = await world.read((tx) =>
-      tx
-        .select({ id: placements.id })
-        .from(placements)
-        .where(eq(placements.calendarId, world.calendarId)),
-    );
+    const cache = () =>
+      world.read((tx) =>
+        tx
+          .select({ id: placements.id, computedAt: placements.computedAt })
+          .from(placements)
+          .where(eq(placements.calendarId, world.calendarId)),
+      );
+
+    const before = await cache();
     expect(before).toHaveLength(1);
 
-    await world.run({ type: 'EditTask', params: { taskId, patch: { title: 'Still one' } } });
-
-    const after = await world.read((tx) =>
-      tx
-        .select({ id: placements.id })
-        .from(placements)
-        .where(eq(placements.calendarId, world.calendarId)),
+    await world.run(
+      { type: 'EditTask', params: { taskId, patch: { title: 'Still one' } } },
+      { at: '2026-03-23T08:05:00Z' },
     );
-    // Same schedule, but a *new* row: the cache is derived state, replaced
-    // wholesale on every command (spec §3.4).
+
+    const after = await cache();
     expect(after).toHaveLength(1);
-    expect(after[0]!.id).not.toBe(before[0]!.id);
+
+    // `computed_at` is what says a fresh solve produced this row (spec §3.4):
+    // the command re-derived from source rather than patching the cache in
+    // place, even though the answer came out the same.
+    expect(after[0]!.computedAt).not.toBe(before[0]!.computedAt);
+
+    // The row keeps its identity across that. It is keyed by occurrence, which
+    // is what lets two concurrent re-derives write it without colliding — see
+    // `writePlacements`.
+    expect(after[0]!.id).toBe(before[0]!.id);
   });
 });
 

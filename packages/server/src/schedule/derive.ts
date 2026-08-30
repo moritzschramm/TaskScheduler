@@ -79,9 +79,25 @@ export async function deriveCalendarSchedule({
 /**
  * Replaces the calendar's cached placements wholesale.
  *
- * Deletes *everything* for the calendar rather than only the current horizon:
- * the horizon moves with `now`, so a narrower delete would leave last
- * fortnight's rows behind, and they would read as a schedule nobody derived.
+ * Removes *everything* for the calendar that the new solve did not produce,
+ * rather than only the current horizon: the horizon moves with `now`, so a
+ * narrower delete would leave last fortnight's rows behind, and they would read
+ * as a schedule nobody derived.
+ *
+ * **Upsert rather than delete-then-insert, because every read derives.** Two
+ * reads of the same calendar arriving together — the week view asks for the
+ * schedule and the backlog at once — each run a solve and each write the cache.
+ * Under `READ COMMITTED` the second transaction's delete cannot see rows the
+ * first inserted after its statement snapshot was taken, so it removed nothing
+ * and then collided on `placements_occurrence_key`: a 500 on an ordinary page
+ * load, whenever the timing happened to line up.
+ *
+ * Serialising the two with a lock on the calendar row would fix it and
+ * introduce a worse problem — a read holding the calendar and wanting a task
+ * row, against a command holding the task and wanting the calendar, is a
+ * deadlock. Keyed writes need no lock ordering at all. The solver's output is
+ * deterministic (§6.3), so two concurrent derives even take their row locks in
+ * the same order.
  */
 async function writePlacements(
   tx: Transaction,
@@ -89,19 +105,40 @@ async function writePlacements(
   calendarId: string,
   result: SolveResult,
 ): Promise<void> {
-  await tx.delete(placements).where(eq(placements.calendarId, calendarId));
+  const keep = result.placements.map((placement) => placement.occurrenceId);
+
+  await tx
+    .delete(placements)
+    .where(
+      keep.length === 0
+        ? eq(placements.calendarId, calendarId)
+        : and(eq(placements.calendarId, calendarId), notInArray(placements.occurrenceId, keep)),
+    );
 
   if (result.placements.length === 0) return;
 
-  await tx.insert(placements).values(
-    result.placements.map((placement) => ({
-      tenantId,
-      calendarId,
-      occurrenceId: placement.occurrenceId,
-      during: toRangeLiteral(placement.interval),
-      cooldownMin: placement.cooldownMin,
-    })),
-  );
+  await tx
+    .insert(placements)
+    .values(
+      result.placements.map((placement) => ({
+        tenantId,
+        calendarId,
+        occurrenceId: placement.occurrenceId,
+        during: toRangeLiteral(placement.interval),
+        cooldownMin: placement.cooldownMin,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: placements.occurrenceId,
+      set: {
+        calendarId: sql`excluded.calendar_id`,
+        during: sql`excluded.during`,
+        cooldownMin: sql`excluded.cooldown_min`,
+        // Which solve produced the row — the baseline §3.4 wants it for — so it
+        // has to move even when the interval did not.
+        computedAt: sql`now()`,
+      },
+    });
 }
 
 /**

@@ -1,12 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   backlogResponseSchema,
+  calendarConfigurationSchema,
   calendarListSchema,
   capacityResponseSchema,
   notificationListSchema,
   scheduleResponseSchema,
 } from '@ambitime/shared';
-import { tasks } from '../../src/db/schema/index.js';
+import { eq } from 'drizzle-orm';
+import { placements, tasks } from '../../src/db/schema/index.js';
 import { withSystemPrivileges } from '../../src/db/context.js';
 import { resetDomainTables, setupTestDatabase } from '../support/database.js';
 import { createApiWorld, type ApiWorld } from '../support/api-world.js';
@@ -163,5 +165,97 @@ describe('the read endpoints', () => {
     ]) {
       expect((await world.app.app.request(path)).status).toBe(401);
     }
+  });
+
+  /**
+   * The configuration read (spec §4.3, §9.1) — the one read that does not
+   * derive, because what it returns is the *input* to a solve.
+   */
+  it('returns the configuration a settings screen edits', async () => {
+    await world.run({
+      type: 'SetCalendarWindows',
+      params: {
+        calendarId: world.calendarId,
+        kind: 'working',
+        windows: [{ weekday: 1, startMin: 8 * 60, endMin: 18 * 60 }],
+      },
+    });
+    await world.run({
+      type: 'CreateWeekTypeOverride',
+      params: {
+        calendarId: world.calendarId,
+        name: 'Conference',
+        startDate: '2026-04-06',
+        endDate: '2026-04-11',
+      },
+    });
+
+    const response = await world.get(`/api/calendars/${world.calendarId}/configuration`);
+    expect(response.status).toBe(200);
+
+    const body = calendarConfigurationSchema.parse(await response.json());
+
+    expect(body.calendar).toMatchObject({
+      id: world.calendarId,
+      name: 'Primary',
+      timezone: 'Europe/Berlin',
+      visibilityScope: 'private',
+      isOwner: true,
+    });
+    expect(body.categories.map((category) => category.name)).toEqual(['Work']);
+    expect(body.windows).toEqual([
+      expect.objectContaining({ kind: 'working', weekday: 1, startMin: 480, endMin: 1080 }),
+    ]);
+    // Five weekdays from the fixture, in weekday order, addressed to the
+    // default set rather than to the override.
+    expect(body.availability.map((window) => window.weekday)).toEqual([1, 2, 3, 4, 5]);
+    expect(body.availability.every((window) => window.weekTypeOverrideId === null)).toBe(true);
+    expect(body.weekTypeOverrides.map((override) => override.name)).toEqual(['Conference']);
+  });
+
+  it('refuses a calendar in another tenant as if it were not there', async () => {
+    const other = await createApiWorld(handle.db);
+
+    // RLS makes "someone else's" and "does not exist" the same answer, which is
+    // the answer either way (§5.2).
+    const response = await world.get(`/api/calendars/${other.calendarId}/configuration`);
+    expect(response.status).toBe(404);
+  });
+
+  /**
+   * Two reads of the same calendar at once (spec §3.4).
+   *
+   * The week view asks for the schedule and the backlog together, and every
+   * read re-derives and rewrites the placement cache. When the cache was
+   * replaced with a delete followed by an insert, the second transaction's
+   * delete could not see rows the first had inserted after its statement
+   * snapshot was taken — so it removed nothing and then violated
+   * `placements_occurrence_key`. An ordinary page load, returning 500,
+   * whenever the timing lined up.
+   */
+  it('survives concurrent reads that both re-derive', async () => {
+    await createTask('Report');
+    await createTask('Review');
+
+    const responses = await Promise.all([
+      world.get(`/api/calendars/${world.calendarId}/schedule`),
+      world.get(`/api/calendars/${world.calendarId}/backlog`),
+      world.get(`/api/calendars/${world.calendarId}/schedule`),
+      world.get(`/api/calendars/${world.calendarId}/capacity`),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 200]);
+
+    // And the cache is left holding one row per placed occurrence, not two.
+    const schedule = scheduleResponseSchema.parse(await responses[0]!.json());
+    const cached = await withSystemPrivileges(handle.db, (tx) =>
+      tx
+        .select({ occurrenceId: placements.occurrenceId })
+        .from(placements)
+        .where(eq(placements.calendarId, world.calendarId)),
+    );
+
+    expect(cached).toHaveLength(schedule.schedule.blocks.length);
+    expect(new Set(cached.map((row) => row.occurrenceId)).size).toBe(cached.length);
   });
 });
