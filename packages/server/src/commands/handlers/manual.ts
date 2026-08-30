@@ -1,11 +1,10 @@
 import { and, eq } from 'drizzle-orm';
-import { computeHardHorizon, type Instant } from '@ambitime/scheduler';
+import { deferFloor } from '@ambitime/scheduler';
 import { taskOccurrences } from '../../db/schema/index.js';
 import { lockTask, type CommandContext, type HandlerOutcome } from '../context.js';
 import { calendarTimeZone, requireActive, requireLeaf } from '../entities.js';
 import { updateRow, updateWhere } from '../journal.js';
 import { toIso } from '../../schedule/instants.js';
-import { startOfNextDay, startOfNextWeek } from '../../schedule/local-days.js';
 import type {
   ClearFloorParams,
   CompleteTaskParams,
@@ -98,7 +97,7 @@ export async function deferTask(
   const timeZone = await calendarTimeZone(ctx, task.calendarId);
 
   await updateRow(ctx, 'tasks', task.id, {
-    manualFloor: toIso(deferFloor(params.target, ctx, timeZone)),
+    manualFloor: toIso(deferFloor(params.target, ctx.now, timeZone, ctx.config)),
     // "Sets nothing fixed" (§7.3). An earlier reposition's bias pointed at a
     // time the user has just rejected, so keeping it would pull the task
     // straight back to the edge of its new floor.
@@ -112,21 +111,6 @@ export async function deferTask(
   });
 
   return { calendarIds: [task.calendarId] };
-}
-
-function deferFloor(
-  target: DeferTaskParams['target'],
-  ctx: CommandContext,
-  timeZone: string,
-): Instant {
-  switch (target) {
-    case 'tomorrow':
-      return startOfNextDay(ctx.now, timeZone);
-    case 'next_week':
-      return startOfNextWeek(ctx.now, timeZone, ctx.config);
-    case 'backlog':
-      return computeHardHorizon(ctx.now, timeZone, ctx.config).end;
-  }
 }
 
 /**

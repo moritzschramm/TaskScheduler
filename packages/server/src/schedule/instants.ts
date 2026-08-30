@@ -1,5 +1,9 @@
 import { sql, type SQL } from 'drizzle-orm';
-import type { CivilDate, Instant, Interval } from '@ambitime/scheduler';
+import type { Instant, Interval } from '@ambitime/scheduler';
+
+// `toCivilDate` moved into the scheduler in M12: both sides of the wire parse
+// these, so it belongs with the rest of the calendar arithmetic.
+export { toCivilDate } from '@ambitime/scheduler';
 
 /**
  * The boundary between stored time and the engine's time.
@@ -47,13 +51,6 @@ export function toIso(instant: Instant): string {
  */
 export function toRangeLiteral(interval: Interval): string {
   return `["${toIso(interval.start)}","${toIso(interval.end)}")`;
-}
-
-/** A `YYYY-MM-DD` column value as the engine's zone-free calendar date. */
-export function toCivilDate(value: string): CivilDate {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) throw new RangeError(`Not a YYYY-MM-DD date: ${value}`);
-  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
 }
 
 /**

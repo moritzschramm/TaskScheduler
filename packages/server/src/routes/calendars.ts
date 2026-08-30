@@ -12,6 +12,7 @@ import { readCalendarTaskTree } from '../tasks/task-tree.js';
 import { readCalendarConfiguration } from '../configuration/read.js';
 import { readHistory } from '../commands/history.js';
 import { deriveCalendarSchedule } from '../schedule/derive.js';
+import { loadScheduleContext } from '../schedule/load-context.js';
 import { isoText, toInstant, toInstantCeil } from '../schedule/instants.js';
 import type { AppEnv } from '../app.js';
 import type { Auth } from '../auth/auth.js';
@@ -130,6 +131,44 @@ export function calendarRoutes(auth: Auth, clock: Clock) {
         );
 
         return c.json({ calendarId, tasks: tasks.map(presentTaskNode) }, 200);
+      })
+
+      /**
+       * The solver's **input** (spec §3.3).
+       *
+       * Every other read hands back the schedule's answer; this one hands back
+       * the question, so the client can run the same engine over the same facts
+       * and show the result of a gesture before the server has replied.
+       *
+       * It carries the server's `now` and the horizon derived from it. A client
+       * substituting its own clock would get a legitimately different answer
+       * and then report it as a mismatch it could not explain (§6.3).
+       *
+       * A read, not a write path: nothing the client computes from this is ever
+       * trusted. The command endpoint remains the only way to change anything,
+       * and its answer replaces whatever the client drew.
+       */
+      .get('/calendars/:calendarId/context', requireContext(auth), async (c) => {
+        const context = c.get('context');
+        const calendarId = c.req.param('calendarId');
+
+        try {
+          const body = await withRequestContext(c.get('db'), context, async (tx) => {
+            const loaded = await loadScheduleContext({
+              tx,
+              calendarId,
+              now: nowOf(clock),
+              config: DEFAULT_TUNING,
+            });
+
+            return { calendarId, context: loaded.context };
+          });
+
+          return c.json(body, 200);
+        } catch (error) {
+          const failure = toApiFailure(error);
+          return c.json(failure.body, failure.status);
+        }
       })
 
       /**

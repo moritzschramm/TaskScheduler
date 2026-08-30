@@ -5,7 +5,7 @@ import type { AttentionItem, CommandContext, HandlerOutcome } from '../context.j
 import { calendarTimeZone } from '../entities.js';
 import { updateWhere } from '../journal.js';
 import { toIso } from '../../schedule/instants.js';
-import { dayFromParam, weekFromParam } from '../../schedule/local-days.js';
+import { dayFromParam, weekFromParam } from '@ambitime/scheduler';
 import type { ClearWeekParams, PostponeRestOfDayParams } from '@ambitime/shared';
 
 /**
