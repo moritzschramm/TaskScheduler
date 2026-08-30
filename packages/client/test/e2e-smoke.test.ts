@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createMemoryHistory } from 'vue-router';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp as createServer } from '@ambitime/server';
 import { createAuth } from '@ambitime/server/auth';
 import { createDatabase, type DatabaseHandle } from '@ambitime/server/db';
@@ -36,7 +36,9 @@ const PASSWORD = 'correct-horse-battery-staple';
 
 let handle: DatabaseHandle;
 let server: ReturnType<typeof createServer>;
+let mounted: ReturnType<typeof mount> | null = null;
 const jar = new Map<string, string>();
+const inFlight = new Set<Promise<Response>>();
 
 describe('seed via the API, render the client', () => {
   beforeAll(async () => {
@@ -64,24 +66,33 @@ describe('seed via the API, render the client', () => {
     // week the fixture schedules into rather than on whatever week it is today.
     setClock(() => new Date(MONDAY_0900));
 
-    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       const path = url.startsWith('http') ? new URL(url).pathname + new URL(url).search : url;
 
-      const headers = new Headers(init?.headers ?? {});
-      if (jar.size > 0) {
-        headers.set('cookie', [...jar].map(([name, value]) => `${name}=${value}`).join('; '));
-      }
+      const pending = (async () => {
+        const headers = new Headers(init?.headers ?? {});
+        if (jar.size > 0) {
+          headers.set('cookie', [...jar].map(([name, value]) => `${name}=${value}`).join('; '));
+        }
 
-      const response = await server.request(path, { ...init, headers });
+        const response = await server.request(path, { ...init, headers });
 
-      for (const cookie of response.headers.getSetCookie()) {
-        const [pair] = cookie.split(';');
-        const [name, ...rest] = (pair ?? '').split('=');
-        if (name) jar.set(name.trim(), rest.join('='));
-      }
+        for (const cookie of response.headers.getSetCookie()) {
+          const [pair] = cookie.split(';');
+          const [name, ...rest] = (pair ?? '').split('=');
+          if (name) jar.set(name.trim(), rest.join('='));
+        }
 
-      return response;
+        return response;
+      })();
+
+      // Tracked so a test can wait for the view to go quiet. Unmounting does
+      // not cancel a request already on its way, and one still deriving while
+      // the next test truncates the tables deadlocks against its cascade.
+      inFlight.add(pending);
+      void pending.catch(() => undefined).finally(() => inFlight.delete(pending));
+      return pending;
     });
   });
 
@@ -99,6 +110,12 @@ describe('seed via the API, render the client', () => {
     jar.clear();
   });
 
+  afterEach(async () => {
+    mounted?.unmount();
+    mounted = null;
+    await settle();
+  });
+
   it('renders the week the API derived', async () => {
     const email = `smoke-${Date.now()}@example.test`;
     await seed(email);
@@ -110,7 +127,7 @@ describe('seed via the API, render the client', () => {
     await router.push('/');
     await router.isReady();
 
-    const wrapper = mount(App, { global: { plugins: [router] } });
+    const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
 
     // The reads are real network round trips to a real Postgres, so this waits
     // for them rather than counting microtask turns.
@@ -138,7 +155,93 @@ describe('seed via the API, render the client', () => {
     expect(backlogged.text()).toContain('Much later');
     expect(backlogged.find('[data-testid="estimated-week"]').text()).toMatch(/week of \d{4}-/);
   });
+
+  /**
+   * Plan M11: configuration built through the UI, and the schedule that follows.
+   *
+   * The assertion at the end is the one that matters — not "the form posted a
+   * command" but "the block on the grid moved". A settings screen that writes a
+   * perfect row the solver ignores has done nothing, and only a test that walks
+   * all the way back to the grid can tell the difference.
+   */
+  it('changes the schedule from the settings screen', async () => {
+    const email = `settings-${Date.now()}@example.test`;
+    await seed(email);
+
+    await signIn(email, PASSWORD);
+    await loadSession();
+
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/settings');
+    await router.isReady();
+
+    const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+    await waitFor(() => wrapper.find('[data-testid="calendar-section"]').exists());
+
+    // A category, created through the form. Its id comes back on the command,
+    // which is what lets the page select it without re-reading and guessing.
+    await wrapper.find('[data-testid="new-category-name"]').setValue('Exercise');
+    await wrapper.find('[data-testid="new-category-cooldown"]').setValue('20');
+    await wrapper.find('[data-testid="add-category"]').trigger('click');
+    await waitFor(() => wrapper.findAll('[data-testid="category-row"]').length === 2);
+
+    // Read off the inputs, not the row's text: the names live in field values,
+    // and the form was re-seeded from the server's answer rather than kept.
+    const names = wrapper
+      .findAll('[data-testid="category-name"]')
+      .map((input) => (input.element as HTMLInputElement).value);
+    expect(names).toContain('Exercise');
+    expect(wrapper.find('[data-testid="new-category-name"]').element).toHaveProperty('value', '');
+
+    // A working window covering Tuesday afternoons only. Naming one weekday
+    // makes every other weekday unworkable (§9.1), which is the whole
+    // difference between "unset" and "empty".
+    const tuesday = wrapper.find('[data-testid="working-window"] [data-testid="weekday-2"]');
+    await wrapper.find('[data-testid="add-range-2"]').trigger('click');
+    await flushPromises();
+
+    const times = wrapper
+      .find('[data-testid="working-window"] [data-testid="weekday-2"]')
+      .findAll('input[type="time"]');
+    expect(times).toHaveLength(2);
+    await times[0]!.setValue('13:00');
+    await times[1]!.setValue('17:00');
+    expect(tuesday.exists()).toBe(true);
+
+    await wrapper.find('[data-testid="save-working-window"]').trigger('click');
+    await settle();
+    expect(wrapper.find('[data-testid="settings-error"]').exists()).toBe(false);
+
+    // Back to the grid, which re-derives from the source the form just changed.
+    await router.push('/');
+    await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+    const columns = wrapper.findAll('[data-testid="day-column"]');
+    const task = columns[1]?.find('[data-testid="block-task"]');
+
+    // Was 09:00 Berlin (540) before the working window said afternoons only.
+    expect(task?.attributes('data-title')).toBe('Tuesday work');
+    expect(task?.attributes('data-start-min')).toBe('780');
+
+    // Monday is not a working day now, so the appointment is still drawn — it
+    // is a fixed block, not a placement — but nothing is scheduled around it.
+    expect(columns[0]?.find('[data-testid="block-appointment"]').exists()).toBe(true);
+    expect(columns[0]?.find('[data-testid="block-task"]').exists()).toBe(false);
+  });
 });
+
+/**
+ * Waits until nothing is in flight, chained requests included.
+ *
+ * A response can start the next request — a save re-reads — so one pass over
+ * the set is not enough; it is drained until it stays empty.
+ */
+async function settle(): Promise<void> {
+  while (inFlight.size > 0) {
+    await Promise.allSettled([...inFlight]);
+    await flushPromises();
+  }
+}
 
 /** Flushes and re-renders until `ready` holds, or gives up loudly. */
 async function waitFor(ready: () => boolean, timeoutMs = 5_000): Promise<void> {
@@ -154,13 +257,14 @@ async function waitFor(ready: () => boolean, timeoutMs = 5_000): Promise<void> {
 }
 
 /**
- * Everything through the API, exactly as a client would.
+ * Everything through the API, exactly as a client would — the calendar,
+ * category and availability windows included.
  *
- * Calendars, categories and windows are the exception — §7 names no command for
- * them, so they are inserted directly, the same seam the server's own API tests
- * use.
+ * Until M11 there was no command for those three and this function reached into
+ * the tables for them. It no longer needs to, and the returned ids come from
+ * what each command reports having created.
  */
-async function seed(email: string): Promise<void> {
+async function seed(email: string): Promise<Seeded> {
   const signUp = await server.request('/api/auth/sign-up/email', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -173,35 +277,6 @@ async function seed(email: string): Promise<void> {
     .map((value) => value.split(';')[0])
     .join('; ');
 
-  const { calendars, categories, availabilityWindows } = await import('@ambitime/server/schema');
-  const userId = ((await signUp.json()) as { user: { id: string } }).user.id;
-
-  // The tenant comes from the API too: right after sign-up the active context
-  // *is* the personal tenant the triggers made (§4.2), so asking is both
-  // simpler than querying for it and a check that the linkage happened.
-  const me = await server.request('/api/me', { headers: { cookie } });
-  const { activeTenantId: tenantId } = (await me.json()) as { activeTenantId: string };
-
-  const [calendar] = await handle.db
-    .insert(calendars)
-    .values({ tenantId, ownerId: userId, name: 'Primary', timezone: 'Europe/Berlin' })
-    .returning({ id: calendars.id });
-  const [category] = await handle.db
-    .insert(categories)
-    .values({ tenantId, name: 'Work', defaultCooldownMin: 0 })
-    .returning({ id: categories.id });
-
-  await handle.db.insert(availabilityWindows).values(
-    [1, 2, 3, 4, 5].map((weekday) => ({
-      tenantId,
-      calendarId: calendar!.id,
-      categoryId: category!.id,
-      weekday,
-      startMin: 9 * 60,
-      endMin: 17 * 60,
-    })),
-  );
-
   const command = async (body: unknown) => {
     const response = await server.request('/api/commands', {
       method: 'POST',
@@ -209,13 +284,45 @@ async function seed(email: string): Promise<void> {
       body: JSON.stringify(body),
     });
     if (!response.ok) throw new Error(`command failed: ${await response.text()}`);
-    return response.json();
+    return (await response.json()) as CommandBody;
   };
+
+  const idOf = (result: CommandBody, entity: string): string => {
+    const match = result.created.find((row) => row.entity === entity);
+    if (match === undefined) throw new Error(`no ${entity} was created`);
+    return match.id;
+  };
+
+  const calendarId = idOf(
+    await command({
+      type: 'CreateCalendar',
+      params: { name: 'Primary', timezone: 'Europe/Berlin' },
+    }),
+    'calendar',
+  );
+
+  const categoryId = idOf(
+    await command({ type: 'CreateCategory', params: { name: 'Work', defaultCooldownMin: 0 } }),
+    'category',
+  );
+
+  await command({
+    type: 'SetAvailabilityWindows',
+    params: {
+      calendarId,
+      categoryId,
+      windows: [1, 2, 3, 4, 5].map((weekday) => ({
+        weekday,
+        startMin: 9 * 60,
+        endMin: 17 * 60,
+      })),
+    },
+  });
 
   await command({
     type: 'AddAppointment',
     params: {
-      calendarId: calendar!.id,
+      calendarId,
       title: 'Standup',
       start: '2026-03-23T08:00:00Z',
       end: '2026-03-23T08:30:00Z',
@@ -224,33 +331,39 @@ async function seed(email: string): Promise<void> {
 
   await command({
     type: 'CreateTask',
-    params: {
-      calendarId: calendar!.id,
-      title: 'Tuesday work',
-      categoryId: category!.id,
-      estimatedDurationMin: 60,
-    },
+    params: { calendarId, title: 'Tuesday work', categoryId, estimatedDurationMin: 60 },
   });
 
-  const created = (await command({
+  const created = await command({
     type: 'CreateTask',
-    params: {
-      calendarId: calendar!.id,
-      title: 'Much later',
-      categoryId: category!.id,
-      estimatedDurationMin: 60,
-    },
-  })) as { schedules: { blocks: { taskId: string; title: string }[] }[] };
+    params: { calendarId, title: 'Much later', categoryId, estimatedDurationMin: 60 },
+  });
 
-  const later = created.schedules[0]!.blocks.find((b) => b.title === 'Much later')!.taskId;
-  await command({ type: 'MoveToBacklog', params: { taskId: later } });
+  const blocks = created.schedules[0]!.blocks;
+  await command({
+    type: 'MoveToBacklog',
+    params: { taskId: blocks.find((block) => block.title === 'Much later')!.taskId },
+  });
 
   // The remaining task must land on Tuesday, so Monday is taken up first.
   await command({
     type: 'MoveTask',
     params: {
-      taskId: created.schedules[0]!.blocks.find((b) => b.title === 'Tuesday work')!.taskId,
+      taskId: blocks.find((block) => block.title === 'Tuesday work')!.taskId,
       datetime: '2026-03-24T08:00:00Z',
     },
   });
+
+  return { cookie, calendarId, categoryId };
+}
+
+interface Seeded {
+  cookie: string;
+  calendarId: string;
+  categoryId: string;
+}
+
+interface CommandBody {
+  created: { entity: string; id: string }[];
+  schedules: { blocks: { taskId: string; title: string }[] }[];
 }

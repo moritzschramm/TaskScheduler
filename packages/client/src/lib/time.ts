@@ -98,6 +98,31 @@ export function formatMinuteOfDay(minutes: number): string {
   return `${String(hours).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
 }
 
+/**
+ * `09:00` → `540`, the inverse of `formatMinuteOfDay`.
+ *
+ * `<input type="time">` always yields 24-hour `HH:MM` whatever the browser
+ * displays, so this parses one format regardless of locale. Anything else —
+ * an emptied field, a partial entry — returns `null` rather than a number the
+ * caller would have to guess at.
+ */
+export function parseMinuteOfDay(value: string): number | null {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const minutes = Number(match[1]) * 60 + Number(match[2]);
+  return minutes >= 0 && minutes <= 1440 ? minutes : null;
+}
+
+/** ISO-8601 weekday names, 1 = Monday … 7 = Sunday, in the user's locale. */
+export function weekdayNames(locale: string): string[] {
+  const format = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' });
+  // 2026-03-23 is a Monday, so this walks Monday to Sunday in ISO order.
+  return Array.from({ length: 7 }, (_, offset) =>
+    format.format(new Date(Date.UTC(2026, 2, 23 + offset))),
+  );
+}
+
 /** `2026-03-23` → `Mon 23 Mar`, in the user's locale. */
 export function formatDayLabel(date: CivilDate, locale: string): string {
   const utc = new Date(Date.UTC(date.year, date.month - 1, date.day));

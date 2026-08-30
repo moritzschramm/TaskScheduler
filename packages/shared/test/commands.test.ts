@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { COMMAND_TYPES, commandSchema, newCommand, uuidv7 } from '../src/index.js';
+import {
+  COMMAND_TYPES,
+  commandRequestSchema,
+  commandSchema,
+  newCommand,
+  uuidv7,
+} from '../src/index.js';
 import type { EditTaskParams } from '../src/index.js';
 
 /**
@@ -82,6 +88,18 @@ describe('the command envelope (spec §7.1)', () => {
       'SwapTasks',
       'Undo',
     ]);
+  });
+
+  it('offers the same vocabulary over HTTP as in the command layer', () => {
+    // `commandRequestSchema` is deliberately a second union — the envelope a
+    // caller may send is not the envelope the server applies — which means the
+    // two can drift, and a command with no request variant is simply
+    // unreachable over HTTP with nothing to say so.
+    const overTheWire = commandRequestSchema.options
+      .map((option) => option.shape.type.value)
+      .sort();
+
+    expect(overTheWire).toEqual([...COMMAND_TYPES].sort());
   });
 
   it('rejects a time zone the runtime does not know', () => {

@@ -11,7 +11,7 @@ import {
   type Schedule,
   type TaskNode,
 } from '@ambitime/shared';
-import { api } from './api';
+import { api, expectOk } from './api';
 
 /**
  * Reads, parsed with the shared schemas (spec §3.1).
@@ -22,16 +22,6 @@ import { api } from './api';
  * a real state, and the difference between "the contract moved" and "the grid
  * rendered nonsense" is this parse.
  */
-
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
 
 export interface ScheduleView {
   schedule: Schedule;
@@ -65,16 +55,4 @@ export async function fetchTasks(calendarId: string): Promise<TaskNode[]> {
 export async function fetchCapacity(calendarId: string): Promise<CapacityCell[]> {
   const response = await api.api.calendars[':calendarId'].capacity.$get({ param: { calendarId } });
   return capacityResponseSchema.parse(await expectOk(response)).cells;
-}
-
-async function expectOk(response: Response): Promise<unknown> {
-  const body: unknown = await response.json();
-  if (response.ok) return body;
-
-  const message =
-    typeof body === 'object' && body !== null && 'error' in body
-      ? String((body as { error: { message?: string } }).error.message ?? response.statusText)
-      : response.statusText;
-
-  throw new ApiError(response.status, message);
 }

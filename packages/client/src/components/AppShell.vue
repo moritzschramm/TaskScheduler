@@ -10,9 +10,9 @@ import { session, signOut } from '@/lib/session';
  *
  * The context strip is §9.3's switcher in read-only form: which tenant this
  * request is acting in, and which others exist. Switching is a write to the
- * session (M8 has the endpoint) and belongs with the rest of the mutation
- * surface in M11 — showing the list now is what makes its absence obvious
- * rather than invisible.
+ * *session* rather than to domain state, so it is not a command and does not
+ * belong to M11's configuration surface; showing the list is what makes its
+ * absence obvious rather than invisible.
  */
 
 const router = useRouter();
@@ -49,6 +49,13 @@ async function leave() {
       </div>
 
       <div class="flex items-center gap-3">
+        <RouterLink
+          class="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+          to="/settings"
+          data-testid="settings-link"
+        >
+          Settings
+        </RouterLink>
         <span class="text-muted-foreground text-xs">{{ session.user.email }}</span>
         <Button variant="ghost" size="sm" data-testid="sign-out" @click="leave">Sign out</Button>
       </div>
