@@ -143,13 +143,41 @@ export const addAppointmentParams = z
     end: instant,
     /** True when every participant is an app user, enabling §7.2 negotiation. */
     isInternal: z.boolean().optional(),
+    /**
+     * An RFC 5545 rule and the zone its wall-clock times mean (spec §8.1, §5.1).
+     *
+     * The zone travels with the rule and is not optional, because "every
+     * weekday at 09:00" is not a statement about instants: it means a different
+     * moment either side of a DST boundary, and a rule stored without a zone
+     * cannot be expanded twice the same way.
+     *
+     * This is **datetime expansion** — the other recurrence engine, a task's
+     * per-period demand (§8.2), is a different mechanism entirely and lives on
+     * `CreateTask`.
+     */
+    recurrence: z.object({ rule: z.string().min(1), timeZone: z.string().min(1) }).optional(),
   })
   .refine((params) => params.start < params.end, {
     message: 'An appointment must end after it starts',
   });
 
+/**
+ * Spec §8.1: editing a series exposes "this occurrence only" versus "this and
+ * all future occurrences".
+ *
+ * `occurrenceStart` names *which* instance is being edited, and is required for
+ * anything but a whole-series edit — an instance has no id of its own, because
+ * it is not a row until something makes it one.
+ */
 export const editAppointmentParams = z.object({
   appointmentId: uuid,
+  /**
+   * `series` edits the template and every instance with it; `occurrence`
+   * detaches one; `this_and_future` ends the old series and starts a new one.
+   */
+  scope: z.enum(['series', 'occurrence', 'this_and_future']).optional(),
+  /** The unmodified start of the instance being edited. */
+  occurrenceStart: instant.optional(),
   patch: z.object({
     title: z.string().min(1).optional(),
     notes: z.string().nullable().optional(),

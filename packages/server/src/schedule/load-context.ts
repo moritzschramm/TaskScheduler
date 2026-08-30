@@ -1,4 +1,4 @@
-import { and, eq, gt, lt, ne, sql } from 'drizzle-orm';
+import { and, eq, gt, isNotNull, lt, or, sql } from 'drizzle-orm';
 import {
   computeHardHorizon,
   resolveWindows,
@@ -28,6 +28,7 @@ import {
 import { readCalendarTaskTree, type TaskTreeNode } from '../tasks/task-tree.js';
 import { isoText, toCivilDate, toInstant, toInstantCeil } from './instants.js';
 import { localDay } from '@ambitime/scheduler';
+import { expandTemplate } from './recurrence.js';
 import type { Transaction } from '../db/client.js';
 
 /**
@@ -123,7 +124,7 @@ export async function loadScheduleContext({
   const [rules, overrides, fixedBlocks, sequenceSpecs, demand] = await Promise.all([
     loadAvailabilityRules(tx, calendarId),
     loadWeekTypeOverrides(tx, calendarId, horizon),
-    loadFixedBlocks(tx, calendarId, horizon),
+    loadFixedBlocks(tx, calendarId, horizon, spec.timeZone),
     loadSequences(tx, calendarId),
     loadDemand(tx, calendarId, spec.timeZone),
   ]);
@@ -245,32 +246,109 @@ async function loadWeekTypeOverrides(
  * cancelling one. Unavailability blocks are included without distinction: the
  * engine does not care why a block is there, only that it is (§7.4).
  */
+/**
+ * Every block of taken time in the horizon, recurring ones expanded (§7.4, §8.1).
+ *
+ * Three kinds of row become fixed blocks and the difference matters:
+ *
+ * - a **one-off**, which is its own block;
+ * - a **template** carrying an RRULE, whose `during` is its first instance and
+ *   which expands into as many blocks as the horizon holds;
+ * - a **modified occurrence**, a real row that replaces one instance of its
+ *   template — so that instance is dropped from the expansion and this row
+ *   stands in its place, wherever it has been moved to.
+ *
+ * A cancelled modified occurrence is how "delete just this one" is stored
+ * alongside EXDATE: the row is excluded by status, and its `original_start`
+ * still suppresses the instance it replaced. Either mechanism alone would
+ * leave the deleted instance showing.
+ */
 async function loadFixedBlocks(
   tx: Transaction,
   calendarId: string,
   horizon: { start: Instant; end: Instant },
+  timeZone: string,
 ): Promise<FixedBlock[]> {
   const rows = await tx
     .select({
       id: appointments.id,
       startAt: isoText(sql`lower(${appointments.during})`),
       endAt: isoText(sql`upper(${appointments.during})`),
+      status: appointments.status,
+      recurrenceRule: appointments.recurrenceRule,
+      recurrenceTimezone: appointments.recurrenceTimezone,
+      recurrenceExdates: appointments.recurrenceExdates,
+      recurrenceParentId: appointments.recurrenceParentId,
+      recurrenceOriginalStart: appointments.recurrenceOriginalStart,
     })
     .from(appointments)
     .where(
       and(
         eq(appointments.calendarId, calendarId),
-        ne(appointments.status, 'cancelled'),
-        sql`${appointments.during} && tstzrange(to_timestamp(${horizon.start * 60}), to_timestamp(${horizon.end * 60}), '[)')`,
+        // Templates are matched on their rule rather than their span: a weekly
+        // meeting set up last year has a `during` nowhere near this horizon and
+        // still fills it.
+        or(
+          isNotNull(appointments.recurrenceRule),
+          isNotNull(appointments.recurrenceParentId),
+          sql`${appointments.during} && tstzrange(to_timestamp(${horizon.start * 60}), to_timestamp(${horizon.end * 60}), '[)')`,
+        ),
       ),
     );
 
-  return rows.map((row) => ({
-    id: row.id,
-    calendarId,
+  // Which instances a modified occurrence has taken over — including the
+  // cancelled ones, which is what makes a per-occurrence deletion stick.
+  const overridden = new Map<string, Set<Instant>>();
+  for (const row of rows) {
+    if (row.recurrenceParentId === null || row.recurrenceOriginalStart === null) continue;
+    const taken = overridden.get(row.recurrenceParentId) ?? new Set<Instant>();
+    taken.add(toInstant(row.recurrenceOriginalStart));
+    overridden.set(row.recurrenceParentId, taken);
+  }
+
+  const blocks: FixedBlock[] = [];
+
+  for (const row of rows) {
+    if (row.status === 'cancelled') continue;
+
     // Outward: a fixed block never shrinks because of sub-minute endpoints.
-    interval: { start: toInstant(row.startAt), end: toInstantCeil(row.endAt) },
-  }));
+    const interval = { start: toInstant(row.startAt), end: toInstantCeil(row.endAt) };
+
+    if (row.recurrenceRule === null) {
+      if (interval.end > horizon.start && interval.start < horizon.end) {
+        blocks.push({ id: row.id, calendarId, interval });
+      }
+      continue;
+    }
+
+    const taken = overridden.get(row.id) ?? new Set<Instant>();
+
+    for (const occurrence of expandTemplate(
+      {
+        id: row.id,
+        calendarId,
+        start: row.startAt,
+        end: row.endAt,
+        rule: row.recurrenceRule,
+        timeZone: row.recurrenceTimezone ?? timeZone,
+        exdates: row.recurrenceExdates ?? [],
+      },
+      horizon,
+    )) {
+      if (taken.has(occurrence.originalStart)) continue;
+
+      // An expanded instance is not a row, so it needs an id of its own: the
+      // template's, plus which instance it is. Nothing in the engine reads it
+      // except to order deterministically, and the composite is stable.
+      blocks.push({
+        id: `${row.id}:${occurrence.originalStart}`,
+        calendarId,
+        interval: occurrence.interval,
+      });
+    }
+  }
+
+  return blocks;
 }
 
 async function loadSequences(tx: Transaction, calendarId: string): Promise<SequenceSpec[]> {

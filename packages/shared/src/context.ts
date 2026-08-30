@@ -63,7 +63,13 @@ export const schedulableSchema = z.object({
 });
 
 export const engineFixedBlockSchema = z.object({
-  id: uuid,
+  /**
+   * Not a uuid: an expanded instance of a recurring appointment (§8.1) is not a
+   * row and has no id of its own, so it carries its template's plus which
+   * instance it is. The engine reads a block's id only to order
+   * deterministically (§6.3), and a composite is as stable as a uuid for that.
+   */
+  id: z.string().min(1),
   calendarId: uuid,
   interval,
 });

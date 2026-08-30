@@ -2,13 +2,13 @@ import { lockAppointment, type CommandContext, type HandlerOutcome } from '../co
 import { requireCalendar } from '../entities.js';
 import { insertRow, updateRow } from '../journal.js';
 import { PreconditionFailedError } from '../errors.js';
-import { toInstant, toInstantCeil, toRangeLiteral } from '../../schedule/instants.js';
+import { toInstant, toInstantCeil, toIso, toRangeLiteral } from '../../schedule/instants.js';
 import type {
   AddAppointmentParams,
   AddUnavailabilityParams,
   EditAppointmentParams,
 } from '@ambitime/shared';
-import type { NewAppointment } from '../../db/schema/index.js';
+import type { Appointment, NewAppointment } from '../../db/schema/index.js';
 
 /**
  * Ad-hoc fixed blocks (spec §7.4).
@@ -39,6 +39,8 @@ export async function addAppointment(
     notes: params.notes,
     during: interval(params.start, params.end),
     isInternal: params.isInternal,
+    recurrenceRule: params.recurrence?.rule,
+    recurrenceTimezone: params.recurrence?.timeZone,
   };
 
   await insertingBlock(() => insertRow(ctx, 'appointments', values), params.calendarId);
@@ -79,6 +81,129 @@ export async function editAppointment(
   ctx: CommandContext,
 ): Promise<HandlerOutcome> {
   const appointment = await lockAppointment(ctx, params.appointmentId);
+  const scope = params.scope ?? 'series';
+
+  if (scope !== 'series' && appointment.recurrenceRule !== null) {
+    return params.occurrenceStart === undefined
+      ? refuseWithoutInstance(scope)
+      : scope === 'occurrence'
+        ? await detachOccurrence(params, ctx, appointment)
+        : await splitSeries(params, ctx, appointment);
+  }
+
+  const values = patchValues(params);
+
+  await insertingBlock(
+    () => updateRow(ctx, 'appointments', appointment.id, values),
+    appointment.calendarId,
+  );
+
+  return { calendarIds: [appointment.calendarId] };
+}
+
+function refuseWithoutInstance(scope: string): never {
+  throw new PreconditionFailedError(
+    `Editing "${scope}" needs to know which occurrence, and none was named`,
+  );
+}
+
+/**
+ * "This occurrence only" (spec §8.1).
+ *
+ * The instance becomes a **row**: a modified occurrence pointing at its
+ * template and at the instant it replaces. The template is untouched, so every
+ * other instance keeps expanding exactly as before — which is the whole promise
+ * of "only this one".
+ *
+ * Deleting one instance is the same act with `status: cancelled`. The row still
+ * suppresses the instance it replaced, which is why the loader must look at
+ * cancelled overrides too.
+ */
+async function detachOccurrence(
+  params: EditAppointmentParams,
+  ctx: CommandContext,
+  template: Appointment,
+): Promise<HandlerOutcome> {
+  const originalStart = toInstant(params.occurrenceStart!);
+  const patch = params.patch;
+
+  const duration = rangeDuration(template.during);
+  const start = patch.interval?.start ?? toIso(originalStart);
+  const end = patch.interval?.end ?? toIso(originalStart + duration);
+
+  const values: NewAppointment = {
+    tenantId: ctx.tenantId,
+    calendarId: template.calendarId,
+    ownerId: ctx.actorId,
+    title: patch.title ?? template.title,
+    notes: patch.notes === undefined ? template.notes : patch.notes,
+    during: interval(start, end),
+    isInternal: template.isInternal,
+    isUnavailability: template.isUnavailability,
+    recurrenceParentId: template.id,
+    recurrenceOriginalStart: toIso(originalStart),
+    ...(patch.status === undefined ? {} : { status: patch.status }),
+  };
+
+  await insertingBlock(() => insertRow(ctx, 'appointments', values), template.calendarId);
+
+  return { calendarIds: [template.calendarId] };
+}
+
+/**
+ * "This and all future occurrences" (spec §8.1).
+ *
+ * Modelled as two series rather than one rule with a discontinuity: the old
+ * template is given an `UNTIL` ending it before this instance, and a new
+ * template carries the change forward. A rule that had to describe "Tuesdays at
+ * 09:00 until March and 10:00 after" is not one rule, and RFC 5545 has no way
+ * to write it.
+ *
+ * The instances already detached from the old series stay with it. They are
+ * before the split by definition — anything after it belongs to a series that
+ * did not exist when they were made.
+ */
+async function splitSeries(
+  params: EditAppointmentParams,
+  ctx: CommandContext,
+  template: Appointment,
+): Promise<HandlerOutcome> {
+  const originalStart = toInstant(params.occurrenceStart!);
+  const patch = params.patch;
+
+  // `UNTIL` is inclusive in RFC 5545, so the old series must stop a minute
+  // before this instance rather than at it.
+  const until = toUntilStamp(originalStart - 1);
+  const rule = withUntil(template.recurrenceRule!, until);
+
+  await updateRow(ctx, 'appointments', template.id, { recurrenceRule: rule });
+
+  const duration = rangeDuration(template.during);
+  const start = patch.interval?.start ?? toIso(originalStart);
+  const end = patch.interval?.end ?? toIso(originalStart + duration);
+
+  const values: NewAppointment = {
+    tenantId: ctx.tenantId,
+    calendarId: template.calendarId,
+    ownerId: ctx.actorId,
+    title: patch.title ?? template.title,
+    notes: patch.notes === undefined ? template.notes : patch.notes,
+    during: interval(start, end),
+    isInternal: template.isInternal,
+    isUnavailability: template.isUnavailability,
+    // The same rule, minus any `UNTIL` the old one just acquired: the new
+    // series runs on from here with the shape the user set up originally.
+    recurrenceRule: stripUntil(template.recurrenceRule!),
+    recurrenceTimezone: template.recurrenceTimezone,
+    ...(patch.status === undefined ? {} : { status: patch.status }),
+  };
+
+  await insertingBlock(() => insertRow(ctx, 'appointments', values), template.calendarId);
+
+  return { calendarIds: [template.calendarId] };
+}
+
+function patchValues(params: EditAppointmentParams): Partial<NewAppointment> {
   const { patch } = params;
   const values: Partial<NewAppointment> = {};
 
@@ -89,12 +214,34 @@ export async function editAppointment(
     values.during = interval(patch.interval.start, patch.interval.end);
   }
 
-  await insertingBlock(
-    () => updateRow(ctx, 'appointments', appointment.id, values),
-    appointment.calendarId,
-  );
+  return values;
+}
 
-  return { calendarIds: [appointment.calendarId] };
+/** `["2026-03-23T08:00:00+00","2026-03-23T08:30:00+00")` → 30. */
+function rangeDuration(during: string): number {
+  const [start, end] = during.slice(1, -1).split(',');
+  return toInstantCeil(unquote(end ?? '')) - toInstant(unquote(start ?? ''));
+}
+
+function unquote(value: string): string {
+  return value.replaceAll('"', '');
+}
+
+/** RFC 5545 wants `UNTIL` as a basic-format UTC stamp. */
+function toUntilStamp(instant: number): string {
+  return `${toIso(instant).replace(/[-:]/g, '').split('.')[0]}Z`;
+}
+
+function withUntil(rule: string, until: string): string {
+  return `${stripUntil(rule)};UNTIL=${until}`;
+}
+
+/** Also drops `COUNT`: a count and an end date cannot both bound one rule. */
+function stripUntil(rule: string): string {
+  return rule
+    .split(';')
+    .filter((part) => !/^(UNTIL|COUNT)=/i.test(part))
+    .join(';');
 }
 
 /**

@@ -144,6 +144,15 @@ export const fixedBlockSchema = z.object({
   end: instant,
   /** The optimistic lock an editor sends back with its patch (spec §5.4). */
   version: z.int().positive(),
+  /**
+   * Set when this block is one instance of a recurring series (§8.1).
+   *
+   * An expanded instance is not a row, so an editor needs to know which
+   * instance of which template it is looking at before it can offer "this
+   * occurrence" or "this and all future".
+   */
+  occurrenceStart: instant.nullable(),
+  isRecurring: z.boolean(),
   isUnavailability: z.boolean(),
   isInternal: z.boolean(),
   status: z.enum(['confirmed', 'tentative', 'cancelled']),

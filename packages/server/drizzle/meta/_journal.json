@@ -57,6 +57,13 @@
       "when": 1788110133927,
       "tag": "0007_recurring_demand",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788110134927,
+      "tag": "0008_recurring_appointments",
+      "breakpoints": true
     }
   ]
 }

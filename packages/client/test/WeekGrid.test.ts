@@ -33,6 +33,8 @@ const standup: FixedBlock = {
   start: '2026-03-23T08:00:00.000Z',
   end: '2026-03-23T08:30:00.000Z',
   version: 1,
+  occurrenceStart: null,
+  isRecurring: false,
   isUnavailability: false,
   isInternal: true,
   status: 'confirmed',

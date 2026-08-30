@@ -786,6 +786,121 @@ describe('seed via the API, render the client', () => {
       expect(chronic.text()).toContain('Keeps slipping');
     });
   });
+
+  /**
+   * Plan M14b: a recurring appointment, and §8.1's two edit scopes.
+   *
+   * The grid draws instances rather than rules, so an expanded occurrence has
+   * no row and no id — which is why the editor has to name one by its start,
+   * and why this is worth walking through the real client rather than asserting
+   * on the API alone.
+   */
+  describe('recurring appointments', () => {
+    it('draws every instance, and edits just one of them', async () => {
+      const email = `rrule-${Date.now()}@example.test`;
+      const { calendarId, command } = await seed(email);
+
+      await command({
+        type: 'AddAppointment',
+        params: {
+          calendarId,
+          title: 'Weekly sync',
+          start: '2026-03-24T13:00:00Z',
+          end: '2026-03-24T14:00:00Z',
+          recurrence: { rule: 'FREQ=WEEKLY;BYDAY=TU', timeZone: 'Europe/Berlin' },
+        },
+      });
+
+      await signIn(email, PASSWORD);
+      await loadSession();
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+      // One row, drawn on the Tuesday of the week being shown.
+      const tuesday = (title: string) =>
+        wrapper
+          .findAll('[data-testid="day-column"]')[1]!
+          .findAll('[data-testid="block-appointment"]')
+          .find((block) => block.attributes('data-title') === title);
+      expect(tuesday('Weekly sync')).toBeDefined();
+
+      await tuesday('Weekly sync')!.trigger('click');
+      await flushPromises();
+
+      // Editing an instance must ask which occurrences it applies to, and
+      // default to the one that changes least.
+      expect(wrapper.find('[data-testid="scope-fieldset"]').exists()).toBe(true);
+      expect(
+        (wrapper.find('[data-testid="scope-occurrence"]').element as HTMLInputElement).checked,
+      ).toBe(true);
+
+      await wrapper.find('[data-testid="appointment-title"]').setValue('Weekly sync (moved)');
+      await wrapper.find('[data-testid="save-appointment"]').trigger('click');
+      await settle();
+
+      expect(tuesday('Weekly sync (moved)')).toBeDefined();
+      expect(tuesday('Weekly sync')).toBeUndefined();
+
+      // …and next week is untouched, which is the whole promise of the choice.
+      await wrapper.find('[data-testid="week-forward"]').trigger('click');
+      await settle();
+
+      const nextWeek = wrapper
+        .findAll('[data-testid="day-column"]')[1]!
+        .findAll('[data-testid="block-appointment"]')
+        .map((block) => block.attributes('data-title'));
+      expect(nextWeek).toContain('Weekly sync');
+      expect(nextWeek).not.toContain('Weekly sync (moved)');
+    });
+
+    it('offers repetition when creating, and expands what it creates', async () => {
+      const email = `rrule-create-${Date.now()}@example.test`;
+      await seed(email);
+
+      await signIn(email, PASSWORD);
+      await loadSession();
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+      await wrapper.findAll('[data-testid="add-block"]')[2]!.trigger('click');
+      await flushPromises();
+
+      await wrapper.find('[data-testid="appointment-title"]').setValue('Retro');
+      await wrapper.find('[data-testid="appointment-repeats"]').setValue(true);
+      await flushPromises();
+      await wrapper.find('[data-testid="appointment-frequency"]').setValue('WEEKLY');
+      await wrapper.find('[data-testid="save-appointment"]').trigger('click');
+      await settle();
+
+      // This week's Wednesday…
+      expect(
+        wrapper
+          .findAll('[data-testid="day-column"]')[2]!
+          .findAll('[data-testid="block-appointment"]')
+          .some((block) => block.attributes('data-title') === 'Retro'),
+      ).toBe(true);
+
+      // …and next week's, from the one row that was written.
+      await wrapper.find('[data-testid="week-forward"]').trigger('click');
+      await settle();
+      expect(
+        wrapper
+          .findAll('[data-testid="day-column"]')[2]!
+          .findAll('[data-testid="block-appointment"]')
+          .some((block) => block.attributes('data-title') === 'Retro'),
+      ).toBe(true);
+    });
+  });
 });
 
 /** The task list as the server reports it, for assertions the DOM cannot make. */

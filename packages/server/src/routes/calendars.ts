@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, or, sql } from 'drizzle-orm';
 import { computeCapacity, DEFAULT_TUNING } from '@ambitime/scheduler';
 import { appointments, calendars } from '../db/schema/index.js';
 import { requireContext } from '../auth/middleware.js';
@@ -13,7 +13,8 @@ import { readCalendarConfiguration } from '../configuration/read.js';
 import { readHistory } from '../commands/history.js';
 import { deriveCalendarSchedule } from '../schedule/derive.js';
 import { loadScheduleContext } from '../schedule/load-context.js';
-import { isoText, toInstant, toInstantCeil } from '../schedule/instants.js';
+import { isoText, toInstant, toInstantCeil, toIso } from '../schedule/instants.js';
+import { expandTemplate } from '../schedule/recurrence.js';
 import type { AppEnv } from '../app.js';
 import type { Auth } from '../auth/auth.js';
 import type { Transaction } from '../db/client.js';
@@ -82,7 +83,12 @@ export function calendarRoutes(auth: Auth, clock: Clock) {
 
               return {
                 schedule: await presentSchedule({ tx, schedule: derived }),
-                fixedBlocks: await readFixedBlocks(tx, calendarId, window),
+                fixedBlocks: await readFixedBlocks(
+                  tx,
+                  calendarId,
+                  window,
+                  derived.context.calendars[0]?.timeZone ?? 'UTC',
+                ),
               };
             });
 
@@ -286,6 +292,7 @@ async function readFixedBlocks(
   tx: Transaction,
   calendarId: string,
   window: { start: number; end: number },
+  timeZone: string,
 ) {
   const rows = await tx
     .select({
@@ -298,18 +305,92 @@ async function readFixedBlocks(
       isUnavailability: appointments.isUnavailability,
       isInternal: appointments.isInternal,
       status: appointments.status,
+      recurrenceRule: appointments.recurrenceRule,
+      recurrenceTimezone: appointments.recurrenceTimezone,
+      recurrenceExdates: appointments.recurrenceExdates,
+      recurrenceParentId: appointments.recurrenceParentId,
+      recurrenceOriginalStart: appointments.recurrenceOriginalStart,
     })
     .from(appointments)
     .where(
       and(
         eq(appointments.calendarId, calendarId),
-        ne(appointments.status, 'cancelled'),
-        sql`${appointments.during} && tstzrange(to_timestamp(${window.start * 60}), to_timestamp(${window.end * 60}), '[)')`,
+        // Cancelled rows are *not* excluded here, only when emitting blocks
+        // below: a cancelled override is how "delete just this one" is stored,
+        // and it has to be seen in order to suppress the instance it replaced.
+        // Filtering it out in SQL would put the deleted occurrence back.
+        or(
+          isNotNull(appointments.recurrenceRule),
+          isNotNull(appointments.recurrenceParentId),
+          sql`${appointments.during} && tstzrange(to_timestamp(${window.start * 60}), to_timestamp(${window.end * 60}), '[)')`,
+        ),
       ),
     )
     .orderBy(sql`lower(${appointments.during})`);
 
-  return rows;
+  /**
+   * Templates become one block per instance (spec §8.1).
+   *
+   * The grid draws instances, not rules, and each has to carry which instance
+   * it is: an expanded occurrence has no row and therefore no id, so
+   * `occurrenceStart` is what an editor names when it offers "this occurrence"
+   * or "this and all future".
+   */
+  const overridden = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (row.recurrenceParentId === null || row.recurrenceOriginalStart === null) continue;
+    const taken = overridden.get(row.recurrenceParentId) ?? new Set<string>();
+    taken.add(toIso(toInstant(row.recurrenceOriginalStart)));
+    overridden.set(row.recurrenceParentId, taken);
+  }
+
+  const blocks = [];
+
+  for (const row of rows) {
+    if (row.status === 'cancelled') continue;
+
+    const { recurrenceRule, recurrenceTimezone, recurrenceExdates, ...block } = row;
+
+    if (recurrenceRule === null) {
+      blocks.push({
+        ...block,
+        occurrenceStart:
+          row.recurrenceOriginalStart === null
+            ? null
+            : toIso(toInstant(row.recurrenceOriginalStart)),
+        isRecurring: row.recurrenceParentId !== null,
+      });
+      continue;
+    }
+
+    const taken = overridden.get(row.appointmentId) ?? new Set<string>();
+
+    for (const occurrence of expandTemplate(
+      {
+        id: row.appointmentId,
+        calendarId,
+        start: row.start,
+        end: row.end,
+        rule: recurrenceRule,
+        timeZone: recurrenceTimezone ?? timeZone,
+        exdates: recurrenceExdates ?? [],
+      },
+      window,
+    )) {
+      const occurrenceStart = toIso(occurrence.originalStart);
+      if (taken.has(occurrenceStart)) continue;
+
+      blocks.push({
+        ...block,
+        start: toIso(occurrence.interval.start),
+        end: toIso(occurrence.interval.end),
+        occurrenceStart,
+        isRecurring: true,
+      });
+    }
+  }
+
+  return blocks.sort((a, b) => a.start.localeCompare(b.start));
 }
 
 function validationHook(
