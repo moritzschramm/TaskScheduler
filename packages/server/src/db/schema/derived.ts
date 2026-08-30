@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { createdAtColumn, primaryKeyColumn, updatedAtColumn, versionColumn } from './columns.js';
@@ -154,13 +155,34 @@ export const notifications = pgTable(
     /** Which entity this is about, and any diagnostic detail (§6.7). */
     payload: jsonb('payload').notNull(),
 
+    /**
+     * What this notification is *about*, so the same signal is one row.
+     *
+     * A derived signal is recomputed on every write: "this task will miss its
+     * hard due date" is true until it is not, and a row per re-derive would
+     * bury the user in copies of one fact. The key names the subject —
+     * `hard_due_date_at_risk:<taskId>` — and the producer replaces the set
+     * rather than appending to it (§3.4's pattern, applied to signals).
+     *
+     * `null` marks an *event* rather than a state: an internal appointment
+     * changed under you (§7.2) happened once and is not recomputed away.
+     */
+    dedupeKey: text('dedupe_key'),
+
     readAt: timestamp('read_at', { withTimezone: true, mode: 'string' }),
 
     version: versionColumn(),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
-  (table) => [index('notifications_user_unread_idx').on(table.userId, table.readAt)],
+  (table) => [
+    index('notifications_user_unread_idx').on(table.userId, table.readAt),
+    // One live row per signal per user. Partial, so a dismissed notification
+    // does not stop the same signal being raised again later.
+    uniqueIndex('notifications_live_signal_key')
+      .on(table.userId, table.dedupeKey)
+      .where(sql`${table.dedupeKey} is not null and ${table.readAt} is null`),
+  ],
 );
 
 export type Placement = typeof placements.$inferSelect;

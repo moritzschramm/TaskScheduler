@@ -3,6 +3,7 @@ import { desc, eq } from 'drizzle-orm';
 import { notifications } from '../db/schema/index.js';
 import { requireContext } from '../auth/middleware.js';
 import { withRequestContext } from '../auth/context.js';
+import { isoOrNull } from '../api/present.js';
 import type { AppEnv } from '../app.js';
 import type { Auth } from '../auth/auth.js';
 
@@ -38,6 +39,19 @@ export function notificationRoutes(auth: Auth) {
         .limit(100),
     );
 
-    return c.json({ notifications: rows }, 200);
+    // Normalised here, at the presentation boundary: these columns are
+    // `mode: 'string'`, so the driver hands back Postgres's own
+    // `2026-03-23 08:00:00+00` and the shared schema promises ISO-8601. The
+    // same seam the task list needed.
+    return c.json(
+      {
+        notifications: rows.map((row) => ({
+          ...row,
+          readAt: isoOrNull(row.readAt),
+          createdAt: isoOrNull(row.createdAt)!,
+        })),
+      },
+      200,
+    );
   });
 }

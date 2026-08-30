@@ -19,6 +19,7 @@ import {
   editTaskParams,
   editWeekTypeOverrideParams,
   extendTaskParams,
+  markNotificationsReadParams,
   moveTaskParams,
   moveToBacklogParams,
   postponeRestOfDayParams,
@@ -96,6 +97,7 @@ export const commandRequestSchema = z.discriminatedUnion('type', [
   request('PromoteFromBacklog', promoteFromBacklogParams),
   request('MoveToBacklog', moveToBacklogParams),
   request('AddUnavailability', addUnavailabilityParams),
+  request('MarkNotificationsRead', markNotificationsReadParams),
   request('CreateCalendar', createCalendarParams),
   request('ConfigureCalendar', configureCalendarParams),
   request('SetCalendarWindows', setCalendarWindowsParams),
@@ -429,6 +431,7 @@ export const createdEntitySchema = z.object({
     'category',
     'availability_window',
     'week_type_override',
+    'notification',
   ]),
   id: uuid,
 });

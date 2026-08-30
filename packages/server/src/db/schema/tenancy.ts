@@ -1,17 +1,22 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   foreignKey,
+  integer,
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import {
+  createdAtColumn,
   createdAtDateColumn,
   primaryKeyColumn,
+  updatedAtColumn,
   updatedAtDateColumn,
   versionColumn,
 } from './columns.js';
@@ -112,6 +117,50 @@ export const groups = pgTable(
   ],
 );
 
+/**
+ * A team's working window (spec §9.4).
+ *
+ * §9.4 asks the system to notice when a user's working window diverges from
+ * their team's and tell them — which "requires storing both a per-user working
+ * window and the team working window". The per-user one is `calendar_windows`;
+ * this is the other half, and without it the comparison has nothing to compare
+ * against.
+ *
+ * Same per-weekday shape as a calendar's, deliberately: the two are compared
+ * directly, and a different representation would mean converting one into the
+ * other before every comparison — which is where the drift would live.
+ */
+export const teamWindows = pgTable(
+  'team_windows',
+  {
+    id: primaryKeyColumn(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    teamId: uuid('team_id').notNull(),
+    /** ISO-8601 weekday: 1 = Monday … 7 = Sunday. */
+    weekday: smallint('weekday').notNull(),
+    /** Minutes since local midnight; half-open `[start, end)`. */
+    startMin: integer('start_min').notNull(),
+    endMin: integer('end_min').notNull(),
+    version: versionColumn(),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.teamId, table.tenantId],
+      foreignColumns: [teams.id, teams.tenantId],
+      name: 'team_windows_team_same_tenant_fk',
+    }).onDelete('cascade'),
+    check('team_windows_weekday_range', sql`${table.weekday} between 1 and 7`),
+    check(
+      'team_windows_minute_range',
+      sql`${table.startMin} >= 0 and ${table.endMin} <= 1440 and ${table.startMin} < ${table.endMin}`,
+    ),
+  ],
+);
+
 /** Tenant-scoped; belongs to zero or more groups (spec §4.2). */
 export const teams = pgTable(
   'teams',
@@ -209,6 +258,8 @@ export type NewMembership = typeof memberships.$inferInsert;
 export type MembershipRole = (typeof membershipRole.enumValues)[number];
 export type Group = typeof groups.$inferSelect;
 export type NewGroup = typeof groups.$inferInsert;
+export type TeamWindow = typeof teamWindows.$inferSelect;
+export type NewTeamWindow = typeof teamWindows.$inferInsert;
 export type Team = typeof teams.$inferSelect;
 export type NewTeam = typeof teams.$inferInsert;
 export type TeamGroup = typeof teamGroups.$inferSelect;

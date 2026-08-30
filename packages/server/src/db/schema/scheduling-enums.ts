@@ -60,3 +60,7 @@ export const notificationType = pgEnum('notification_type', [
 
 /** Spec §6.5 / §6.7: soft due dates warn, hard ones alert. */
 export const notificationSeverity = pgEnum('notification_severity', ['info', 'warning', 'alert']);
+
+/** The vocabulary of §11, as types. */
+export type NotificationType = (typeof notificationType.enumValues)[number];
+export type NotificationSeverity = (typeof notificationSeverity.enumValues)[number];

@@ -387,6 +387,21 @@ export const editWeekTypeOverrideParams = z.object({
 export const deleteWeekTypeOverrideParams = z.object({ weekTypeOverrideId: uuid });
 
 /**
+ * `MarkNotificationsRead(ids)` — dismissing what the engine told you (§11).
+ *
+ * Not named in §7, and it changes nothing about the schedule. It is a command
+ * anyway because the single write path (§3.2) has no exceptions worth carving:
+ * the moment one screen is allowed to `PATCH` a row directly, there are two
+ * write paths and the second one is invisible to the log.
+ *
+ * A list rather than one id, so "mark all read" is one entry in the history and
+ * one undo, rather than eleven of each.
+ */
+export const markNotificationsReadParams = z.object({
+  notificationIds: z.array(uuid).min(1),
+});
+
+/**
  * Spec §7.5. No parameters: undo means "the last thing I did", and letting a
  * caller name an arbitrary target would make it something else — a selective
  * revert, which reverses changes later commands were built on.
@@ -447,6 +462,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   command('PromoteFromBacklog', promoteFromBacklogParams),
   command('MoveToBacklog', moveToBacklogParams),
   command('AddUnavailability', addUnavailabilityParams),
+  command('MarkNotificationsRead', markNotificationsReadParams),
   command('CreateCalendar', createCalendarParams),
   command('ConfigureCalendar', configureCalendarParams),
   command('SetCalendarWindows', setCalendarWindowsParams),
@@ -484,6 +500,7 @@ export type SwapForwardParams = z.infer<typeof swapForwardParams>;
 export type PromoteFromBacklogParams = z.infer<typeof promoteFromBacklogParams>;
 export type MoveToBacklogParams = z.infer<typeof moveToBacklogParams>;
 export type AddUnavailabilityParams = z.infer<typeof addUnavailabilityParams>;
+export type MarkNotificationsReadParams = z.infer<typeof markNotificationsReadParams>;
 export type CreateCalendarParams = z.infer<typeof createCalendarParams>;
 export type ConfigureCalendarParams = z.infer<typeof configureCalendarParams>;
 export type SetCalendarWindowsParams = z.infer<typeof setCalendarWindowsParams>;

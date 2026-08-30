@@ -173,6 +173,6 @@ export function presentTaskNode(node: TaskTreeNode): TaskNode {
  * boundary, rather than in the CTE — M2 owns that query's shape, and the API
  * owns the format it promises.
  */
-function isoOrNull(value: string | null): string | null {
+export function isoOrNull(value: string | null): string | null {
   return value === null ? null : new Date(value).toISOString();
 }

@@ -7,6 +7,7 @@ import { deriveCalendarSchedule, type DerivedSchedule } from '../schedule/derive
 import { toInstant, toIso } from '../schedule/instants.js';
 import { CommandValidationError, PreconditionFailedError } from './errors.js';
 import { COMMAND_TARGETS, dispatch } from './registry.js';
+import { produceSignals } from '../notifications/produce.js';
 import type { AttentionItem, CommandContext } from './context.js';
 import type { CommandJournal, JournalTable } from './journal.js';
 import type { Database } from '../db/client.js';
@@ -69,6 +70,7 @@ const CREATED_ENTITY: Readonly<Record<JournalTable, CreatedEntity['entity']>> = 
   categories: 'category',
   availability_windows: 'availability_window',
   week_type_overrides: 'week_type_override',
+  notifications: 'notification',
 };
 
 /** SQLSTATE for a unique violation — here, a command id already in the log. */
@@ -119,15 +121,26 @@ export async function applyCommand(
       const calendarIds = [...new Set(outcome.calendarIds)].sort();
       const schedules: DerivedSchedule[] = [];
       for (const calendarId of calendarIds) {
-        schedules.push(
-          await deriveCalendarSchedule({
-            tx,
-            tenantId: ctx.tenantId,
-            calendarId,
-            now: ctx.now,
-            config: ctx.config,
-          }),
-        );
+        const derived = await deriveCalendarSchedule({
+          tx,
+          tenantId: ctx.tenantId,
+          calendarId,
+          now: ctx.now,
+          config: ctx.config,
+        });
+        schedules.push(derived);
+
+        // Signals are recomputed from the solve that just ran, in the same
+        // transaction (§11). A user cannot see a schedule and its warnings
+        // disagree, because there is no moment at which only one of them has
+        // been written.
+        await produceSignals({
+          tx,
+          tenantId: ctx.tenantId,
+          userId: ctx.actorId,
+          derived,
+          config: ctx.config,
+        });
       }
 
       const journal: CommandJournal = {

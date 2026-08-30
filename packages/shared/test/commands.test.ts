@@ -78,6 +78,7 @@ describe('the command envelope (spec §7.1)', () => {
       'EditTask',
       'EditWeekTypeOverride',
       'ExtendTask',
+      'MarkNotificationsRead',
       'MoveTask',
       'MoveToBacklog',
       'PostponeRestOfDay',

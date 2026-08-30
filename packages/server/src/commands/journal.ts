@@ -5,6 +5,7 @@ import {
   calendars,
   calendarWindows,
   categories,
+  notifications,
   taskOccurrences,
   tasks,
   weekTypeOverrides,
@@ -16,6 +17,7 @@ import type {
   NewCalendar,
   NewCalendarWindow,
   NewCategory,
+  NewNotification,
   NewTask,
   NewTaskOccurrence,
   NewWeekTypeOverride,
@@ -42,6 +44,11 @@ import type { PgTable } from 'drizzle-orm/pg-core';
  * derived (§3.3): they are recomputed from source after every command, undo
  * included, so recording them would be recording an answer rather than a fact.
  * Nothing here can reach them — `deriveCalendarSchedule` writes them directly.
+ *
+ * `notifications` is in the set for one column's sake. The rows themselves are
+ * derived — `produceSignals` replaces them wholesale, outside the journal, for
+ * the same reason placements are — but `read_at` is a person's decision about
+ * one, and dismissing something is exactly the kind of act somebody wants back.
  */
 
 /**
@@ -62,6 +69,7 @@ interface JournalInserts {
   categories: NewCategory;
   availability_windows: NewAvailabilityWindow;
   week_type_overrides: NewWeekTypeOverride;
+  notifications: NewNotification;
 }
 
 /**
@@ -78,6 +86,7 @@ const JOURNALLED = {
   categories,
   availability_windows: availabilityWindows,
   week_type_overrides: weekTypeOverrides,
+  notifications,
 } satisfies Record<keyof JournalInserts, PgTable>;
 
 export type JournalTable = keyof typeof JOURNALLED;
