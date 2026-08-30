@@ -1,5 +1,5 @@
 import { DEFAULT_TUNING, type Instant, type TuningConfig } from '@ambitime/scheduler';
-import { commandSchema, type Command } from '@ambitime/shared';
+import { commandSchema, type Command, type CreatedEntity } from '@ambitime/shared';
 import { z } from 'zod';
 import { withTenantContext } from '../db/context.js';
 import { commands } from '../db/schema/index.js';
@@ -8,7 +8,7 @@ import { toInstant, toIso } from '../schedule/instants.js';
 import { CommandValidationError, PreconditionFailedError } from './errors.js';
 import { COMMAND_TARGETS, dispatch } from './registry.js';
 import type { AttentionItem, CommandContext } from './context.js';
-import type { CommandJournal } from './journal.js';
+import type { CommandJournal, JournalTable } from './journal.js';
 import type { Database } from '../db/client.js';
 
 /**
@@ -47,9 +47,29 @@ export interface CommandOutcome {
   seq: bigint;
   /** One per calendar the command touched, in id order. */
   schedules: DerivedSchedule[];
+  /**
+   * What the command brought into existence, in the order it did.
+   *
+   * Read straight off the journal — a change with no `before` image *is* a
+   * creation — so it cannot drift from what the handler actually inserted, and
+   * no handler has to remember to report it.
+   */
+  created: CreatedEntity[];
   /** What the command deliberately left for a person to deal with (§7.2). */
   attention: AttentionItem[];
 }
+
+/** Journal table to the name the API uses for what lives in it. */
+const CREATED_ENTITY: Readonly<Record<JournalTable, CreatedEntity['entity']>> = {
+  tasks: 'task',
+  task_occurrences: 'occurrence',
+  appointments: 'appointment',
+  calendars: 'calendar',
+  calendar_windows: 'calendar_window',
+  categories: 'category',
+  availability_windows: 'availability_window',
+  week_type_overrides: 'week_type_override',
+};
 
 /** SQLSTATE for a unique violation — here, a command id already in the log. */
 const UNIQUE_VIOLATION = '23505';
@@ -111,6 +131,9 @@ export async function applyCommand(
         command,
         seq: await appendToLog(ctx, command, journal),
         schedules,
+        created: ctx.journal
+          .filter((change) => change.before === null)
+          .map((change) => ({ entity: CREATED_ENTITY[change.table], id: change.id })),
         attention: outcome.attention ?? [],
       };
     },

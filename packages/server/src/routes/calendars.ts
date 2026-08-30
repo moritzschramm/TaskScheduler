@@ -9,6 +9,7 @@ import { withRequestContext } from '../auth/context.js';
 import { toApiFailure, toValidationFailure } from '../api/errors.js';
 import { presentCapacityCell, presentSchedule, presentTaskNode } from '../api/present.js';
 import { readCalendarTaskTree } from '../tasks/task-tree.js';
+import { readCalendarConfiguration } from '../configuration/read.js';
 import { deriveCalendarSchedule } from '../schedule/derive.js';
 import { isoText, toInstant, toInstantCeil } from '../schedule/instants.js';
 import type { AppEnv } from '../app.js';
@@ -38,28 +39,62 @@ export function calendarRoutes(auth: Auth, clock: Clock) {
     to: z.iso.datetime({ offset: true }).optional(),
   });
 
-  return new Hono<AppEnv>()
-    .get('/calendars', requireContext(auth), async (c) => {
-      const context = c.get('context');
+  return (
+    new Hono<AppEnv>()
+      .get('/calendars', requireContext(auth), async (c) => {
+        const context = c.get('context');
 
-      const rows = await withRequestContext(c.get('db'), context, (tx) =>
-        tx
-          .select({ id: calendars.id, name: calendars.name, timezone: calendars.timezone })
-          .from(calendars)
-          .orderBy(calendars.name),
-      );
+        const rows = await withRequestContext(c.get('db'), context, (tx) =>
+          tx
+            .select({ id: calendars.id, name: calendars.name, timezone: calendars.timezone })
+            .from(calendars)
+            .orderBy(calendars.name),
+        );
 
-      return c.json({ calendars: rows }, 200);
-    })
+        return c.json({ calendars: rows }, 200);
+      })
 
-    .get(
-      '/calendars/:calendarId/schedule',
-      requireContext(auth),
-      zValidator('query', range, validationHook),
-      async (c) => {
+      .get(
+        '/calendars/:calendarId/schedule',
+        requireContext(auth),
+        zValidator('query', range, validationHook),
+        async (c) => {
+          const context = c.get('context');
+          const calendarId = c.req.param('calendarId');
+          const { from, to } = c.req.valid('query');
+
+          try {
+            const body = await withRequestContext(c.get('db'), context, async (tx) => {
+              const derived = await deriveCalendarSchedule({
+                tx,
+                tenantId: context.tenantId,
+                calendarId,
+                now: nowOf(clock),
+                config: DEFAULT_TUNING,
+              });
+
+              const window = {
+                start: from === undefined ? derived.horizon.start : toInstant(from),
+                end: to === undefined ? derived.horizon.end : toInstantCeil(to),
+              };
+
+              return {
+                schedule: await presentSchedule({ tx, schedule: derived }),
+                fixedBlocks: await readFixedBlocks(tx, calendarId, window),
+              };
+            });
+
+            return c.json(body, 200);
+          } catch (error) {
+            const failure = toApiFailure(error);
+            return c.json(failure.body, failure.status);
+          }
+        },
+      )
+
+      .get('/calendars/:calendarId/backlog', requireContext(auth), async (c) => {
         const context = c.get('context');
         const calendarId = c.req.param('calendarId');
-        const { from, to } = c.req.valid('query');
 
         try {
           const body = await withRequestContext(c.get('db'), context, async (tx) => {
@@ -71,15 +106,8 @@ export function calendarRoutes(auth: Auth, clock: Clock) {
               config: DEFAULT_TUNING,
             });
 
-            const window = {
-              start: from === undefined ? derived.horizon.start : toInstant(from),
-              end: to === undefined ? derived.horizon.end : toInstantCeil(to),
-            };
-
-            return {
-              schedule: await presentSchedule({ tx, schedule: derived }),
-              fixedBlocks: await readFixedBlocks(tx, calendarId, window),
-            };
+            const presented = await presentSchedule({ tx, schedule: derived });
+            return { calendarId, entries: presented.backlog };
           });
 
           return c.json(body, 200);
@@ -87,81 +115,80 @@ export function calendarRoutes(auth: Auth, clock: Clock) {
           const failure = toApiFailure(error);
           return c.json(failure.body, failure.status);
         }
-      },
-    )
+      })
 
-    .get('/calendars/:calendarId/backlog', requireContext(auth), async (c) => {
-      const context = c.get('context');
-      const calendarId = c.req.param('calendarId');
+      .get('/calendars/:calendarId/tasks', requireContext(auth), async (c) => {
+        const context = c.get('context');
+        const calendarId = c.req.param('calendarId');
 
-      try {
-        const body = await withRequestContext(c.get('db'), context, async (tx) => {
-          const derived = await deriveCalendarSchedule({
-            tx,
-            tenantId: context.tenantId,
-            calendarId,
-            now: nowOf(clock),
-            config: DEFAULT_TUNING,
+        // Source, not derived: the panel has to show tasks that were never
+        // placed — a parent, something completed, something with no estimate
+        // yet — and the schedule by definition contains none of those.
+        const tasks = await withRequestContext(c.get('db'), context, (tx) =>
+          readCalendarTaskTree(tx, calendarId),
+        );
+
+        return c.json({ calendarId, tasks: tasks.map(presentTaskNode) }, 200);
+      })
+
+      /**
+       * Source configuration, not a derived view (spec §4.3, §9.1).
+       *
+       * The only read here that does not re-derive, because there is nothing to
+       * derive: what a settings screen edits is the input to the solve, and
+       * running one to answer "which weekdays is exercise available" would be
+       * computing an answer to a different question.
+       */
+      .get('/calendars/:calendarId/configuration', requireContext(auth), async (c) => {
+        const context = c.get('context');
+        const calendarId = c.req.param('calendarId');
+
+        try {
+          const body = await withRequestContext(c.get('db'), context, (tx) =>
+            readCalendarConfiguration(tx, calendarId, context.userId),
+          );
+
+          return c.json(body, 200);
+        } catch (error) {
+          const failure = toApiFailure(error);
+          return c.json(failure.body, failure.status);
+        }
+      })
+
+      .get('/calendars/:calendarId/capacity', requireContext(auth), async (c) => {
+        const context = c.get('context');
+        const calendarId = c.req.param('calendarId');
+
+        try {
+          const body = await withRequestContext(c.get('db'), context, async (tx) => {
+            const derived = await deriveCalendarSchedule({
+              tx,
+              tenantId: context.tenantId,
+              calendarId,
+              now: nowOf(clock),
+              config: DEFAULT_TUNING,
+            });
+
+            // Capacity is computed from the *same* derived result, so the
+            // utilization a user sees and the schedule they are looking at
+            // cannot disagree (§6.6).
+            const report = computeCapacity({
+              context: derived.context,
+              placements: derived.placements,
+              backlog: derived.backlog,
+              config: DEFAULT_TUNING,
+            });
+
+            return { calendarId, cells: report.cells.map(presentCapacityCell) };
           });
 
-          const presented = await presentSchedule({ tx, schedule: derived });
-          return { calendarId, entries: presented.backlog };
-        });
-
-        return c.json(body, 200);
-      } catch (error) {
-        const failure = toApiFailure(error);
-        return c.json(failure.body, failure.status);
-      }
-    })
-
-    .get('/calendars/:calendarId/tasks', requireContext(auth), async (c) => {
-      const context = c.get('context');
-      const calendarId = c.req.param('calendarId');
-
-      // Source, not derived: the panel has to show tasks that were never
-      // placed — a parent, something completed, something with no estimate
-      // yet — and the schedule by definition contains none of those.
-      const tasks = await withRequestContext(c.get('db'), context, (tx) =>
-        readCalendarTaskTree(tx, calendarId),
-      );
-
-      return c.json({ calendarId, tasks: tasks.map(presentTaskNode) }, 200);
-    })
-
-    .get('/calendars/:calendarId/capacity', requireContext(auth), async (c) => {
-      const context = c.get('context');
-      const calendarId = c.req.param('calendarId');
-
-      try {
-        const body = await withRequestContext(c.get('db'), context, async (tx) => {
-          const derived = await deriveCalendarSchedule({
-            tx,
-            tenantId: context.tenantId,
-            calendarId,
-            now: nowOf(clock),
-            config: DEFAULT_TUNING,
-          });
-
-          // Capacity is computed from the *same* derived result, so the
-          // utilization a user sees and the schedule they are looking at
-          // cannot disagree (§6.6).
-          const report = computeCapacity({
-            context: derived.context,
-            placements: derived.placements,
-            backlog: derived.backlog,
-            config: DEFAULT_TUNING,
-          });
-
-          return { calendarId, cells: report.cells.map(presentCapacityCell) };
-        });
-
-        return c.json(body, 200);
-      } catch (error) {
-        const failure = toApiFailure(error);
-        return c.json(failure.body, failure.status);
-      }
-    });
+          return c.json(body, 200);
+        } catch (error) {
+          const failure = toApiFailure(error);
+          return c.json(failure.body, failure.status);
+        }
+      })
+  );
 }
 
 /**

@@ -51,27 +51,70 @@ describe('the command envelope (spec §7.1)', () => {
     );
   });
 
-  it('covers exactly the §7 command vocabulary', () => {
+  it('covers exactly the §7 command vocabulary and the configuration family', () => {
     expect([...COMMAND_TYPES].sort()).toEqual([
       'AddAppointment',
       'AddUnavailability',
       'CancelTask',
       'ClearWeek',
       'CompleteTask',
+      'ConfigureCalendar',
+      'CreateCalendar',
+      'CreateCategory',
       'CreateTask',
+      'CreateWeekTypeOverride',
       'DeferTask',
+      'DeleteCategory',
+      'DeleteWeekTypeOverride',
       'EditAppointment',
+      'EditCategory',
       'EditTask',
+      'EditWeekTypeOverride',
       'ExtendTask',
       'MoveTask',
       'MoveToBacklog',
       'PostponeRestOfDay',
       'PromoteFromBacklog',
       'Redo',
+      'SetAvailabilityWindows',
+      'SetCalendarWindows',
       'SwapForward',
       'SwapTasks',
       'Undo',
     ]);
+  });
+
+  it('rejects a time zone the runtime does not know', () => {
+    const berlin = draft('CreateCalendar', { name: 'Work', timezone: 'Europe/Berlin' });
+    const typo = draft('CreateCalendar', { name: 'Work', timezone: 'Europe/Berln' });
+
+    expect(commandSchema.safeParse(newCommand(berlin as never)).success).toBe(true);
+    expect(commandSchema.safeParse(newCommand(typo as never)).success).toBe(false);
+  });
+
+  it('addresses a window set, so an empty set means "never available here"', () => {
+    const cleared = commandSchema.parse(
+      newCommand(
+        draft('SetAvailabilityWindows', {
+          calendarId: TENANT,
+          categoryId: TASK,
+          windows: [],
+        }) as never,
+      ),
+    );
+
+    expect(cleared.type).toBe('SetAvailabilityWindows');
+    expect(cleared.params).toMatchObject({ windows: [] });
+  });
+
+  it('refuses a window that ends before it starts', () => {
+    const backwards = draft('SetCalendarWindows', {
+      calendarId: TENANT,
+      kind: 'working',
+      windows: [{ weekday: 1, startMin: 1020, endMin: 540 }],
+    });
+
+    expect(commandSchema.safeParse(newCommand(backwards as never)).success).toBe(false);
   });
 
   it('carries an optional group id, which is what undo reverses atomically', () => {

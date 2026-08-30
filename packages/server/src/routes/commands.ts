@@ -70,6 +70,7 @@ export function commandRoutes(auth: Auth, clock: Clock) {
           commandId: outcome.command.id,
           seq: outcome.seq.toString(),
           schedules,
+          created: outcome.created,
           attention: outcome.attention,
         };
 

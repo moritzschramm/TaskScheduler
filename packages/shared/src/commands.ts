@@ -15,8 +15,9 @@ import { uuidv7 } from './uuid.js';
  * **Naming.** Where the spec names a command it is used verbatim —
  * `AddAppointment`, `MoveTask`, `DeferTask`, `CompleteTask`,
  * `PostponeRestOfDay`, `ClearWeek` — because that vocabulary is also the future
- * parser's target. `CreateTask`, `EditTask` and `EditAppointment` are not named
- * in §7 and follow the obvious convention.
+ * parser's target. `CreateTask`, `EditTask`, `EditAppointment` and the
+ * configuration family below are not named in §7 and follow the obvious
+ * convention.
  *
  * `Undo` and `Redo` are commands like any other (§7.5): they are appended to
  * the log alongside what they reversed, so the history stays an honest record
@@ -206,6 +207,171 @@ export const addUnavailabilityParams = z
   });
 
 /**
+ * Configuration — the calendars, categories and windows the engine schedules
+ * *within* (spec §4.3, §9.1).
+ *
+ * §7 names no command for any of these, because it enumerates what a user does
+ * to their *schedule*. But configuration is state, and the command layer is the
+ * single write path (§3.2): a settings screen that wrote directly would be a
+ * second one — unlogged, un-undoable, invisible to audit (§12) and to the
+ * future parser. So they follow the `CreateTask` convention above, named for
+ * what they do.
+ *
+ * **The window families replace sets, not rows.** §4.3 describes a category as
+ * owning "the set of availability windows for its kind of activity" and a
+ * week-type override as replacing "the default window set": the unit that means
+ * something is the set, and a weekly editor submits one. Per-row commands would
+ * turn "Mon–Thu 09:00–17:00, Fri 09:00–13:00" into five commands, five undos,
+ * and four intermediate states in which the calendar was wrong — and each of
+ * those intermediate states would re-derive.
+ */
+
+/**
+ * An IANA zone name, checked against the runtime's own zone database rather
+ * than a pattern.
+ *
+ * `Europe/Berln` satisfies every plausible regex and then fails at derive time,
+ * where the failure is a solve that cannot resolve a single window rather than
+ * a rejected field (§5.1).
+ */
+const timeZone = z.string().refine(
+  (zone) => {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: zone });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  { message: 'Unknown IANA time zone' },
+);
+
+const visibilityScope = z.enum(['private', 'team', 'group']);
+
+/** ISO-8601 weekday and a half-open local range — the shape both windows share. */
+const weekdayRule = {
+  /** 1 = Monday … 7 = Sunday, matching Postgres `extract(isodow)`. */
+  weekday: z.int().min(1).max(7),
+  startMin: minuteOfDay,
+  endMin: minuteOfDay,
+} as const;
+
+const ordered = (rule: { startMin: number; endMin: number }) => rule.startMin < rule.endMin;
+const orderedMessage = { message: 'A window must end after it starts' };
+
+const calendarWindowRule = z.object(weekdayRule).refine(ordered, orderedMessage);
+
+/** A window's own focus profile, matched against a task's `focus_level` (§6.5). */
+const availabilityWindowRule = z
+  .object({ ...weekdayRule, focusLevel: z.int().min(1).max(5).optional() })
+  .refine(ordered, orderedMessage);
+
+/**
+ * Spec §4.3. A user "may own several" calendars, so creating one is an action
+ * they take; the tenant is the envelope's and the owner is the actor, neither
+ * of which a client may choose (§10.2).
+ */
+export const createCalendarParams = z.object({
+  name: z.string().min(1),
+  timezone: timeZone,
+  visibilityScope: visibilityScope.optional(),
+});
+
+export const configureCalendarParams = z.object({
+  calendarId: uuid,
+  patch: z.object({
+    name: z.string().min(1).optional(),
+    timezone: timeZone.optional(),
+    visibilityScope: visibilityScope.optional(),
+  }),
+});
+
+/**
+ * Spec §9.1 — the working window (when tasks may be placed) and the shareable
+ * window (what busy time other users see, §9.2). One command for both because
+ * they are the same shape and differ only in what reads them.
+ */
+export const setCalendarWindowsParams = z.object({
+  calendarId: uuid,
+  kind: z.enum(['working', 'shareable']),
+  windows: z.array(calendarWindowRule),
+});
+
+/** Spec §4.3. Tenant-scoped, and owns the default cooldown for its tasks. */
+export const createCategoryParams = z.object({
+  name: z.string().min(1),
+  defaultCooldownMin: z.int().nonnegative().optional(),
+});
+
+/**
+ * No `null` anywhere in the patch: neither field is nullable in the domain — a
+ * category always has a name, and its cooldown defaults to zero rather than to
+ * absent — so there is nothing to clear back to (contrast `EditTask`, where
+ * clearing means reverting to an inherited value).
+ */
+export const editCategoryParams = z.object({
+  categoryId: uuid,
+  patch: z.object({
+    name: z.string().min(1).optional(),
+    defaultCooldownMin: z.int().nonnegative().optional(),
+  }),
+});
+
+export const deleteCategoryParams = z.object({ categoryId: uuid });
+
+/**
+ * Replaces the whole set for one (calendar, category) pair.
+ *
+ * `weekTypeOverrideId` absent addresses the default set; present addresses that
+ * override's replacement set (§4.3). It is part of the address rather than a
+ * filter, which is why an empty `windows` array is meaningful: it says this
+ * category is not available at all here, and during a holiday override that is
+ * exactly the intent.
+ */
+export const setAvailabilityWindowsParams = z.object({
+  calendarId: uuid,
+  categoryId: uuid,
+  weekTypeOverrideId: uuid.optional(),
+  windows: z.array(availabilityWindowRule),
+});
+
+/** Spec §4.3 — holidays, a conference week, parental leave. Half-open dates. */
+export const createWeekTypeOverrideParams = z
+  .object({
+    calendarId: uuid,
+    name: z.string().min(1),
+    startDate: civilDate,
+    endDate: civilDate,
+  })
+  .refine((params) => params.startDate < params.endDate, {
+    message: 'A week-type override must end after it starts',
+  });
+
+/**
+ * Either date may move alone, so the ordering can only be checked here when
+ * both are present; the handler re-checks the merged result, and the
+ * `week_type_overrides_date_range` constraint is the backstop under both.
+ */
+export const editWeekTypeOverrideParams = z.object({
+  weekTypeOverrideId: uuid,
+  patch: z
+    .object({
+      name: z.string().min(1).optional(),
+      startDate: civilDate.optional(),
+      endDate: civilDate.optional(),
+    })
+    .refine(
+      (patch) =>
+        patch.startDate === undefined || patch.endDate === undefined
+          ? true
+          : patch.startDate < patch.endDate,
+      { message: 'A week-type override must end after it starts' },
+    ),
+});
+
+export const deleteWeekTypeOverrideParams = z.object({ weekTypeOverrideId: uuid });
+
+/**
  * Spec §7.5. No parameters: undo means "the last thing I did", and letting a
  * caller name an arbitrary target would make it something else — a selective
  * revert, which reverses changes later commands were built on.
@@ -265,6 +431,16 @@ export const commandSchema = z.discriminatedUnion('type', [
   command('PromoteFromBacklog', promoteFromBacklogParams),
   command('MoveToBacklog', moveToBacklogParams),
   command('AddUnavailability', addUnavailabilityParams),
+  command('CreateCalendar', createCalendarParams),
+  command('ConfigureCalendar', configureCalendarParams),
+  command('SetCalendarWindows', setCalendarWindowsParams),
+  command('CreateCategory', createCategoryParams),
+  command('EditCategory', editCategoryParams),
+  command('DeleteCategory', deleteCategoryParams),
+  command('SetAvailabilityWindows', setAvailabilityWindowsParams),
+  command('CreateWeekTypeOverride', createWeekTypeOverrideParams),
+  command('EditWeekTypeOverride', editWeekTypeOverrideParams),
+  command('DeleteWeekTypeOverride', deleteWeekTypeOverrideParams),
   command('Undo', undoParams),
   command('Redo', redoParams),
 ]);
@@ -291,6 +467,16 @@ export type SwapForwardParams = z.infer<typeof swapForwardParams>;
 export type PromoteFromBacklogParams = z.infer<typeof promoteFromBacklogParams>;
 export type MoveToBacklogParams = z.infer<typeof moveToBacklogParams>;
 export type AddUnavailabilityParams = z.infer<typeof addUnavailabilityParams>;
+export type CreateCalendarParams = z.infer<typeof createCalendarParams>;
+export type ConfigureCalendarParams = z.infer<typeof configureCalendarParams>;
+export type SetCalendarWindowsParams = z.infer<typeof setCalendarWindowsParams>;
+export type CreateCategoryParams = z.infer<typeof createCategoryParams>;
+export type EditCategoryParams = z.infer<typeof editCategoryParams>;
+export type DeleteCategoryParams = z.infer<typeof deleteCategoryParams>;
+export type SetAvailabilityWindowsParams = z.infer<typeof setAvailabilityWindowsParams>;
+export type CreateWeekTypeOverrideParams = z.infer<typeof createWeekTypeOverrideParams>;
+export type EditWeekTypeOverrideParams = z.infer<typeof editWeekTypeOverrideParams>;
+export type DeleteWeekTypeOverrideParams = z.infer<typeof deleteWeekTypeOverrideParams>;
 export type UndoParams = z.infer<typeof undoParams>;
 export type RedoParams = z.infer<typeof redoParams>;
 

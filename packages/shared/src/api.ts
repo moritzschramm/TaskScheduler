@@ -5,16 +5,26 @@ import {
   cancelTaskParams,
   clearWeekParams,
   completeTaskParams,
+  configureCalendarParams,
+  createCalendarParams,
+  createCategoryParams,
   createTaskParams,
+  createWeekTypeOverrideParams,
   deferTaskParams,
+  deleteCategoryParams,
+  deleteWeekTypeOverrideParams,
   editAppointmentParams,
+  editCategoryParams,
   editTaskParams,
+  editWeekTypeOverrideParams,
   extendTaskParams,
   moveTaskParams,
   moveToBacklogParams,
   postponeRestOfDayParams,
   promoteFromBacklogParams,
   redoParams,
+  setAvailabilityWindowsParams,
+  setCalendarWindowsParams,
   swapForwardParams,
   swapTasksParams,
   undoParams,
@@ -84,6 +94,16 @@ export const commandRequestSchema = z.discriminatedUnion('type', [
   request('PromoteFromBacklog', promoteFromBacklogParams),
   request('MoveToBacklog', moveToBacklogParams),
   request('AddUnavailability', addUnavailabilityParams),
+  request('CreateCalendar', createCalendarParams),
+  request('ConfigureCalendar', configureCalendarParams),
+  request('SetCalendarWindows', setCalendarWindowsParams),
+  request('CreateCategory', createCategoryParams),
+  request('EditCategory', editCategoryParams),
+  request('DeleteCategory', deleteCategoryParams),
+  request('SetAvailabilityWindows', setAvailabilityWindowsParams),
+  request('CreateWeekTypeOverride', createWeekTypeOverrideParams),
+  request('EditWeekTypeOverride', editWeekTypeOverrideParams),
+  request('DeleteWeekTypeOverride', deleteWeekTypeOverrideParams),
   request('Undo', undoParams),
   request('Redo', redoParams),
 ]);
@@ -193,6 +213,77 @@ export const calendarSummarySchema = z.object({
 
 export const calendarListSchema = z.object({ calendars: z.array(calendarSummarySchema) });
 
+/**
+ * Configuration — what a settings screen reads before it can offer an edit
+ * (spec §4.3, §9.1).
+ *
+ * One response rather than five endpoints because the pieces are only
+ * meaningful together: an availability window names a category and a week-type
+ * override, and a screen that fetched them separately would render ids until
+ * the last request landed.
+ *
+ * The whole document is the tenant's configuration as it bears on **one**
+ * calendar. Categories are tenant-scoped and so appear whole; windows and
+ * overrides are per-calendar and are filtered to this one.
+ */
+export const weekdayRuleSchema = z.object({
+  /** ISO-8601 weekday: 1 = Monday … 7 = Sunday. */
+  weekday: z.int().min(1).max(7),
+  /** Minutes since local midnight, in the calendar's zone. */
+  startMin: z.int().min(0).max(1440),
+  endMin: z.int().min(0).max(1440),
+});
+
+export const calendarWindowSchema = weekdayRuleSchema.extend({
+  id: uuid,
+  kind: z.enum(['working', 'shareable']),
+});
+
+export const availabilityWindowSchema = weekdayRuleSchema.extend({
+  id: uuid,
+  categoryId: uuid,
+  /** `null` = part of the default set; set = part of that override's set. */
+  weekTypeOverrideId: uuid.nullable(),
+  focusLevel: z.int().min(1).max(5).nullable(),
+});
+
+export const categorySchema = z.object({
+  id: uuid,
+  name: z.string(),
+  defaultCooldownMin: z.int().nonnegative(),
+  version: z.int().positive(),
+});
+
+export const weekTypeOverrideSchema = z.object({
+  id: uuid,
+  name: z.string(),
+  /** Half-open `[startDate, endDate)`, like every other interval (§5.1). */
+  startDate: z.iso.date(),
+  endDate: z.iso.date(),
+  version: z.int().positive(),
+});
+
+export const calendarConfigurationSchema = z.object({
+  calendar: calendarSummarySchema.extend({
+    visibilityScope: z.enum(['private', 'team', 'group']),
+    /** The optimistic lock a settings form sends back with its edit (§5.4). */
+    version: z.int().positive(),
+    isOwner: z.boolean(),
+  }),
+  /** Both of §9.1's windows, distinguished by `kind`. */
+  windows: z.array(calendarWindowSchema),
+  categories: z.array(categorySchema),
+  availability: z.array(availabilityWindowSchema),
+  weekTypeOverrides: z.array(weekTypeOverrideSchema),
+});
+
+export type WeekdayRule = z.infer<typeof weekdayRuleSchema>;
+export type CalendarWindow = z.infer<typeof calendarWindowSchema>;
+export type AvailabilityWindow = z.infer<typeof availabilityWindowSchema>;
+export type Category = z.infer<typeof categorySchema>;
+export type WeekTypeOverrideEntry = z.infer<typeof weekTypeOverrideSchema>;
+export type CalendarConfiguration = z.infer<typeof calendarConfigurationSchema>;
+
 export const scheduleResponseSchema = z.object({
   schedule: scheduleSchema,
   /** Appointments and unavailability in the same window, for the same grid. */
@@ -271,6 +362,32 @@ export const attentionItemSchema = z.object({
   isInternal: z.boolean(),
 });
 
+/**
+ * Something the command brought into existence.
+ *
+ * Ids are minted by Postgres (`uuidv7()`, §5.1), so a client that has just
+ * created a category cannot know its id — and it needs one immediately, to hang
+ * availability windows off. Re-reading and matching on the name would be a
+ * guess: two categories can be renamed into and out of each other between two
+ * requests, and the client would attach windows to the wrong one.
+ *
+ * `entity` is the API's vocabulary rather than the schema's table names, for
+ * the same reason the error codes are (below).
+ */
+export const createdEntitySchema = z.object({
+  entity: z.enum([
+    'task',
+    'occurrence',
+    'appointment',
+    'calendar',
+    'calendar_window',
+    'category',
+    'availability_window',
+    'week_type_override',
+  ]),
+  id: uuid,
+});
+
 export const commandResultSchema = z.object({
   commandId: uuid,
   /**
@@ -280,9 +397,13 @@ export const commandResultSchema = z.object({
   seq: z.string(),
   /** One per calendar the command touched, freshly derived. */
   schedules: z.array(scheduleSchema),
+  /** In the order the command created them. */
+  created: z.array(createdEntitySchema),
   /** What the command deliberately left for a person to deal with (§7.2). */
   attention: z.array(attentionItemSchema),
 });
+
+export type CreatedEntity = z.infer<typeof createdEntitySchema>;
 
 export type CommandResult = z.infer<typeof commandResultSchema>;
 

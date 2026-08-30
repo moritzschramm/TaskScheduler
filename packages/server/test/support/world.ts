@@ -56,6 +56,14 @@ export interface World {
   categoryId: string;
   /** Applies a command as the world's user, at `MONDAY_0900` unless told otherwise. */
   run: (draft: WorldCommand, options?: RunOptions) => Promise<CommandOutcome>;
+  /**
+   * The same, as somebody else in the same tenant.
+   *
+   * For the per-resource predicates of §10.2: tenant isolation puts two members
+   * in the same data, and only an actor-aware test can show that owning
+   * something still means something.
+   */
+  runAs: (actorId: string, draft: WorldCommand, options?: RunOptions) => Promise<CommandOutcome>;
   /** The placements the last derive actually wrote, read back out of the cache. */
   cachedPlacements: () => Promise<Placement[]>;
   read: <T>(callback: (tx: Transaction) => Promise<T>) => Promise<T>;
@@ -117,6 +125,16 @@ export async function createWorld(
     return { calendarId: calendar.id, categoryId: category.id };
   });
 
+  const runAs = (actorId: string, draft: WorldCommand, runOptions: RunOptions = {}) =>
+    applyCommand(
+      db,
+      newCommand({ ...draft, actor: actorId, tenantId } as CommandDraft, {
+        issuedAt: runOptions.at ?? MONDAY_0900,
+        ...(runOptions.id === undefined ? {} : { id: runOptions.id }),
+      }),
+      runOptions.config === undefined ? {} : { config: runOptions.config },
+    );
+
   return {
     db,
     tenantId,
@@ -124,15 +142,9 @@ export async function createWorld(
     calendarId,
     categoryId,
 
-    run: (draft, runOptions = {}) =>
-      applyCommand(
-        db,
-        newCommand({ ...draft, actor: user.userId, tenantId } as CommandDraft, {
-          issuedAt: runOptions.at ?? MONDAY_0900,
-          ...(runOptions.id === undefined ? {} : { id: runOptions.id }),
-        }),
-        runOptions.config === undefined ? {} : { config: runOptions.config },
-      ),
+    run: (draft, runOptions = {}) => runAs(user.userId, draft, runOptions),
+
+    runAs,
 
     cachedPlacements: () =>
       withTenantContext(db, { userId: user.userId, tenantId }, (tx) =>

@@ -1,7 +1,25 @@
 import { eq, inArray, type SQL } from 'drizzle-orm';
-import { appointments, taskOccurrences, tasks } from '../db/schema/index.js';
+import {
+  appointments,
+  availabilityWindows,
+  calendars,
+  calendarWindows,
+  categories,
+  taskOccurrences,
+  tasks,
+  weekTypeOverrides,
+} from '../db/schema/index.js';
 import type { CommandContext } from './context.js';
-import type { NewAppointment, NewTask, NewTaskOccurrence } from '../db/schema/index.js';
+import type {
+  NewAppointment,
+  NewAvailabilityWindow,
+  NewCalendar,
+  NewCalendarWindow,
+  NewCategory,
+  NewTask,
+  NewTaskOccurrence,
+  NewWeekTypeOverride,
+} from '../db/schema/index.js';
 import type { PgTable } from 'drizzle-orm/pg-core';
 
 /**
@@ -27,17 +45,40 @@ import type { PgTable } from 'drizzle-orm/pg-core';
  */
 
 /**
- * The three tables a command may change.
+ * The tables a command may change, and the insert type each one takes.
  *
  * A closed set on purpose: anything reachable from a handler is reversible, and
  * adding a table here is the deliberate act of saying a new kind of state is
- * part of history.
+ * part of history. Configuration joined it in M11 for exactly that reason — a
+ * mis-set availability window is precisely the kind of change a person wants
+ * back, and the schedule it silently reflowed comes back with it.
+ */
+interface JournalInserts {
+  tasks: NewTask;
+  task_occurrences: NewTaskOccurrence;
+  appointments: NewAppointment;
+  calendars: NewCalendar;
+  calendar_windows: NewCalendarWindow;
+  categories: NewCategory;
+  availability_windows: NewAvailabilityWindow;
+  week_type_overrides: NewWeekTypeOverride;
+}
+
+/**
+ * `satisfies` rather than an annotation: it holds the map and the insert types
+ * above to the same key set — a table added to one and not the other is a
+ * compile error — while `keyof typeof` below still reads the literal keys.
  */
 const JOURNALLED = {
   tasks,
   task_occurrences: taskOccurrences,
   appointments,
-} as const;
+  calendars,
+  calendar_windows: calendarWindows,
+  categories,
+  availability_windows: availabilityWindows,
+  week_type_overrides: weekTypeOverrides,
+} satisfies Record<keyof JournalInserts, PgTable>;
 
 export type JournalTable = keyof typeof JOURNALLED;
 
@@ -74,11 +115,7 @@ export interface CommandJournal {
 }
 
 /** Per-table insert types, so call sites keep their column-name checking. */
-type JournalValues<T extends JournalTable> = T extends 'tasks'
-  ? Partial<NewTask>
-  : T extends 'task_occurrences'
-    ? Partial<NewTaskOccurrence>
-    : Partial<NewAppointment>;
+type JournalValues<T extends JournalTable> = Partial<JournalInserts[T]>;
 
 /**
  * Managed by the `touch_row()` trigger (§5.4), so never restored.
@@ -90,7 +127,7 @@ const TRIGGER_MANAGED: ReadonlySet<string> = new Set(['version', 'updatedAt']);
 
 /**
  * Drizzle's query builders are typed per table and this module is deliberately
- * not — treating three tables identically is its entire job. The casts are
+ * not — treating every table identically is its entire job. The casts are
  * confined to the four functions below; every call site above them passes a
  * `Partial<NewTask>` and friends, so column names are still checked where they
  * are written.

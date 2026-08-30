@@ -1,17 +1,17 @@
 import { eq } from 'drizzle-orm';
-import { availabilityWindows, calendars, categories, tenants } from '../../src/db/schema/index.js';
-import { withSystemPrivileges } from '../../src/db/context.js';
+import { tenants } from '../../src/db/schema/index.js';
 import { createTestApp, type Signed, type TestApp } from './auth.js';
 import { MONDAY_0900, TIME_ZONE } from './world.js';
 import type { Database } from '../../src/db/client.js';
-import type { CommandRequest } from '@ambitime/shared';
+import type { CommandRequest, CreatedEntity } from '@ambitime/shared';
 
 /**
  * A signed-in user with a working calendar, reached only over HTTP.
  *
  * The M6 world builds its state by inserting rows and calls `applyCommand`
  * directly, which is right for testing the command layer. This one goes through
- * the API for everything it can: a request is what a client will actually send,
+ * the API for **everything**, its own calendar and category included: a request
+ * is what a client will actually send,
  * and the parts M9 adds — session to context, validation, error mapping,
  * presentation — only exist on that path.
  *
@@ -44,6 +44,7 @@ export interface CommandOk {
     diagnostics: { code: string; taskId: string }[];
     unschedulable: { taskId: string; reason: string }[];
   }[];
+  created: { entity: CreatedEntity['entity']; id: string }[];
   attention: { appointmentId: string; title: string }[];
 }
 
@@ -57,35 +58,6 @@ export async function createApiWorld(db: Database, at: string = MONDAY_0900): Pr
     .where(eq(tenants.personalOwnerId, session.userId));
   const tenantId = personal!.id;
 
-  // Calendars, categories and availability windows have no commands yet —
-  // §7 does not name any, and inventing some would be building a feature the
-  // spec has not asked for. Seeded on the system path, as M6 does.
-  const { calendarId, categoryId } = await withSystemPrivileges(db, async (tx) => {
-    const [calendar] = await tx
-      .insert(calendars)
-      .values({ tenantId, ownerId: session.userId, name: 'Primary', timezone: TIME_ZONE })
-      .returning({ id: calendars.id });
-    const [category] = await tx
-      .insert(categories)
-      .values({ tenantId, name: 'Work', defaultCooldownMin: 0 })
-      .returning({ id: categories.id });
-
-    if (!calendar || !category) throw new Error('Failed to build the API world');
-
-    await tx.insert(availabilityWindows).values(
-      [1, 2, 3, 4, 5].map((weekday) => ({
-        tenantId,
-        calendarId: calendar.id,
-        categoryId: category.id,
-        weekday,
-        startMin: 9 * 60,
-        endMin: 17 * 60,
-      })),
-    );
-
-    return { calendarId: calendar.id, categoryId: category.id };
-  });
-
   const get = (path: string) => app.as(session, path);
 
   const command = (body: CommandRequest) =>
@@ -94,6 +66,39 @@ export async function createApiWorld(db: Database, at: string = MONDAY_0900): Pr
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+  const run = async (body: CommandRequest): Promise<CommandOk> => {
+    const response = await command(body);
+    if (response.status !== 200) {
+      throw new Error(`Command ${body.type} failed: ${response.status} ${await response.text()}`);
+    }
+    return (await response.json()) as CommandOk;
+  };
+
+  // Built through commands, over HTTP, exactly as the settings screen will do
+  // it. Until M11 there was no command for any of this and the fixture inserted
+  // rows on the system path; that it no longer needs to is the milestone.
+  const calendarId = created(
+    await run({ type: 'CreateCalendar', params: { name: 'Primary', timezone: TIME_ZONE } }),
+    'calendar',
+  );
+  const categoryId = created(
+    await run({ type: 'CreateCategory', params: { name: 'Work', defaultCooldownMin: 0 } }),
+    'category',
+  );
+
+  await run({
+    type: 'SetAvailabilityWindows',
+    params: {
+      calendarId,
+      categoryId,
+      windows: [1, 2, 3, 4, 5].map((weekday) => ({
+        weekday,
+        startMin: 9 * 60,
+        endMin: 17 * 60,
+      })),
+    },
+  });
 
   return {
     app,
@@ -104,13 +109,15 @@ export async function createApiWorld(db: Database, at: string = MONDAY_0900): Pr
     categoryId,
     get,
     command,
-
-    run: async (body) => {
-      const response = await command(body);
-      if (response.status !== 200) {
-        throw new Error(`Command ${body.type} failed: ${response.status} ${await response.text()}`);
-      }
-      return (await response.json()) as CommandOk;
-    },
+    run,
   };
+}
+
+/** The single entity of a kind a command created, or a loud failure. */
+function created(result: CommandOk, entity: CreatedEntity['entity']): string {
+  const matches = result.created.filter((row) => row.entity === entity);
+  if (matches.length !== 1) {
+    throw new Error(`Expected exactly one created ${entity}, got ${matches.length}`);
+  }
+  return matches[0]!.id;
 }

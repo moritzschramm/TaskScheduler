@@ -7,6 +7,18 @@ import { createTask, editTask } from './handlers/tasks.js';
 import { cancelTask, extendTask, moveToBacklog, promoteFromBacklog } from './handlers/lifecycle.js';
 import { swapForward, swapTasks } from './handlers/swap.js';
 import { redo, undo } from './handlers/history.js';
+import {
+  configureCalendar,
+  createCalendar,
+  createCategory,
+  createWeekTypeOverride,
+  deleteCategory,
+  deleteWeekTypeOverride,
+  editCategory,
+  editWeekTypeOverride,
+  setAvailabilityWindows,
+  setCalendarWindows,
+} from './handlers/configuration.js';
 
 /**
  * The command vocabulary, bound to the code that carries each one out.
@@ -51,6 +63,26 @@ export function dispatch(command: Command, ctx: CommandContext): Promise<Handler
       return moveToBacklog(command.params, ctx);
     case 'AddUnavailability':
       return addUnavailability(command.params, ctx);
+    case 'CreateCalendar':
+      return createCalendar(command.params, ctx);
+    case 'ConfigureCalendar':
+      return configureCalendar(command.params, ctx);
+    case 'SetCalendarWindows':
+      return setCalendarWindows(command.params, ctx);
+    case 'CreateCategory':
+      return createCategory(command.params, ctx);
+    case 'EditCategory':
+      return editCategory(command.params, ctx);
+    case 'DeleteCategory':
+      return deleteCategory(command.params, ctx);
+    case 'SetAvailabilityWindows':
+      return setAvailabilityWindows(command.params, ctx);
+    case 'CreateWeekTypeOverride':
+      return createWeekTypeOverride(command.params, ctx);
+    case 'EditWeekTypeOverride':
+      return editWeekTypeOverride(command.params, ctx);
+    case 'DeleteWeekTypeOverride':
+      return deleteWeekTypeOverride(command.params, ctx);
     case 'Undo':
       return undo(command.params, ctx);
     case 'Redo':
@@ -67,7 +99,12 @@ export function dispatch(command: Command, ctx: CommandContext): Promise<Handler
  * optimistic lock is worse than none, because the caller believes it is
  * protected.
  */
-export const COMMAND_TARGETS: Readonly<Record<CommandType, 'task' | 'appointment' | null>> = {
+export const COMMAND_TARGETS: Readonly<
+  Record<
+    CommandType,
+    'task' | 'appointment' | 'calendar' | 'category' | 'week type override' | null
+  >
+> = {
   CreateTask: null,
   EditTask: 'task',
   AddAppointment: null,
@@ -86,6 +123,19 @@ export const COMMAND_TARGETS: Readonly<Record<CommandType, 'task' | 'appointment
   PromoteFromBacklog: 'task',
   MoveToBacklog: 'task',
   AddUnavailability: null,
+  CreateCalendar: null,
+  ConfigureCalendar: 'calendar',
+  // The set is the unit, and a set has no version of its own — the calendar it
+  // belongs to does, and that is what a stale editor would be holding.
+  SetCalendarWindows: 'calendar',
+  CreateCategory: null,
+  EditCategory: 'category',
+  DeleteCategory: 'category',
+  // Addressed by calendar *and* category; the calendar is the versioned half.
+  SetAvailabilityWindows: 'calendar',
+  CreateWeekTypeOverride: 'calendar',
+  EditWeekTypeOverride: 'week type override',
+  DeleteWeekTypeOverride: 'week type override',
   // Undo names no entity at all: what it reverses is decided by the log, and a
   // version supplied against "whatever I did last" guards nothing.
   Undo: null,
