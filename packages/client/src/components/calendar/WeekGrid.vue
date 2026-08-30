@@ -16,9 +16,16 @@ const props = withDefaults(
     dayStartMin?: number;
     dayEndMin?: number;
     locale?: string;
+    /** M11: the grid becomes a way in to the editors, not only a picture. */
+    editable?: boolean;
   }>(),
-  { today: null, dayStartMin: 6 * 60, dayEndMin: 22 * 60, locale: 'en-GB' },
+  { today: null, dayStartMin: 6 * 60, dayEndMin: 22 * 60, locale: 'en-GB', editable: false },
 );
+
+const emit = defineEmits<{
+  selectBlock: [block: GridBlock];
+  addBlock: [day: CivilDate];
+}>();
 
 /** Pixels per minute. One number, so the axis and the blocks cannot disagree. */
 const SCALE = 1.1;
@@ -89,10 +96,20 @@ function classesFor(block: GridBlock): string {
         :data-day="`${column.day.year}-${String(column.day.month).padStart(2, '0')}-${String(column.day.day).padStart(2, '0')}`"
       >
         <div
-          class="h-8 border-b px-2 text-xs font-medium"
+          class="flex h-8 items-center justify-between gap-1 border-b px-2 text-xs font-medium"
           :class="column.isToday ? 'text-primary' : 'text-muted-foreground'"
         >
-          {{ column.label }}
+          <span>{{ column.label }}</span>
+          <button
+            v-if="editable"
+            type="button"
+            class="hover:text-foreground px-1 leading-none"
+            :aria-label="`Add a fixed block on ${column.label}`"
+            data-testid="add-block"
+            @click="emit('addBlock', column.day)"
+          >
+            +
+          </button>
         </div>
 
         <div
@@ -108,23 +125,26 @@ function classesFor(block: GridBlock): string {
             aria-hidden="true"
           />
 
-          <article
+          <component
+            :is="editable ? 'button' : 'article'"
             v-for="block in column.blocks"
             :key="block.key"
-            class="absolute inset-x-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-xs leading-tight"
+            :type="editable ? 'button' : undefined"
+            class="absolute inset-x-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight"
             :class="classesFor(block)"
             :style="{ top: `${offsetOf(block.startMin)}px`, height: `${heightOf(block)}px` }"
             :data-testid="`block-${block.kind}`"
             :data-title="block.title"
             :data-start-min="block.startMin"
             :data-end-min="block.endMin"
+            @click="editable && emit('selectBlock', block)"
           >
             <p class="truncate font-medium">
               <span v-if="block.continuesBefore" aria-hidden="true">↑ </span>{{ block.title
               }}<span v-if="block.continuesAfter" aria-hidden="true"> ↓</span>
             </p>
             <p class="tabular-nums opacity-70">{{ block.label }}</p>
-          </article>
+          </component>
         </div>
       </div>
     </div>

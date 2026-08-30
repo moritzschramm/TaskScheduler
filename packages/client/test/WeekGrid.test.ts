@@ -29,8 +29,10 @@ const block: ScheduledBlock = {
 const standup: FixedBlock = {
   appointmentId: 'appt-1',
   title: 'Standup',
+  notes: null,
   start: '2026-03-23T08:00:00.000Z',
   end: '2026-03-23T08:30:00.000Z',
+  version: 1,
   isUnavailability: false,
   isInternal: true,
   status: 'confirmed',

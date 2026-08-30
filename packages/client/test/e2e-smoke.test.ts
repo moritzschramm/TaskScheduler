@@ -9,6 +9,7 @@ import App from '@/App.vue';
 import { resetClock, setClock } from '@/lib/clock';
 import { createAppRouter } from '@/router';
 import { loadSession, signIn } from '@/lib/session';
+import type { TaskNode } from '@ambitime/shared';
 
 /**
  * Seed through the real API, render the real client (plan M10).
@@ -228,7 +229,203 @@ describe('seed via the API, render the client', () => {
     expect(columns[0]?.find('[data-testid="block-appointment"]').exists()).toBe(true);
     expect(columns[0]?.find('[data-testid="block-task"]').exists()).toBe(false);
   });
+
+  /**
+   * Plan M11b: a task tree built through the UI, and an inherited property
+   * overridden on a child.
+   *
+   * The acceptance the plan asks for is inheritance being real rather than
+   * decorative, so the assertion is on what the *server* says afterwards: the
+   * child's own value against its effective one. A form that showed the right
+   * thing and sent the wrong patch would pass a markup test and fail this.
+   */
+  it('builds a task tree and overrides an inherited property', async () => {
+    const email = `tree-${Date.now()}@example.test`;
+    const { calendarId } = await seed(email);
+
+    await signIn(email, PASSWORD);
+    await loadSession();
+
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+    await waitFor(() => wrapper.findAll('[data-testid="task-row"]').length > 0);
+
+    // A parent with a priority of its own.
+    await wrapper.find('[data-testid="add-root-task"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[data-testid="task-title"]').setValue('Ship the thing');
+    await wrapper
+      .find('[data-testid="field-priority"] [data-testid="override-toggle"]')
+      .trigger('click');
+    await wrapper.find('[data-testid="task-priority"]').setValue('7');
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+    await settle();
+
+    const parentRow = wrapper
+      .findAll('[data-testid="task-row"]')
+      .find((row) => row.text().includes('Ship the thing'));
+    expect(parentRow).toBeDefined();
+
+    // A subtask under it, with nothing of its own.
+    await parentRow!.find('[data-testid="add-subtask"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="editor-parent"]').text()).toContain('Ship the thing');
+    await wrapper.find('[data-testid="task-title"]').setValue('Write the docs');
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+    await settle();
+
+    const tasks = await readTasks(calendarId);
+    const child = tasks.find((task) => task.title === 'Write the docs')!;
+
+    // Nearest-ancestor-wins, straight from the server: the child set nothing
+    // and inherits 7.
+    expect(child.depth).toBe(2);
+    expect(child.ownPriority).toBeNull();
+    expect(child.effectivePriority).toBe(7);
+
+    // Now override it on the child.
+    await wrapper
+      .findAll('[data-testid="select-task"]')
+      .find((button) => button.text() === 'Write the docs')!
+      .trigger('click');
+    await flushPromises();
+    await wrapper
+      .find('[data-testid="field-priority"] [data-testid="override-toggle"]')
+      .trigger('click');
+    await wrapper.find('[data-testid="task-priority"]').setValue('2');
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+    await settle();
+
+    const overridden = (await readTasks(calendarId)).find(
+      (task) => task.title === 'Write the docs',
+    )!;
+    expect(overridden.ownPriority).toBe(2);
+    expect(overridden.effectivePriority).toBe(2);
+
+    // And clearing it puts the inheritance back — the half of §4.4 a plain
+    // form cannot express at all.
+    await wrapper
+      .find('[data-testid="field-priority"] [data-testid="override-toggle"]')
+      .trigger('click');
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+    await settle();
+
+    const reverted = (await readTasks(calendarId)).find((task) => task.title === 'Write the docs')!;
+    expect(reverted.ownPriority).toBeNull();
+    expect(reverted.effectivePriority).toBe(7);
+  });
+
+  it('refuses a subtask due after its container, in the form', async () => {
+    const email = `due-${Date.now()}@example.test`;
+    await seed(email);
+
+    await signIn(email, PASSWORD);
+    await loadSession();
+
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+    await waitFor(() => wrapper.findAll('[data-testid="task-row"]').length > 0);
+
+    await wrapper.find('[data-testid="add-root-task"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[data-testid="task-title"]').setValue('Ship the thing');
+    await wrapper
+      .find('[data-testid="field-due"] [data-testid="override-toggle"]')
+      .trigger('click');
+    await wrapper.find('[data-testid="task-due"]').setValue('2026-03-27T17:00');
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+    await settle();
+
+    const parentRow = wrapper
+      .findAll('[data-testid="task-row"]')
+      .find((row) => row.text().includes('Ship the thing'))!;
+    await parentRow.find('[data-testid="add-subtask"]').trigger('click');
+    await flushPromises();
+
+    await wrapper.find('[data-testid="task-title"]').setValue('Write the docs');
+    await wrapper
+      .find('[data-testid="field-due"] [data-testid="override-toggle"]')
+      .trigger('click');
+    await wrapper.find('[data-testid="task-due"]').setValue('2026-04-03T17:00');
+    await flushPromises();
+
+    // Said in the form, before the round trip — the database would refuse it
+    // too, with a deferred trigger, but only after the typing was done.
+    expect(wrapper.find('[data-testid="due-conflict"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="save-task"]').attributes('disabled')).toBeDefined();
+  });
+
+  /** Plan M11b: fixed blocks, made from the grid. */
+  it('adds an appointment from the week grid', async () => {
+    const email = `appt-${Date.now()}@example.test`;
+    await seed(email);
+
+    await signIn(email, PASSWORD);
+    await loadSession();
+
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+    await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+    // Wednesday's "+" seeds the editor with Wednesday, not with today.
+    await wrapper.findAll('[data-testid="add-block"]')[2]!.trigger('click');
+    await flushPromises();
+    expect(
+      (wrapper.find('[data-testid="appointment-start"]').element as HTMLInputElement).value,
+    ).toBe('2026-03-25T09:00');
+
+    await wrapper.find('[data-testid="appointment-title"]').setValue('Design review');
+    await wrapper.find('[data-testid="save-appointment"]').trigger('click');
+    await settle();
+
+    const columns = wrapper.findAll('[data-testid="day-column"]');
+    expect(columns[2]!.find('[data-testid="block-appointment"]').attributes('data-title')).toBe(
+      'Design review',
+    );
+  });
+
+  it('surfaces the overlap refusal as a sentence', async () => {
+    const email = `overlap-${Date.now()}@example.test`;
+    await seed(email);
+
+    await signIn(email, PASSWORD);
+    await loadSession();
+
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+    await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+    // The seed put "Standup" on Monday 09:00–09:30 Berlin.
+    await wrapper.findAll('[data-testid="add-block"]')[0]!.trigger('click');
+    await flushPromises();
+    await wrapper.find('[data-testid="appointment-title"]').setValue('Clash');
+    await wrapper.find('[data-testid="save-appointment"]').trigger('click');
+    await settle();
+
+    // The exclusion constraint is the authority (§5.3); what reaches the user
+    // is the sentence the command layer wrote about it.
+    expect(wrapper.find('[data-testid="calendar-error"]').text()).toContain('overlaps');
+  });
 });
+
+/** The task list as the server reports it, for assertions the DOM cannot make. */
+async function readTasks(calendarId: string): Promise<TaskNode[]> {
+  const response = await fetch(`/api/calendars/${calendarId}/tasks`);
+  const body = (await response.json()) as { tasks: TaskNode[] };
+  return body.tasks;
+}
 
 /**
  * Waits until nothing is in flight, chained requests included.

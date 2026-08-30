@@ -4,6 +4,7 @@ import {
   instantToZonedCivil,
   isoWeekdayFromDays,
   MINUTES_PER_DAY,
+  wallClockToInstant,
   zoneOffsetMinutes,
   type CivilDate,
   type Instant,
@@ -121,6 +122,36 @@ export function weekdayNames(locale: string): string[] {
   return Array.from({ length: 7 }, (_, offset) =>
     format.format(new Date(Date.UTC(2026, 2, 23 + offset))),
   );
+}
+
+/**
+ * An instant as `<input type="datetime-local">` wants it: `YYYY-MM-DDTHH:MM`
+ * wall clock, in the **calendar's** zone.
+ *
+ * A datetime-local field carries no zone at all, which is exactly right here —
+ * the number a user types is a wall clock reading, and which instant it names
+ * depends on the calendar, not on where the browser happens to be (§13).
+ */
+export function toLocalInput(iso: string, timeZone: string): string {
+  const date = localDate(iso, timeZone);
+  return `${formatCivilDate(date)}T${formatMinuteOfDay(minuteOfDay(iso, timeZone))}`;
+}
+
+/** The inverse: a wall clock reading in `timeZone` back to an ISO instant. */
+export function fromLocalInput(value: string, timeZone: string): string | null {
+  const [datePart, timePart] = value.split('T');
+  if (datePart === undefined || timePart === undefined) return null;
+
+  const minutes = parseMinuteOfDay(timePart.slice(0, 5));
+  if (minutes === null) return null;
+
+  try {
+    return toIso(wallClockToInstant(parseCivilDate(datePart), minutes, timeZone));
+  } catch {
+    // An unparseable date, which a half-typed field produces on the way to a
+    // real one. Not a value; not an error either.
+    return null;
+  }
 }
 
 /** `2026-03-23` → `Mon 23 Mar`, in the user's locale. */
