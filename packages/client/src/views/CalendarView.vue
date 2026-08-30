@@ -3,10 +3,12 @@ import { computed, onMounted, ref, watch } from 'vue';
 import type { BacklogEntry, CalendarSummary, TaskNode } from '@ambitime/shared';
 import { wallClockToInstant } from '@ambitime/scheduler';
 import type { CivilDate } from '@ambitime/scheduler';
+import UndoRedo from '@/components/UndoRedo.vue';
 import AppointmentEditor from '@/components/calendar/AppointmentEditor.vue';
 import WeekGrid from '@/components/calendar/WeekGrid.vue';
 import BacklogPanel from '@/components/panels/BacklogPanel.vue';
 import TaskListPanel from '@/components/panels/TaskListPanel.vue';
+import TaskActions from '@/components/tasks/TaskActions.vue';
 import TaskEditor from '@/components/tasks/TaskEditor.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,10 +19,16 @@ import {
   type ScheduleView,
 } from '@/lib/schedule';
 import { ApiError } from '@/lib/api';
-import { fetchConfiguration, runCommand } from '@/lib/commands';
+import { fetchConfiguration, fetchHistory, runCommand } from '@/lib/commands';
 import { now } from '@/lib/clock';
-import { addDays, localDate, toIso, weekDays } from '@/lib/time';
-import type { Category, CommandRequest, FixedBlock } from '@ambitime/shared';
+import { addDays, formatCivilDate, localDate, toIso, weekDays } from '@/lib/time';
+import type {
+  Category,
+  CommandRequest,
+  FixedBlock,
+  HistoryView,
+  ScheduledBlock,
+} from '@ambitime/shared';
 import type { GridBlock } from '@/lib/grid';
 
 /**
@@ -48,6 +56,7 @@ const view = ref<ScheduleView | null>(null);
 const backlog = ref<BacklogEntry[]>([]);
 const tasks = ref<TaskNode[]>([]);
 const categories = ref<Category[]>([]);
+const history = ref<HistoryView | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(true);
 
@@ -87,14 +96,16 @@ async function load() {
     const id = selectedId.value;
     if (id === null) return;
 
-    const [schedule, entries, taskList, configuration] = await Promise.all([
+    const [schedule, entries, taskList, configuration, log] = await Promise.all([
       fetchSchedule(id),
       fetchBacklog(id),
       fetchTasks(id),
       fetchConfiguration(id),
+      fetchHistory(),
     ]);
 
     categories.value = configuration.categories;
+    history.value = log;
 
     view.value = schedule;
     backlog.value = entries;
@@ -179,6 +190,50 @@ function editBlock(block: GridBlock): void {
   if (found !== undefined) editing.value = { kind: 'block', block: found };
 }
 
+/**
+ * A block dropped, or nudged, onto a new local start (spec §7.3, §13).
+ *
+ * The grid speaks in local minutes, because that is what a user dragged; the
+ * command speaks in instants. The conversion happens here, once, in the
+ * calendar's zone — the same helper the editors use, so a drag across a DST
+ * weekend lands on the wall clock the user saw rather than an hour off it.
+ */
+async function moveBlock(payload: {
+  block: GridBlock;
+  day: CivilDate;
+  startMin: number;
+}): Promise<void> {
+  const taskId = payload.block.taskId;
+  if (taskId === undefined) return;
+
+  const zone = calendar.value?.timezone ?? 'UTC';
+  await submit({
+    type: 'MoveTask',
+    params: { taskId, datetime: toIso(wallClockToInstant(payload.day, payload.startMin, zone)) },
+  });
+}
+
+async function postponeDay(day: CivilDate): Promise<void> {
+  await submit({
+    type: 'PostponeRestOfDay',
+    params: { calendarId: selectedId.value!, date: formatCivilDate(day) },
+  });
+}
+
+/** The placement of the task the editor has open, if it has one. */
+const selectedPlacement = computed<ScheduledBlock | null>(() => {
+  const open = editing.value;
+  if (open.kind !== 'task' || open.task === null) return null;
+  return view.value?.schedule.blocks.find((block) => block.taskId === open.task!.id) ?? null;
+});
+
+/** Everything else on the calendar, as swap candidates (§7.3). */
+const swapCandidates = computed<ScheduledBlock[]>(() => {
+  const open = editing.value;
+  if (open.kind !== 'task' || open.task === null) return [];
+  return (view.value?.schedule.blocks ?? []).filter((block) => block.taskId !== open.task!.id);
+});
+
 function addBlockOn(day: CivilDate): void {
   const zone = calendar.value?.timezone ?? 'UTC';
   const at = wallClockToInstant(day, 9 * 60, zone);
@@ -210,6 +265,7 @@ watch(selectedId, load);
       </div>
 
       <div class="flex items-center gap-2">
+        <UndoRedo :history="history" :submit="submit" />
         <Button variant="outline" size="sm" data-testid="week-back" @click="shiftWeek(-1)">
           Previous
         </Button>
@@ -233,6 +289,8 @@ watch(selectedId, load);
         editable
         @select-block="editBlock"
         @add-block="addBlockOn"
+        @move-block="moveBlock"
+        @postpone-day="postponeDay"
       />
 
       <div class="grid gap-8 lg:grid-cols-[2fr_1fr]">
@@ -252,19 +310,29 @@ watch(selectedId, load);
         class="bg-card rounded-lg border p-5"
         data-testid="editor-panel"
       >
-        <TaskEditor
-          v-if="editing.kind === 'task'"
-          :key="editing.task?.id ?? `new-${editing.parent?.id ?? 'root'}`"
-          :task="editing.task"
-          :parent="editing.parent"
-          :calendar-id="calendar.id"
-          :categories="categories"
-          :time-zone="calendar.timezone"
-          :submit="submit"
-          @cancel="editing = { kind: 'none' }"
-        />
+        <template v-if="editing.kind === 'task'">
+          <TaskEditor
+            :key="editing.task?.id ?? `new-${editing.parent?.id ?? 'root'}`"
+            :task="editing.task"
+            :parent="editing.parent"
+            :calendar-id="calendar.id"
+            :categories="categories"
+            :time-zone="calendar.timezone"
+            :submit="submit"
+            @cancel="editing = { kind: 'none' }"
+          />
+          <div v-if="editing.task && editing.task.isLeaf" class="mt-6 border-t pt-5">
+            <TaskActions
+              :task="editing.task"
+              :placement="selectedPlacement"
+              :others="swapCandidates"
+              :time-zone="calendar.timezone"
+              :submit="submit"
+            />
+          </div>
+        </template>
         <AppointmentEditor
-          v-else
+          v-else-if="editing.kind === 'block'"
           :key="editing.block?.appointmentId ?? 'new-block'"
           :block="editing.block"
           :calendar-id="calendar.id"

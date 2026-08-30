@@ -50,6 +50,8 @@ function task(overrides: Partial<TaskNode> = {}): TaskNode {
     effectiveFocusLevel: null,
     ownCooldownOverrideMin: null,
     effectiveCooldownOverrideMin: null,
+    manualFloor: null,
+    manualBias: null,
     ...overrides,
   };
 }

@@ -1,10 +1,12 @@
 import {
   calendarConfigurationSchema,
   commandResultSchema,
+  historySchema,
   type CalendarConfiguration,
   type CommandRequest,
   type CommandResult,
   type CreatedEntity,
+  type HistoryView,
 } from '@ambitime/shared';
 import { api, expectOk } from './api';
 
@@ -47,4 +49,10 @@ export async function fetchConfiguration(calendarId: string): Promise<CalendarCo
   });
 
   return calendarConfigurationSchema.parse(await expectOk(response));
+}
+
+/** What undo and redo would do next (spec §7.5). */
+export async function fetchHistory(): Promise<HistoryView> {
+  const response = await api.api.history.$get();
+  return historySchema.parse(await expectOk(response));
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FixedBlock, ScheduledBlock } from '@ambitime/shared';
-import { blocksForDay } from '@/lib/grid';
+import { blocksForDay, dragOffsetMinutes, movedStartMin, SCALE, snapToGrid } from '@/lib/grid';
 import { minuteOfDay, parseCivilDate, weekDays } from '@/lib/time';
 
 /**
@@ -148,5 +148,48 @@ describe('minuteOfDay', () => {
     expect(minuteOfDay('2026-03-23T08:00:00.000Z', 'UTC')).toBe(480);
     // A viewer's own zone is irrelevant: the calendar's is what is drawn.
     expect(minuteOfDay('2026-03-23T08:00:00.000Z', 'America/New_York')).toBe(240);
+  });
+});
+
+/**
+ * The drag grid of spec §13: "UI drag grid snaps to 15-minute blocks; a text
+ * field allows exact minutes."
+ *
+ * Arithmetic, so it is tested as arithmetic — the component only has to render
+ * what these return, and a wrong answer here would be a task rescheduled to a
+ * time nobody asked for.
+ */
+describe('drag arithmetic', () => {
+  it('snaps to the nearest quarter hour', () => {
+    expect(snapToGrid(0)).toBe(0);
+    expect(snapToGrid(7)).toBe(0);
+    expect(snapToGrid(8)).toBe(15);
+    expect(snapToGrid(22)).toBe(15);
+    expect(snapToGrid(23)).toBe(30);
+    expect(snapToGrid(-8)).toBe(-15);
+  });
+
+  it('converts a pixel delta through the same scale the layout uses', () => {
+    // SCALE is exported rather than duplicated, so a change to the row height
+    // cannot make a drop land somewhere other than where it was dropped.
+    expect(dragOffsetMinutes(SCALE * 60)).toBe(60);
+    expect(dragOffsetMinutes(SCALE * 8)).toBe(15);
+    expect(dragOffsetMinutes(-SCALE * 30)).toBe(-30);
+  });
+
+  it('clamps a move to the day it was dragged on', () => {
+    // 08:00–09:00 UTC, drawn on a UTC calendar: 480 to 540 local minutes.
+    const day = parseCivilDate('2026-03-23');
+    const [drawn] = blocksForDay(day, 'UTC', [task()], []);
+
+    expect(movedStartMin(drawn!, 120)).toBe(10 * 60);
+
+    // Dragged off the top: the user was reaching for the start of the day and
+    // overshot. Rescheduling it to the previous day would be a surprising
+    // answer to a slip of the hand.
+    expect(movedStartMin(drawn!, -600, 6 * 60)).toBe(6 * 60);
+
+    // And off the bottom, where a one-hour block can start no later than 23:00.
+    expect(movedStartMin(drawn!, 10_000)).toBe(23 * 60);
   });
 });

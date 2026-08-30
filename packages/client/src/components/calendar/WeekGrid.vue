@@ -1,8 +1,15 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { FixedBlock, ScheduledBlock } from '@ambitime/shared';
 import type { CivilDate } from '@ambitime/scheduler';
-import { blocksForDay, type GridBlock } from '@/lib/grid';
+import {
+  blocksForDay,
+  dragOffsetMinutes,
+  movedStartMin,
+  SCALE,
+  SNAP_MINUTES,
+  type GridBlock,
+} from '@/lib/grid';
 import { formatDayLabel, formatMinuteOfDay, sameCivilDate } from '@/lib/time';
 
 const props = withDefaults(
@@ -25,10 +32,98 @@ const props = withDefaults(
 const emit = defineEmits<{
   selectBlock: [block: GridBlock];
   addBlock: [day: CivilDate];
+  /** A task dropped, or nudged, onto a new local start (spec §7.3, §13). */
+  moveBlock: [payload: { block: GridBlock; day: CivilDate; startMin: number }];
+  postponeDay: [day: CivilDate];
 }>();
 
-/** Pixels per minute. One number, so the axis and the blocks cannot disagree. */
-const SCALE = 1.1;
+/**
+ * A move in progress: which block, and how far it has been dragged so far.
+ *
+ * Held here rather than committed on every pointer move because a drag is one
+ * intent, not fifty. The block follows the pointer; only the drop emits a
+ * command.
+ */
+const pending = ref<{ key: string; day: CivilDate; offsetMin: number } | null>(null);
+
+/** Where the pointer went down, in pixels — the origin every delta is from. */
+let dragOriginY: number | null = null;
+
+function isMoving(block: GridBlock): boolean {
+  return pending.value?.key === block.key;
+}
+
+/** The top a block is drawn at, including any move in progress. */
+function startMinOf(block: GridBlock): number {
+  return isMoving(block)
+    ? movedStartMin(block, pending.value!.offsetMin, props.dayStartMin)
+    : block.startMin;
+}
+
+function beginDrag(block: GridBlock, day: CivilDate, event: PointerEvent): void {
+  // Only task blocks move. An appointment is a fixed block by definition
+  // (§6.2 rule 2); dragging one would be editing it, which the editor does.
+  if (!props.editable || block.kind !== 'task') return;
+
+  dragOriginY = event.clientY;
+  pending.value = { key: block.key, day, offsetMin: 0 };
+  (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+}
+
+function duringDrag(event: PointerEvent): void {
+  if (pending.value === null || dragOriginY === null) return;
+  pending.value = {
+    ...pending.value,
+    offsetMin: dragOffsetMinutes(event.clientY - dragOriginY),
+  };
+}
+
+function endDrag(block: GridBlock): void {
+  const move = pending.value;
+  dragOriginY = null;
+  pending.value = null;
+  if (move === null || move.key !== block.key) return;
+
+  // A drag that ended where it started is a click, not a move. Emitting a
+  // command for it would put a floor on a task the user only wanted to look at.
+  if (move.offsetMin === 0) {
+    emit('selectBlock', block);
+    return;
+  }
+
+  emit('moveBlock', {
+    block,
+    day: move.day,
+    startMin: movedStartMin(block, move.offsetMin, props.dayStartMin),
+  });
+}
+
+/**
+ * The keyboard equivalent §14 requires: "every drag-and-drop action needs a
+ * keyboard-accessible equivalent".
+ *
+ * Arrows nudge by the same 15 minutes the pointer snaps to and move the block
+ * on screen; Enter commits, Escape abandons. That is the same three-part
+ * gesture a drag is — pick up, move, drop — rather than a different feature
+ * wearing its name.
+ */
+function nudge(block: GridBlock, day: CivilDate, steps: number): void {
+  if (!props.editable || block.kind !== 'task') return;
+  const offsetMin = (isMoving(block) ? pending.value!.offsetMin : 0) + steps * SNAP_MINUTES;
+  pending.value = { key: block.key, day, offsetMin };
+}
+
+function commitNudge(block: GridBlock): void {
+  if (!isMoving(block)) return;
+  endDrag(block);
+}
+
+function abandonNudge(): void {
+  pending.value = null;
+  dragOriginY = null;
+}
+
+// `SCALE` lives in `lib/grid` beside the drag arithmetic that depends on it.
 
 const visibleMinutes = computed(() => props.dayEndMin - props.dayStartMin);
 const gridHeight = computed(() => visibleMinutes.value * SCALE);
@@ -100,16 +195,27 @@ function classesFor(block: GridBlock): string {
           :class="column.isToday ? 'text-primary' : 'text-muted-foreground'"
         >
           <span>{{ column.label }}</span>
-          <button
-            v-if="editable"
-            type="button"
-            class="hover:text-foreground px-1 leading-none"
-            :aria-label="`Add a fixed block on ${column.label}`"
-            data-testid="add-block"
-            @click="emit('addBlock', column.day)"
-          >
-            +
-          </button>
+          <span v-if="editable" class="flex items-center gap-1">
+            <button
+              type="button"
+              class="hover:text-foreground px-1 leading-none"
+              :aria-label="`Postpone the rest of ${column.label}`"
+              title="Move the rest of this day's tasks into later days"
+              data-testid="postpone-day"
+              @click="emit('postponeDay', column.day)"
+            >
+              ⤓
+            </button>
+            <button
+              type="button"
+              class="hover:text-foreground px-1 leading-none"
+              :aria-label="`Add a fixed block on ${column.label}`"
+              data-testid="add-block"
+              @click="emit('addBlock', column.day)"
+            >
+              +
+            </button>
+          </span>
         </div>
 
         <div
@@ -130,14 +236,23 @@ function classesFor(block: GridBlock): string {
             v-for="block in column.blocks"
             :key="block.key"
             :type="editable ? 'button' : undefined"
-            class="absolute inset-x-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight"
-            :class="classesFor(block)"
-            :style="{ top: `${offsetOf(block.startMin)}px`, height: `${heightOf(block)}px` }"
+            class="absolute inset-x-1 touch-none overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight"
+            :class="[classesFor(block), isMoving(block) ? 'ring-primary z-10 ring-2' : '']"
+            :style="{ top: `${offsetOf(startMinOf(block))}px`, height: `${heightOf(block)}px` }"
             :data-testid="`block-${block.kind}`"
             :data-title="block.title"
-            :data-start-min="block.startMin"
+            :data-start-min="startMinOf(block)"
             :data-end-min="block.endMin"
-            @click="editable && emit('selectBlock', block)"
+            :data-moving="isMoving(block) ? 'true' : undefined"
+            :aria-grabbed="editable && block.kind === 'task' ? isMoving(block) : undefined"
+            @pointerdown="beginDrag(block, column.day, $event)"
+            @pointermove="duringDrag"
+            @pointerup="endDrag(block)"
+            @keydown.up.prevent="nudge(block, column.day, -1)"
+            @keydown.down.prevent="nudge(block, column.day, 1)"
+            @keydown.enter.prevent="commitNudge(block)"
+            @keydown.esc.prevent="abandonNudge"
+            @click="!isMoving(block) && editable && emit('selectBlock', block)"
           >
             <p class="truncate font-medium">
               <span v-if="block.continuesBefore" aria-hidden="true">↑ </span>{{ block.title

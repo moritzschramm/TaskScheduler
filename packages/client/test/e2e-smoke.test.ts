@@ -418,6 +418,191 @@ describe('seed via the API, render the client', () => {
     // is the sentence the command layer wrote about it.
     expect(wrapper.find('[data-testid="calendar-error"]').text()).toContain('overlaps');
   });
+
+  /**
+   * Plan M12a: the manual actions of spec §7.3, each from the UI.
+   *
+   * One sign-in and one mount for all of them, because the interesting thing is
+   * the *sequence* — a floor set by a drag, then cleared, then a defer on top —
+   * and each assertion is against what the server says afterwards rather than
+   * against the markup that asked for it.
+   */
+  describe('manual actions', () => {
+    let wrapper: ReturnType<typeof mount>;
+    let calendarId: string;
+
+    const taskNamed = async (title: string): Promise<TaskNode> => {
+      const found = (await readTasks(calendarId)).find((task) => task.title === title);
+      if (found === undefined) throw new Error(`no task called ${title}`);
+      return found;
+    };
+
+    beforeEach(async () => {
+      const email = `gestures-${Date.now()}@example.test`;
+      ({ calendarId } = await seed(email));
+
+      await signIn(email, PASSWORD);
+      await loadSession();
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/');
+      await router.isReady();
+
+      wrapper = mounted = mount(App, { global: { plugins: [router] } });
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+    });
+
+    /** Opens the actions panel for the task placed on Tuesday. */
+    const openTuesdayTask = async (): Promise<void> => {
+      await wrapper
+        .findAll('[data-testid="day-column"]')[1]!
+        .find('[data-testid="block-task"]')
+        .trigger('click');
+      await settle();
+    };
+
+    it('nudges a block with the keyboard and persists the drop', async () => {
+      // §14 requires a keyboard equivalent for every drag gesture. Two nudges
+      // down is half an hour, at the same 15-minute step the pointer snaps to.
+      const block = wrapper
+        .findAll('[data-testid="day-column"]')[1]!
+        .find('[data-testid="block-task"]');
+      expect(block.attributes('data-start-min')).toBe('540');
+
+      await block.trigger('keydown', { key: 'ArrowDown' });
+      await block.trigger('keydown', { key: 'ArrowDown' });
+
+      // Moved on screen before anything was sent: the drag is one intent, and
+      // only the drop commits it.
+      expect(block.attributes('data-start-min')).toBe('570');
+      expect((await taskNamed('Tuesday work')).manualFloor).toBe('2026-03-24T08:00:00.000Z');
+
+      await block.trigger('keydown', { key: 'Enter' });
+      await settle();
+
+      // Two nudges is half an hour: 09:30 Berlin on 2026-03-24, which is
+      // 08:30Z. The floor moved with the block, because a reposition is a
+      // constraint rather than a pin (§7.3).
+      expect((await taskNamed('Tuesday work')).manualFloor).toBe('2026-03-24T08:30:00.000Z');
+    });
+
+    it('abandons a nudge on Escape without sending anything', async () => {
+      const block = wrapper
+        .findAll('[data-testid="day-column"]')[1]!
+        .find('[data-testid="block-task"]');
+
+      await block.trigger('keydown', { key: 'ArrowDown' });
+      expect(block.attributes('data-start-min')).toBe('555');
+
+      await block.trigger('keydown', { key: 'Escape' });
+      await settle();
+
+      expect(block.attributes('data-start-min')).toBe('540');
+      expect((await taskNamed('Tuesday work')).manualFloor).toBe('2026-03-24T08:00:00.000Z');
+    });
+
+    it('shows the floor a reposition left, and clears it on request', async () => {
+      await openTuesdayTask();
+
+      // The seed moved this task, so it already carries a floor. A task at
+      // 09:00 looks identical whether it chose to be or was told to be.
+      expect(wrapper.find('[data-testid="floor-badge"]').text()).toContain('Not before');
+
+      await wrapper.find('[data-testid="clear-floor"]').trigger('click');
+      await settle();
+
+      // §7.3's "explicit user reset" — the one of its three clearing paths
+      // that had no command until M12.
+      const cleared = await taskNamed('Tuesday work');
+      expect(cleared.manualFloor).toBeNull();
+      expect(cleared.manualBias).toBeNull();
+    });
+
+    it('moves to an exact minute the grid could not snap to', async () => {
+      await openTuesdayTask();
+
+      // §13: the grid snaps to 15 minutes, the text field takes any minute.
+      await wrapper.find('[data-testid="exact-start"]').setValue('2026-03-24T14:07');
+      await wrapper.find('[data-testid="move-exact"]').trigger('click');
+      await settle();
+
+      expect((await taskNamed('Tuesday work')).manualFloor).toBe('2026-03-24T13:07:00.000Z');
+    });
+
+    it('defers to the start of tomorrow', async () => {
+      await openTuesdayTask();
+
+      await wrapper.find('[data-testid="defer-tomorrow"]').trigger('click');
+      await settle();
+
+      // "Tomorrow" is measured from `now` — Monday 09:00 Berlin — so the floor
+      // lands at Tuesday 00:00 Berlin, which is 2026-03-23T23:00Z.
+      //
+      // Note this task was *already* placed on Tuesday, so the defer relaxes
+      // its floor rather than pushing it. Whether `tomorrow` should mean "the
+      // day after now" or "the day after wherever this task currently sits" is
+      // a question §7.3 does not settle; the handler has meant the former since
+      // M6 and this pins that rather than quietly changing it.
+      expect((await taskNamed('Tuesday work')).manualFloor).toBe('2026-03-23T23:00:00.000Z');
+    });
+
+    it('extends a task that is taking longer', async () => {
+      await openTuesdayTask();
+
+      await wrapper.find('[data-testid="new-estimate"]').setValue('90');
+      await wrapper.find('[data-testid="extend-task"]').trigger('click');
+      await settle();
+
+      expect((await taskNamed('Tuesday work')).estimatedDurationMin).toBe(90);
+    });
+
+    it('completes a task from the editor', async () => {
+      await openTuesdayTask();
+
+      await wrapper.find('[data-testid="complete-task"]').trigger('click');
+      await settle();
+
+      const done = await taskNamed('Tuesday work');
+      expect(done.status).toBe('completed');
+      // §7.3: completion clears the floor, so the slot and its cooldown are
+      // free for whatever the re-derive wants to put there.
+      expect(done.manualFloor).toBeNull();
+    });
+
+    it('postpones the rest of a day from its column', async () => {
+      await wrapper.findAll('[data-testid="postpone-day"]')[1]!.trigger('click');
+      await settle();
+
+      // Tuesday's task is pushed out of Tuesday; the appointment on Monday is
+      // untouched, because §7.2 leaves those to a person.
+      const columns = wrapper.findAll('[data-testid="day-column"]');
+      expect(columns[1]!.find('[data-testid="block-task"]').exists()).toBe(false);
+      expect(columns[0]!.find('[data-testid="block-appointment"]').exists()).toBe(true);
+    });
+
+    it('undoes the last thing done, from the UI', async () => {
+      await openTuesdayTask();
+      await wrapper.find('[data-testid="clear-floor"]').trigger('click');
+      await settle();
+      expect((await taskNamed('Tuesday work')).manualFloor).toBeNull();
+
+      // The button names what it would reverse rather than making the user
+      // remember.
+      const undo = wrapper.find('[data-testid="undo"]');
+      expect(undo.attributes('disabled')).toBeUndefined();
+      expect(undo.attributes('title')).toBe('Undo: Clear floor');
+
+      await undo.trigger('click');
+      await settle();
+
+      expect((await taskNamed('Tuesday work')).manualFloor).toBe('2026-03-24T08:00:00.000Z');
+
+      // And redo puts it back, because undo is itself a command in the log.
+      await wrapper.find('[data-testid="redo"]').trigger('click');
+      await settle();
+      expect((await taskNamed('Tuesday work')).manualFloor).toBeNull();
+    });
+  });
 });
 
 /** The task list as the server reports it, for assertions the DOM cannot make. */

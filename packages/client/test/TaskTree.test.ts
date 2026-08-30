@@ -39,6 +39,8 @@ function node(id: string, depth: number, overrides: Partial<TaskNode> = {}): Tas
     effectiveFocusLevel: null,
     ownCooldownOverrideMin: null,
     effectiveCooldownOverrideMin: null,
+    manualFloor: null,
+    manualBias: null,
     ...overrides,
   };
 }

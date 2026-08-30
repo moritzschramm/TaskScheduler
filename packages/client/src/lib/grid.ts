@@ -36,6 +36,53 @@ export interface GridBlock {
 const MINUTES_PER_DAY = 1440;
 
 /**
+ * Pixels per minute. One number, shared by the layout and the drag arithmetic,
+ * so what a user sees and what a drop means cannot disagree.
+ */
+export const SCALE = 1.1;
+
+/**
+ * The drag grid of spec §13: "UI drag grid snaps to 15-minute blocks; a text
+ * field allows exact minutes."
+ *
+ * Two affordances, deliberately. Snapping makes the common case fast and the
+ * result tidy; the text field is the escape hatch for the case snapping cannot
+ * express, and it is also the keyboard-accessible path (§14) for a gesture that
+ * would otherwise need a mouse.
+ */
+export const SNAP_MINUTES = 15;
+
+/** Rounds to the nearest 15 minutes; ties go later, as dragging down suggests. */
+export function snapToGrid(minutes: number): number {
+  return Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
+}
+
+/**
+ * A drag's pixel delta as a snapped minute offset.
+ *
+ * Kept here rather than in the component because it is arithmetic, and
+ * arithmetic in a component can only be tested by mounting one.
+ */
+export function dragOffsetMinutes(deltaPixels: number): number {
+  return snapToGrid(deltaPixels / SCALE);
+}
+
+/**
+ * Where a block would start after being moved by `offsetMinutes`, clamped to
+ * the day it is drawn on.
+ *
+ * Clamped rather than allowed to overflow: a block dragged off the top of a
+ * column has not been moved to the previous day — the user was reaching for
+ * 06:00 and overshot — and silently rescheduling it a day earlier is a
+ * surprising answer to a slip of the hand.
+ */
+export function movedStartMin(block: GridBlock, offsetMinutes: number, dayStartMin = 0): number {
+  const duration = block.endMin - block.startMin;
+  const latest = MINUTES_PER_DAY - duration;
+  return Math.min(Math.max(block.startMin + offsetMinutes, dayStartMin), Math.max(latest, 0));
+}
+
+/**
  * The blocks belonging to one local day, positioned.
  *
  * A block spanning midnight appears on **both** days, clipped to each and
