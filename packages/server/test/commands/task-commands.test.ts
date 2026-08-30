@@ -13,6 +13,7 @@ import { resetDomainTables, setupTestDatabase } from '../support/database.js';
 import {
   createWorld,
   MONDAY_0900,
+  seedTask,
   validatePersistedSchedule,
   type World,
 } from '../support/world.js';
@@ -365,5 +366,93 @@ describe('appointments as hard blocks (spec §7.4)', () => {
 
     // A cancelled block stops reserving time, which is the point of cancelling.
     expect(after.schedules[0]!.placements[0]!.interval.start).toBe(toInstant(MONDAY_0900));
+  });
+});
+
+/**
+ * Spec §4.4's due-date rule, as a caller experiences it.
+ *
+ * Enforced by a **deferred** trigger, which is what makes this worth its own
+ * test: it fires at commit, after every handler has returned, so nothing inside
+ * the transaction can catch it. Before M11 it reached a caller as a 500.
+ */
+describe('a child cannot be due after its container', () => {
+  let handle: DatabaseHandle;
+  let world: World;
+
+  beforeAll(async () => {
+    handle = await setupTestDatabase();
+  });
+
+  afterAll(async () => {
+    await handle?.close();
+  });
+
+  beforeEach(async () => {
+    await resetDomainTables(handle);
+    world = await createWorld(handle);
+  });
+
+  const due = (date: string) => ({ date, kind: 'soft' as const });
+
+  it('refuses a child due after its parent, with a sentence about why', async () => {
+    const parentId = await seedTask(world, 'Ship the thing', {
+      dueDate: due('2026-03-27T17:00:00Z'),
+    });
+
+    const attempt = world.run({
+      type: 'CreateTask',
+      params: {
+        calendarId: world.calendarId,
+        title: 'Write the docs',
+        parentId,
+        categoryId: world.categoryId,
+        estimatedDurationMin: 60,
+        dueDate: due('2026-04-03T17:00:00Z'),
+      },
+    });
+
+    await expect(attempt).rejects.toBeInstanceOf(PreconditionFailedError);
+    await expect(attempt).rejects.toThrow(/cannot be due after its parent/);
+  });
+
+  it('refuses tightening a parent past a child that was already legal', async () => {
+    const parentId = await seedTask(world, 'Ship the thing', {
+      dueDate: due('2026-04-03T17:00:00Z'),
+    });
+    await seedTask(world, 'Write the docs', {
+      parentId,
+      dueDate: due('2026-04-02T17:00:00Z'),
+    });
+
+    // The trigger walks the subtree rather than the changed row, which is the
+    // only way this one is caught: the child did not change.
+    await expect(
+      world.run({
+        type: 'EditTask',
+        params: { taskId: parentId, patch: { dueDate: due('2026-03-27T17:00:00Z') } },
+      }),
+    ).rejects.toBeInstanceOf(PreconditionFailedError);
+  });
+
+  it('allows a child due exactly when its parent is', async () => {
+    const parentId = await seedTask(world, 'Ship the thing', {
+      dueDate: due('2026-03-27T17:00:00Z'),
+    });
+
+    // The rule is ≤, not <.
+    await expect(
+      world.run({
+        type: 'CreateTask',
+        params: {
+          calendarId: world.calendarId,
+          title: 'Write the docs',
+          parentId,
+          categoryId: world.categoryId,
+          estimatedDurationMin: 60,
+          dueDate: due('2026-03-27T17:00:00Z'),
+        },
+      }),
+    ).resolves.toBeDefined();
   });
 });

@@ -135,8 +135,11 @@ export const scheduledBlockSchema = z.object({
 export const fixedBlockSchema = z.object({
   appointmentId: uuid,
   title: z.string(),
+  notes: z.string().nullable(),
   start: instant,
   end: instant,
+  /** The optimistic lock an editor sends back with its patch (spec §5.4). */
+  version: z.int().positive(),
   isUnavailability: z.boolean(),
   isInternal: z.boolean(),
   status: z.enum(['confirmed', 'tentative', 'cancelled']),
@@ -312,12 +315,15 @@ export const taskNodeSchema = z.object({
   id: uuid,
   parentId: uuid.nullable(),
   title: z.string(),
+  notes: z.string().nullable(),
   depth: z.int().min(1).max(5),
   /** Ancestor ids from the root down to and including this task. */
   path: z.array(uuid),
   /** Only leaves are placed; a parent rolls up from its children (§4.4). */
   isLeaf: z.boolean(),
   status: z.enum(['active', 'completed', 'cancelled']),
+  /** The optimistic lock an editor sends back with its patch (spec §5.4). */
+  version: z.int().positive(),
   estimatedDurationMin: z.int().nullable(),
   ownCategoryId: uuid.nullable(),
   effectiveCategoryId: uuid.nullable(),
@@ -327,6 +333,11 @@ export const taskNodeSchema = z.object({
   effectiveDueDate: instant.nullable(),
   ownDueKind: z.enum(['soft', 'hard']).nullable(),
   effectiveDueKind: z.enum(['soft', 'hard']).nullable(),
+  /** Minutes since local midnight; the pair travels together or not at all. */
+  ownPreferredStartMin: z.int().min(0).max(1440).nullable(),
+  effectivePreferredStartMin: z.int().min(0).max(1440).nullable(),
+  ownPreferredEndMin: z.int().min(0).max(1440).nullable(),
+  effectivePreferredEndMin: z.int().min(0).max(1440).nullable(),
   ownFocusLevel: z.int().nullable(),
   effectiveFocusLevel: z.int().nullable(),
   ownCooldownOverrideMin: z.int().nullable(),

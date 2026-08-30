@@ -74,6 +74,17 @@ const CREATED_ENTITY: Readonly<Record<JournalTable, CreatedEntity['entity']>> = 
 /** SQLSTATE for a unique violation — here, a command id already in the log. */
 const UNIQUE_VIOLATION = '23505';
 
+/**
+ * SQLSTATE for a check constraint or a `RAISE ... USING ERRCODE`.
+ *
+ * The due-date rule of §4.4 is enforced by a **deferred** trigger, because
+ * moving a parent and its children takes several statements and the states in
+ * between are legitimately inconsistent. Deferred means it fires at commit —
+ * after every handler's `try` has returned — so the only place that can catch
+ * it is around the transaction itself.
+ */
+const CHECK_VIOLATION = '23514';
+
 export async function applyCommand(
   db: Database,
   input: Command,
@@ -85,10 +96,8 @@ export async function applyCommand(
   // Membership is verified and the RLS context is set here, above the policies
   // — a context cannot vouch for itself. Everything below runs as
   // `ambitime_app`, which is subject to them (§5.2).
-  return withTenantContext(
-    db,
-    { userId: command.actor, tenantId: command.tenantId },
-    async (tx) => {
+  return asCommandFailure(() =>
+    withTenantContext(db, { userId: command.actor, tenantId: command.tenantId }, async (tx) => {
       const now = options.now ?? toInstant(command.issuedAt);
       const ctx: CommandContext = {
         tx,
@@ -136,8 +145,35 @@ export async function applyCommand(
           .map((change) => ({ entity: CREATED_ENTITY[change.table], id: change.id })),
         attention: outcome.attention ?? [],
       };
-    },
+    }),
   );
+}
+
+/**
+ * Turns a constraint the database refused at commit into a sentence.
+ *
+ * Without this the §4.4 due-date rule reaches a caller as a 500: the trigger is
+ * deferred, so it raises after the last handler has returned and there is
+ * nothing left inside the transaction to catch it. A 500 says "the server is
+ * broken" about a request that was simply not allowed.
+ *
+ * The message is the constraint's own. The due-date trigger writes one for a
+ * person — which task, which container, which dates — and replacing it with
+ * something generic would throw away the only part a user can act on.
+ */
+async function asCommandFailure<T>(action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    const cause = (error as { cause?: unknown }).cause ?? error;
+    if ((cause as { code?: unknown }).code === CHECK_VIOLATION) {
+      const message = (cause as { message?: unknown }).message;
+      throw new PreconditionFailedError(
+        typeof message === 'string' ? message : 'That change breaks a rule the data must hold to',
+      );
+    }
+    throw error;
+  }
 }
 
 function parseCommand(input: Command): Command {

@@ -14,12 +14,15 @@ export interface TaskTreeNode extends Record<string, unknown> {
   parentId: string | null;
   calendarId: string;
   title: string;
+  notes: string | null;
   depth: number;
   /** Ancestor ids from the root down to and including this node. */
   path: string[];
   /** Only leaves are placed by the scheduler (spec §4.4). */
   isLeaf: boolean;
   status: 'active' | 'completed' | 'cancelled';
+  /** The optimistic lock an editor sends back with its patch (spec §5.4). */
+  version: number;
   estimatedDurationMin: number | null;
 
   ownCategoryId: string | null;
@@ -65,9 +68,11 @@ const selectedColumns = sql`
   n.parent_id            as "parentId",
   n.calendar_id          as "calendarId",
   n.title,
+  n.notes,
   n.depth,
   n.path,
   n.status,
+  n.version,
   n.estimated_duration_min as "estimatedDurationMin",
   not exists (select 1 from tasks c where c.parent_id = n.id) as "isLeaf",
   n.category_id          as "ownCategoryId",
@@ -108,8 +113,8 @@ export async function readCalendarTaskTree(
   const rows = await tx.execute<TaskTreeNode>(sql`
     with recursive tree as (
       select
-        t.id, t.parent_id, t.calendar_id, t.title, t.depth, t.status,
-        t.estimated_duration_min,
+        t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
+        t.version, t.estimated_duration_min,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
@@ -129,8 +134,8 @@ export async function readCalendarTaskTree(
       union all
 
       select
-        t.id, t.parent_id, t.calendar_id, t.title, t.depth, t.status,
-        t.estimated_duration_min,
+        t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
+        t.version, t.estimated_duration_min,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
@@ -202,8 +207,8 @@ export async function readTaskSubtree(
     ),
     tree as (
       select
-        t.id, t.parent_id, t.calendar_id, t.title, t.depth, t.status,
-        t.estimated_duration_min,
+        t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
+        t.version, t.estimated_duration_min,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
@@ -219,8 +224,8 @@ export async function readTaskSubtree(
       union all
 
       select
-        t.id, t.parent_id, t.calendar_id, t.title, t.depth, t.status,
-        t.estimated_duration_min,
+        t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
+        t.version, t.estimated_duration_min,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,

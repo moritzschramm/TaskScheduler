@@ -214,8 +214,10 @@ async function readFixedBlocks(
     .select({
       appointmentId: appointments.id,
       title: appointments.title,
+      notes: appointments.notes,
       start: isoText(sql`lower(${appointments.during})`),
       end: isoText(sql`upper(${appointments.during})`),
+      version: appointments.version,
       isUnavailability: appointments.isUnavailability,
       isInternal: appointments.isInternal,
       status: appointments.status,
