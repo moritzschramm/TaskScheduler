@@ -111,6 +111,28 @@ export interface CalendarSpec {
   id: string;
   /** IANA zone name. Wall-clock rules are resolved against it (spec §5.1). */
   timeZone: string;
+  /**
+   * Spec §9.1 — "when the scheduler may place tasks for this calendar".
+   *
+   * A union of per-weekday ranges that clips every availability window: a
+   * category may say "exercise, Saturdays" and the working window still says
+   * the calendar is not worked in on a Saturday, and the second wins.
+   *
+   * **Absent is not empty.** Absent means unrestricted, which is what a
+   * calendar that has never had one set should mean; `[]` means nothing may be
+   * placed at all, which only a deliberate act should produce.
+   */
+  workingWindow?: readonly WeekdayRange[];
+}
+
+/**
+ * A recurring wall-clock range on one ISO weekday — 1 = Monday … 7 = Sunday,
+ * matching Postgres `extract(isodow)`. Minutes since local midnight, half-open.
+ */
+export interface WeekdayRange {
+  weekday: number;
+  startMin: number;
+  endMin: number;
 }
 
 /** A concrete assignment of an occurrence to a time (spec §3.4). */

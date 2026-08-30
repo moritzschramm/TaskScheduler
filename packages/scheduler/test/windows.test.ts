@@ -96,6 +96,142 @@ describe('availability window resolution', () => {
     expect(windows[0]?.focusLevel).toBe(4);
   });
 
+  describe('the working window (spec §9.1)', () => {
+    const horizon = { start: at('2026-03-23T00:00:00Z'), end: at('2026-03-24T00:00:00Z') };
+
+    it('leaves availability alone when no working window is set', () => {
+      // Absent is not empty. A calendar nobody has configured a working window
+      // for is not a calendar nobody may work in.
+      const windows = resolveWindows({ horizon, calendars: utc, rules: [mondayRule] });
+
+      expect(windows).toHaveLength(1);
+      expect(windows[0]?.interval).toEqual({
+        start: at('2026-03-23T09:00:00Z'),
+        end: at('2026-03-23T12:00:00Z'),
+      });
+    });
+
+    it('clips availability to the working window', () => {
+      const windows = resolveWindows({
+        horizon,
+        calendars: [
+          {
+            id: 'cal-1',
+            timeZone: 'UTC',
+            workingWindow: [{ weekday: 1, startMin: 10 * 60, endMin: 11 * 60 }],
+          },
+        ],
+        rules: [mondayRule],
+      });
+
+      expect(windows).toHaveLength(1);
+      expect(windows[0]?.interval).toEqual({
+        start: at('2026-03-23T10:00:00Z'),
+        end: at('2026-03-23T11:00:00Z'),
+      });
+    });
+
+    it('splits one rule across a working window with a gap in it', () => {
+      const windows = resolveWindows({
+        horizon,
+        calendars: [
+          {
+            id: 'cal-1',
+            timeZone: 'UTC',
+            workingWindow: [
+              { weekday: 1, startMin: 9 * 60, endMin: 10 * 60 },
+              { weekday: 1, startMin: 11 * 60, endMin: 13 * 60 },
+            ],
+          },
+        ],
+        rules: [mondayRule],
+      });
+
+      // Two spans from one rule, both carrying its id — a resolved window is a
+      // rule *and* a span, which is what the validator already assumes.
+      expect(windows.map((w) => w.ruleId)).toEqual(['r-mon', 'r-mon']);
+      expect(windows.map((w) => [w.interval.start, w.interval.end])).toEqual([
+        [at('2026-03-23T09:00:00Z'), at('2026-03-23T10:00:00Z')],
+        [at('2026-03-23T11:00:00Z'), at('2026-03-23T12:00:00Z')],
+      ]);
+    });
+
+    it('coalesces overlapping working ranges rather than emitting a slot twice', () => {
+      const windows = resolveWindows({
+        horizon,
+        calendars: [
+          {
+            id: 'cal-1',
+            timeZone: 'UTC',
+            workingWindow: [
+              { weekday: 1, startMin: 9 * 60, endMin: 11 * 60 },
+              { weekday: 1, startMin: 10 * 60, endMin: 12 * 60 },
+            ],
+          },
+        ],
+        rules: [mondayRule],
+      });
+
+      // Without coalescing these two ranges would produce two overlapping
+      // windows, and the solver's tie-break (score, start, rule id) would have
+      // no way to order the duplicate candidates they generate (spec §6.3).
+      expect(windows).toHaveLength(1);
+      expect(windows[0]?.interval).toEqual({
+        start: at('2026-03-23T09:00:00Z'),
+        end: at('2026-03-23T12:00:00Z'),
+      });
+    });
+
+    it('places nothing on a weekday the working window omits', () => {
+      const windows = resolveWindows({
+        horizon,
+        calendars: [
+          {
+            id: 'cal-1',
+            timeZone: 'UTC',
+            workingWindow: [{ weekday: 2, startMin: 9 * 60, endMin: 17 * 60 }],
+          },
+        ],
+        rules: [mondayRule],
+      });
+
+      // A working window that names only Tuesday says Monday is not worked.
+      expect(windows).toEqual([]);
+    });
+
+    it('places nothing at all for an explicitly empty working window', () => {
+      const windows = resolveWindows({
+        horizon,
+        calendars: [{ id: 'cal-1', timeZone: 'UTC', workingWindow: [] }],
+        rules: [mondayRule],
+      });
+
+      expect(windows).toEqual([]);
+    });
+
+    it("applies the clip in the calendar's zone, not UTC", () => {
+      // 09:00–12:00 Berlin is 08:00–11:00 UTC in March. A working window of
+      // 10:00–12:00 *local* must keep the last two local hours, not the two
+      // hours that happen to share those numbers in UTC.
+      const windows = resolveWindows({
+        horizon,
+        calendars: [
+          {
+            id: 'cal-1',
+            timeZone: 'Europe/Berlin',
+            workingWindow: [{ weekday: 1, startMin: 10 * 60, endMin: 12 * 60 }],
+          },
+        ],
+        rules: [mondayRule],
+      });
+
+      expect(windows[0]?.interval).toEqual({
+        start: at('2026-03-23T09:00:00Z'),
+        end: at('2026-03-23T11:00:00Z'),
+      });
+    });
+  });
+
   describe('week-type overrides', () => {
     const holidayRule: AvailabilityRule = {
       id: 'r-holiday',

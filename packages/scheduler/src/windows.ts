@@ -9,7 +9,13 @@ import {
   type Interval,
 } from './time.js';
 import { chain, byId, byInt, sorted } from './ordering.js';
-import type { AvailabilityRule, CalendarSpec, ResolvedWindow, WeekTypeOverride } from './types.js';
+import type {
+  AvailabilityRule,
+  CalendarSpec,
+  ResolvedWindow,
+  WeekdayRange,
+  WeekTypeOverride,
+} from './types.js';
 
 /**
  * Expands recurring per-weekday availability rules into concrete intervals over
@@ -81,6 +87,10 @@ export function resolveWindows({
     if (calendarRules.length === 0) continue;
 
     const calendarOverrides = overrides.filter((override) => override.calendarId === calendar.id);
+    // Merged once per calendar rather than once per local day: the working
+    // window is a weekly rule, so 15 days of horizon would otherwise redo the
+    // same coalescing fifteen times.
+    const working = mergeWorkingWindow(calendar.workingWindow);
 
     // Walk local dates, not UTC days. A day is scanned either side of the
     // horizon because a local day straddles UTC midnight by up to a day's
@@ -104,26 +114,99 @@ export function resolveWindows({
       for (const rule of applicable) {
         if (rule.weekday !== weekday) continue;
 
-        const start = wallClockToInstant(date, rule.startMin, calendar.timeZone);
-        const end = wallClockToInstant(date, rule.endMin, calendar.timeZone);
-        if (end <= start) continue;
+        // One rule can yield several spans: a working window split across a
+        // lunch break cuts a single 09:00–17:00 availability in two. They share
+        // a rule id, which the validator already expects — a resolved window is
+        // identified by its rule *and* its span, not by the rule alone.
+        for (const span of workingSpans(rule, working[weekday])) {
+          const start = wallClockToInstant(date, span.startMin, calendar.timeZone);
+          const end = wallClockToInstant(date, span.endMin, calendar.timeZone);
+          if (end <= start) continue;
 
-        const clippedStart = Math.max(start, horizon.start);
-        const clippedEnd = Math.min(end, horizon.end);
-        if (clippedEnd <= clippedStart) continue;
+          const clippedStart = Math.max(start, horizon.start);
+          const clippedEnd = Math.min(end, horizon.end);
+          if (clippedEnd <= clippedStart) continue;
 
-        resolved.push({
-          ruleId: rule.id,
-          calendarId: rule.calendarId,
-          categoryId: rule.categoryId,
-          interval: { start: clippedStart, end: clippedEnd },
-          ...(rule.focusLevel === undefined ? {} : { focusLevel: rule.focusLevel }),
-        });
+          resolved.push({
+            ruleId: rule.id,
+            calendarId: rule.calendarId,
+            categoryId: rule.categoryId,
+            interval: { start: clippedStart, end: clippedEnd },
+            ...(rule.focusLevel === undefined ? {} : { focusLevel: rule.focusLevel }),
+          });
+        }
       }
     }
   }
 
   return sorted(resolved, compareResolvedWindows);
+}
+
+/** A half-open range of minutes within one local day. */
+interface MinuteSpan {
+  startMin: number;
+  endMin: number;
+}
+
+/**
+ * The working window (spec §9.1) as a per-weekday lookup, with overlapping and
+ * touching ranges coalesced.
+ *
+ * Coalescing is not tidiness. Two overlapping ranges would clip one
+ * availability rule into two overlapping spans, and the solver would then see
+ * the same candidate slot twice — identical score, identical start, identical
+ * rule id, and therefore no total order to break the tie with (spec §6.3).
+ *
+ * `undefined` in, `undefined` out: a calendar with no working window is
+ * unrestricted, and every weekday must go on saying so.
+ */
+function mergeWorkingWindow(
+  window: readonly WeekdayRange[] | undefined,
+): Record<number, MinuteSpan[] | undefined> {
+  if (window === undefined) return {};
+
+  const byWeekday: Record<number, MinuteSpan[] | undefined> = {};
+  // Every weekday gets an entry, so a weekday the window says nothing about
+  // reads as "no working time" rather than as "unrestricted".
+  for (let weekday = 1; weekday <= 7; weekday += 1) byWeekday[weekday] = [];
+
+  for (const range of window) {
+    byWeekday[range.weekday]?.push({ startMin: range.startMin, endMin: range.endMin });
+  }
+
+  for (const weekday of Object.keys(byWeekday)) {
+    const spans = sorted(
+      byWeekday[Number(weekday)] ?? [],
+      byInt((span) => span.startMin),
+    );
+    const merged: MinuteSpan[] = [];
+
+    for (const span of spans) {
+      const last = merged[merged.length - 1];
+      if (last !== undefined && span.startMin <= last.endMin) {
+        last.endMin = Math.max(last.endMin, span.endMin);
+        continue;
+      }
+      merged.push({ ...span });
+    }
+
+    byWeekday[Number(weekday)] = merged;
+  }
+
+  return byWeekday;
+}
+
+/** A rule's minutes, clipped to the working window in force on that weekday. */
+function workingSpans(rule: AvailabilityRule, working: MinuteSpan[] | undefined): MinuteSpan[] {
+  if (working === undefined) return [{ startMin: rule.startMin, endMin: rule.endMin }];
+
+  const spans: MinuteSpan[] = [];
+  for (const span of working) {
+    const startMin = Math.max(rule.startMin, span.startMin);
+    const endMin = Math.min(rule.endMin, span.endMin);
+    if (startMin < endMin) spans.push({ startMin, endMin });
+  }
+  return spans;
 }
 
 /** The total order resolved windows are always returned in. */

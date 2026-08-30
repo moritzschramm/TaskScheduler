@@ -11,12 +11,14 @@ import {
   type ScheduleContext,
   type SequenceSpec,
   type TuningConfig,
+  type WeekdayRange,
   type WeekTypeOverride,
 } from '@ambitime/scheduler';
 import {
   appointments,
   availabilityWindows,
   calendars,
+  calendarWindows,
   categories,
   sequences,
   taskOccurrences,
@@ -107,7 +109,14 @@ export async function loadScheduleContext({
   // answer, which is the answer a caller should get either way.
   if (!calendar) throw new CalendarNotFoundError(calendarId);
 
-  const spec: CalendarSpec = { id: calendar.id, timeZone: calendar.timeZone };
+  const workingWindow = await loadWorkingWindow(tx, calendarId);
+  const spec: CalendarSpec = {
+    id: calendar.id,
+    timeZone: calendar.timeZone,
+    // Omitted rather than passed empty when unset: to the engine, absent means
+    // unrestricted and `[]` means nothing may be placed (§9.1).
+    ...(workingWindow === undefined ? {} : { workingWindow }),
+  };
   const horizon = placeableHorizon(now, spec.timeZone, config);
 
   const [rules, overrides, fixedBlocks, sequenceSpecs, demand] = await Promise.all([
@@ -130,6 +139,35 @@ export async function loadScheduleContext({
     },
     unschedulable: demand.unschedulable,
   };
+}
+
+/**
+ * The calendar's working window (spec §9.1) — when the scheduler may place at
+ * all, as distinct from when a category is available.
+ *
+ * Returns `undefined` for a calendar with no rows, because a working window
+ * that was never configured restricts nothing. Reading zero rows as "no working
+ * time" would make every calendar unschedulable until somebody visited a
+ * settings screen.
+ *
+ * The shareable window (§9.2) shares this table and is deliberately not read
+ * here: it governs what *other users* see, not where this calendar's own work
+ * may go.
+ */
+async function loadWorkingWindow(
+  tx: Transaction,
+  calendarId: string,
+): Promise<WeekdayRange[] | undefined> {
+  const rows = await tx
+    .select({
+      weekday: calendarWindows.weekday,
+      startMin: calendarWindows.startMin,
+      endMin: calendarWindows.endMin,
+    })
+    .from(calendarWindows)
+    .where(and(eq(calendarWindows.calendarId, calendarId), eq(calendarWindows.kind, 'working')));
+
+  return rows.length === 0 ? undefined : rows;
 }
 
 async function loadAvailabilityRules(
