@@ -41,6 +41,7 @@ function node(id: string, depth: number, overrides: Partial<TaskNode> = {}): Tas
     effectiveCooldownOverrideMin: null,
     manualFloor: null,
     manualBias: null,
+    recurrence: null,
     ...overrides,
   };
 }

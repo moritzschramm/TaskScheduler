@@ -161,6 +161,14 @@ export function presentTaskNode(node: TaskTreeNode): TaskNode {
     effectiveCooldownOverrideMin: node.effectiveCooldownOverrideMin,
     manualFloor: isoOrNull(node.manualFloor),
     manualBias: isoOrNull(node.manualBias),
+    recurrence:
+      node.recurrencePeriod === null
+        ? null
+        : {
+            period: node.recurrencePeriod,
+            count: node.recurrenceCount ?? 1,
+            missedPolicy: node.missedOccurrencePolicy,
+          },
   };
 }
 

@@ -41,6 +41,24 @@ export function localWeek(date: CivilDate, timeZone: string, config: TuningConfi
   };
 }
 
+/**
+ * The local month containing a date (spec §8.2's `month` period).
+ *
+ * Months are the one period whose length is not a constant, which is exactly
+ * why this is computed from civil dates rather than by adding days: "the month
+ * containing 31 January" and "the month after it" are both well defined, and
+ * neither is 30 days.
+ */
+export function localMonth(date: CivilDate, timeZone: string): Interval {
+  const first = { year: date.year, month: date.month, day: 1 };
+  const next =
+    date.month === 12
+      ? { year: date.year + 1, month: 1, day: 1 }
+      : { year: date.year, month: date.month + 1, day: 1 };
+
+  return { start: startOfLocalDay(first, timeZone), end: startOfLocalDay(next, timeZone) };
+}
+
 /** Midnight at the start of the next local day — where "tomorrow" begins. */
 export function startOfNextDay(instant: Instant, timeZone: string): Instant {
   return localDayOf(instant, timeZone).end;

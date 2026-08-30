@@ -39,6 +39,11 @@ export async function createTask(
     cooldownOverrideMin: params.cooldownOverrideMin,
     sequenceId: params.sequenceId,
     sequencePosition: params.sequencePosition,
+    recurrencePeriod: params.recurrence?.period,
+    recurrenceCount: params.recurrence?.count,
+    ...(params.recurrence?.missedPolicy === undefined
+      ? {}
+      : { missedOccurrencePolicy: params.recurrence.missedPolicy }),
   };
 
   const taskId = await insertRow(ctx, 'tasks', values);
@@ -46,7 +51,12 @@ export async function createTask(
   // A brand-new task is a leaf, so it is demand and gets its occurrence. If it
   // was created beneath another task, that other task has just stopped being
   // one.
-  await createInitialOccurrence(ctx, taskId);
+  //
+  // A *recurring* task gets none here: its demand is per period and belongs to
+  // the generator (§8.2). One period-less occurrence beside the periodic ones
+  // would be an extra unit of work nobody asked for, and no period would bound
+  // where it went.
+  if (params.recurrence === undefined) await createInitialOccurrence(ctx, taskId);
   if (params.parentId !== undefined) await retirePendingOccurrences(ctx, params.parentId);
 
   return { calendarIds: [params.calendarId] };
@@ -72,6 +82,17 @@ export async function editTask(
   if (patch.focusLevel !== undefined) values.focusLevel = patch.focusLevel;
   if (patch.cooldownOverrideMin !== undefined) {
     values.cooldownOverrideMin = patch.cooldownOverrideMin;
+  }
+
+  // `null` stops the task recurring; a rule starts or changes it. The
+  // occurrences follow on the next generation pass rather than being rewritten
+  // here — what a period should contain is one decision, made in one place.
+  if (patch.recurrence !== undefined) {
+    values.recurrencePeriod = patch.recurrence?.period ?? null;
+    values.recurrenceCount = patch.recurrence?.count ?? null;
+    if (patch.recurrence?.missedPolicy !== undefined) {
+      values.missedOccurrencePolicy = patch.recurrence.missedPolicy;
+    }
   }
 
   // The paired fields move together or not at all, which is what keeps the

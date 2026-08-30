@@ -48,6 +48,28 @@ const preferredRange = z
     message: 'preferredRange.startMin must be before endMin',
   });
 
+/**
+ * A task's recurrence — a **demand** rule, not a datetime rule (spec §8.2).
+ *
+ * "Exercise 3× per week" says how much of something a period should contain; it
+ * says nothing about when. Each period the generator spawns that many
+ * occurrences and the scheduler places them flexibly within the period, which
+ * is the whole difference from an appointment's recurrence (§8.1) — that one
+ * expands a rule into fixed datetimes, and the two must not be collapsed into
+ * one mechanism however similar they look in a UI.
+ *
+ * `missedPolicy` is what happens when a period ends with demand unmet.
+ * Rollover carries it into the next period as debt; expire drops it. §8.2's own
+ * example is the reason both exist: a missed workout should not distort the
+ * next day, while a missed invoice must carry over.
+ */
+const recurrence = z.object({
+  period: z.enum(['day', 'week', 'month']),
+  /** How many occurrences each period should contain. */
+  count: z.int().min(1).max(50),
+  missedPolicy: z.enum(['rollover', 'expire']).optional(),
+});
+
 /** The inheritable properties of spec §4.4 a command may set on a task. */
 const taskAttributes = {
   categoryId: uuid,
@@ -75,6 +97,7 @@ export const createTaskParams = z.object({
   preferredRange: taskAttributes.preferredRange.optional(),
   focusLevel: taskAttributes.focusLevel.optional(),
   cooldownOverrideMin: taskAttributes.cooldownOverrideMin.optional(),
+  recurrence: recurrence.optional(),
 });
 
 /**
@@ -96,8 +119,16 @@ export const editTaskParams = z.object({
     preferredRange: taskAttributes.preferredRange.nullable().optional(),
     focusLevel: taskAttributes.focusLevel.nullable().optional(),
     cooldownOverrideMin: taskAttributes.cooldownOverrideMin.nullable().optional(),
+    /**
+     * `null` stops the task recurring. Not an inheritance clear — recurrence is
+     * not one of §4.4's inheritable properties, and a subtask does not inherit
+     * "3× per week" from the thing it is part of.
+     */
+    recurrence: recurrence.nullable().optional(),
   }),
 });
+
+export type TaskRecurrence = z.infer<typeof recurrence>;
 
 /**
  * Spec §7.4. `isUnavailability` is deliberately absent: a content-free block is

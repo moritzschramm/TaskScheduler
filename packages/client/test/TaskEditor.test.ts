@@ -52,6 +52,7 @@ function task(overrides: Partial<TaskNode> = {}): TaskNode {
     effectiveCooldownOverrideMin: null,
     manualFloor: null,
     manualBias: null,
+    recurrence: null,
     ...overrides,
   };
 }
@@ -249,5 +250,59 @@ describe('the task editor', () => {
     // §7.3's vocabulary: the footprint is freed and the schedule re-derived,
     // rather than the history being made untrue.
     expect(submit.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'CancelTask' });
+  });
+
+  describe('recurrence — a demand rule, not a time (§8.2)', () => {
+    it('sends nothing while the task does not recur', async () => {
+      const { wrapper, submit } = editor({ task: task() });
+
+      expect(wrapper.find('[data-testid="recurrence-count"]').exists()).toBe(false);
+
+      await wrapper.find('[data-testid="save-task"]').trigger('click');
+      expect(patchOf(submit)['recurrence']).toBeNull();
+    });
+
+    it('sends the rule when one is set', async () => {
+      const { wrapper, submit } = editor({ task: task() });
+
+      await wrapper.find('[data-testid="recurrence-toggle"]').trigger('click');
+      await wrapper.find('[data-testid="recurrence-count"]').setValue('3');
+      await wrapper.find('[data-testid="save-task"]').trigger('click');
+
+      // "3× per week" — how much a period should hold, and nothing about when.
+      expect(patchOf(submit)['recurrence']).toEqual({
+        period: 'week',
+        count: 3,
+        missedPolicy: 'rollover',
+      });
+    });
+
+    it('offers the missed-period policy §8.2 requires', async () => {
+      const { wrapper, submit } = editor({
+        task: task({ recurrence: { period: 'week', count: 2, missedPolicy: 'rollover' } }),
+      });
+
+      // A missed workout should not distort the next period; a missed invoice
+      // must carry over. Both answers have to be reachable.
+      await wrapper.find('[data-testid="recurrence-missed"]').setValue('expire');
+      await wrapper.find('[data-testid="save-task"]').trigger('click');
+
+      expect(patchOf(submit)['recurrence']).toMatchObject({ missedPolicy: 'expire' });
+    });
+
+    it('clears the rule when recurrence is turned off', async () => {
+      const { wrapper, submit } = editor({
+        task: task({ recurrence: { period: 'week', count: 3, missedPolicy: 'rollover' } }),
+      });
+
+      expect(
+        (wrapper.find('[data-testid="recurrence-count"]').element as HTMLInputElement).value,
+      ).toBe('3');
+
+      await wrapper.find('[data-testid="recurrence-toggle"]').trigger('click');
+      await wrapper.find('[data-testid="save-task"]').trigger('click');
+
+      expect(patchOf(submit)['recurrence']).toBeNull();
+    });
   });
 });

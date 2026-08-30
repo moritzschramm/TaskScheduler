@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import InheritedField from './InheritedField.vue';
 import { formatMinuteOfDay, fromLocalInput, parseMinuteOfDay, toLocalInput } from '@/lib/time';
 import type { Category, CommandRequest, TaskNode } from '@ambitime/shared';
@@ -46,6 +47,12 @@ interface Draft {
   preferred: { overridden: boolean; start: string; end: string };
   focus: { overridden: boolean; value: string };
   cooldown: { overridden: boolean; value: string };
+  recurrence: {
+    on: boolean;
+    period: 'day' | 'week' | 'month';
+    count: string;
+    missedPolicy: 'rollover' | 'expire';
+  };
 }
 
 const busy = ref(false);
@@ -64,6 +71,7 @@ function emptyDraft(): Draft {
     preferred: { overridden: false, start: '09:00', end: '17:00' },
     focus: { overridden: false, value: '3' },
     cooldown: { overridden: false, value: '0' },
+    recurrence: { on: false, period: 'week', count: '1', missedPolicy: 'rollover' },
   };
 }
 
@@ -112,6 +120,12 @@ watch(
       cooldown: {
         overridden: task.ownCooldownOverrideMin !== null,
         value: String(task.ownCooldownOverrideMin ?? task.effectiveCooldownOverrideMin ?? 0),
+      },
+      recurrence: {
+        on: task.recurrence !== null,
+        period: task.recurrence?.period ?? 'week',
+        count: String(task.recurrence?.count ?? 1),
+        missedPolicy: task.recurrence?.missedPolicy ?? 'rollover',
       },
     };
   },
@@ -193,6 +207,27 @@ function preferredValue(): { startMin: number; endMin: number } | null {
   return { startMin, endMin };
 }
 
+/**
+ * The demand rule of spec §8.2, or nothing.
+ *
+ * A count below one is not a rule, so the toggle is what says whether the task
+ * recurs at all — an empty box would otherwise mean "0× per week", which is a
+ * confusing way of saying "never".
+ */
+function recurrenceValue(): {
+  period: 'day' | 'week' | 'month';
+  count: number;
+  missedPolicy: 'rollover' | 'expire';
+} | null {
+  const { recurrence } = draft.value;
+  if (!recurrence.on) return null;
+
+  const count = Number(recurrence.count);
+  if (!Number.isInteger(count) || count < 1) return null;
+
+  return { period: recurrence.period, count, missedPolicy: recurrence.missedPolicy };
+}
+
 function numberOrNull(field: { overridden: boolean; value: string }): number | null {
   if (!field.overridden) return null;
   const parsed = Number(field.value);
@@ -237,6 +272,7 @@ function createRequest(): CommandRequest {
       ...(numberOrNull(draft.value.cooldown) === null
         ? {}
         : { cooldownOverrideMin: numberOrNull(draft.value.cooldown)! }),
+      ...(recurrenceValue() === null ? {} : { recurrence: recurrenceValue()! }),
     },
   };
 }
@@ -259,6 +295,7 @@ function editRequest(): CommandRequest {
         preferredRange: preferredValue(),
         focusLevel: numberOrNull(draft.value.focus),
         cooldownOverrideMin: numberOrNull(draft.value.cooldown),
+        recurrence: recurrenceValue(),
       },
     },
   };
@@ -429,6 +466,63 @@ async function complete(): Promise<void> {
         <Input v-model="draft.cooldown.value" type="number" min="0" data-testid="task-cooldown" />
       </InheritedField>
     </div>
+
+    <section class="space-y-2 border-t pt-4" data-testid="recurrence-field">
+      <div class="flex items-center justify-between gap-3">
+        <Label>Repeats</Label>
+        <label class="text-muted-foreground flex items-center gap-2 text-xs">
+          <span>Recurring</span>
+          <Switch
+            v-model="draft.recurrence.on"
+            aria-label="This task recurs"
+            data-testid="recurrence-toggle"
+          />
+        </label>
+      </div>
+
+      <template v-if="draft.recurrence.on">
+        <div class="flex flex-wrap items-center gap-2">
+          <Input
+            v-model="draft.recurrence.count"
+            type="number"
+            min="1"
+            class="w-20"
+            aria-label="Times per period"
+            data-testid="recurrence-count"
+          />
+          <span class="text-muted-foreground text-sm">times per</span>
+          <Select
+            v-model="draft.recurrence.period"
+            class="w-32"
+            aria-label="Period"
+            data-testid="recurrence-period"
+          >
+            <option value="day">day</option>
+            <option value="week">week</option>
+            <option value="month">month</option>
+          </Select>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-muted-foreground text-sm">If a period is missed:</span>
+          <Select
+            v-model="draft.recurrence.missedPolicy"
+            class="w-44"
+            aria-label="Missed period policy"
+            data-testid="recurrence-missed"
+          >
+            <option value="rollover">carry it over</option>
+            <option value="expire">let it go</option>
+          </Select>
+        </div>
+
+        <p class="text-muted-foreground text-xs">
+          This is a demand rule, not a time: each period gets that many occurrences, scheduled
+          wherever they fit inside it. A recurring <em>appointment</em> is a different thing and
+          repeats at a fixed time.
+        </p>
+      </template>
+    </section>
 
     <div class="flex flex-wrap items-center gap-2">
       <Button :disabled="!canSave" data-testid="save-task" @click="save">

@@ -27,6 +27,7 @@ import {
 } from '../db/schema/index.js';
 import { readCalendarTaskTree, type TaskTreeNode } from '../tasks/task-tree.js';
 import { isoText, toCivilDate, toInstant, toInstantCeil } from './instants.js';
+import { localDay } from '@ambitime/scheduler';
 import type { Transaction } from '../db/client.js';
 
 /**
@@ -124,7 +125,7 @@ export async function loadScheduleContext({
     loadWeekTypeOverrides(tx, calendarId, horizon),
     loadFixedBlocks(tx, calendarId, horizon),
     loadSequences(tx, calendarId),
-    loadDemand(tx, calendarId),
+    loadDemand(tx, calendarId, spec.timeZone),
   ]);
 
   return {
@@ -288,6 +289,9 @@ interface DemandRow {
   manualBias: string | null;
   sequenceId: string | null;
   sequencePosition: number | null;
+  /** The period a recurring occurrence belongs to (§8.2); both null otherwise. */
+  periodStart: string | null;
+  periodEnd: string | null;
 }
 
 /**
@@ -302,6 +306,7 @@ interface DemandRow {
 async function loadDemand(
   tx: Transaction,
   calendarId: string,
+  calendarTimeZone: string,
 ): Promise<{ schedulables: Schedulable[]; unschedulable: UnschedulableTask[] }> {
   const [tree, rows, cooldowns] = await Promise.all([
     readCalendarTaskTree(tx, calendarId),
@@ -311,6 +316,8 @@ async function loadDemand(
         taskId: taskOccurrences.taskId,
         manualFloor: tasks.manualFloor,
         manualBias: tasks.manualBias,
+        periodStart: taskOccurrences.periodStart,
+        periodEnd: taskOccurrences.periodEnd,
         sequenceId: tasks.sequenceId,
         sequencePosition: tasks.sequencePosition,
       })
@@ -352,7 +359,17 @@ async function loadDemand(
       continue;
     }
 
-    schedulables.push(toSchedulable({ row, node, calendarId, categoryId, durationMin, cooldowns }));
+    schedulables.push(
+      toSchedulable({
+        row,
+        node,
+        calendarId,
+        categoryId,
+        durationMin,
+        cooldowns,
+        calendarTimeZone,
+      }),
+    );
   }
 
   return { schedulables, unschedulable };
@@ -377,6 +394,34 @@ interface SchedulableInput {
   categoryId: string;
   durationMin: number;
   cooldowns: ReadonlyMap<string, number>;
+  /** The zone a period's local dates are resolved in (spec §5.1). */
+  calendarTimeZone: string;
+}
+
+/** A recurring occurrence's period as instants, or `undefined` for a one-off. */
+function periodBounds(row: DemandRow, timeZone: string): Interval | undefined {
+  if (row.periodStart === null || row.periodEnd === null) return undefined;
+
+  // `period_end` is the last local *day* of the period, and an interval is
+  // half-open, so the bound is the start of the day after it.
+  return {
+    start: localDay(toCivilDate(row.periodStart), timeZone).start,
+    end: localDay(toCivilDate(row.periodEnd), timeZone).end,
+  };
+}
+
+function latest(...values: (number | undefined)[]): number | undefined {
+  const present = values.filter((value): value is number => value !== undefined);
+  return present.length === 0 ? undefined : Math.max(...present);
+}
+
+function earliest(...values: (number | undefined)[]): number | undefined {
+  const present = values.filter((value): value is number => value !== undefined);
+  return present.length === 0 ? undefined : Math.min(...present);
+}
+
+function toInstantOrUndefined(value: string | null): number | undefined {
+  return value === null ? undefined : toInstant(value);
 }
 
 function toSchedulable({
@@ -386,9 +431,38 @@ function toSchedulable({
   categoryId,
   durationMin,
   cooldowns,
+  calendarTimeZone,
 }: SchedulableInput): Schedulable {
   const preferredStart = node.effectivePreferredStartMin;
   const preferredEnd = node.effectivePreferredEndMin;
+  const period = periodBounds(row, calendarTimeZone);
+
+  /**
+   * A recurring occurrence's period, expressed as bounds the engine already
+   * understands (spec §8.2).
+   *
+   * "Exercise 3× per week" means each occurrence belongs *in* its week — placed
+   * flexibly, but not in some other week. That is a not-before and a
+   * not-after, which is exactly what a floor and a due date are, so no new
+   * engine concept is needed and the property suite is untouched.
+   *
+   * The period's end is **soft** even when the task's own due date is hard. A
+   * period is a plan rather than a promise, and missing one is what the
+   * missed-instance policy exists to handle; making it hard would turn every
+   * skipped workout into an infeasibility alert.
+   */
+  const floor = latest(
+    row.manualFloor === null ? undefined : toInstantCeil(row.manualFloor),
+    period?.start,
+  );
+  const due = earliest(
+    node.effectiveDueDate === null ? undefined : toInstant(node.effectiveDueDate),
+    period?.end,
+  );
+  const dueKind =
+    due !== undefined && due === period?.end && due !== toInstantOrUndefined(node.effectiveDueDate)
+      ? ('soft' as const)
+      : (node.effectiveDueKind ?? 'soft');
 
   return {
     occurrenceId: row.occurrenceId,
@@ -399,12 +473,10 @@ function toSchedulable({
     // The task's own override, else the category default (§6.2 rule 3). The
     // engine is given the effective value; it does not know inheritance exists.
     cooldownMin: node.effectiveCooldownOverrideMin ?? cooldowns.get(categoryId) ?? 0,
-    ...(node.effectiveDueDate === null
-      ? {}
-      : // Inward: a deadline never moves later than what is stored.
-        { dueDate: toInstant(node.effectiveDueDate), dueKind: node.effectiveDueKind ?? 'soft' }),
+    // Inward: a deadline never moves later than what is stored.
+    ...(due === undefined ? {} : { dueDate: due, dueKind }),
     // Inward again: a not-before never moves earlier than the user asked.
-    ...(row.manualFloor === null ? {} : { manualFloor: toInstantCeil(row.manualFloor) }),
+    ...(floor === undefined ? {} : { manualFloor: floor }),
     ...(row.manualBias === null ? {} : { manualBias: toInstant(row.manualBias) }),
     ...(row.sequenceId === null ? {} : { sequenceId: row.sequenceId }),
     ...(row.sequencePosition === null ? {} : { sequencePosition: row.sequencePosition }),

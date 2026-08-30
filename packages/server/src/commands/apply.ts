@@ -8,6 +8,9 @@ import { toInstant, toIso } from '../schedule/instants.js';
 import { CommandValidationError, PreconditionFailedError } from './errors.js';
 import { COMMAND_TARGETS, dispatch } from './registry.js';
 import { produceSignals } from '../notifications/produce.js';
+import { generateDemand } from './demand.js';
+import { calendarTimeZone } from './entities.js';
+import { computeHardHorizon } from '@ambitime/scheduler';
 import type { AttentionItem, CommandContext } from './context.js';
 import type { CommandJournal, JournalTable } from './journal.js';
 import type { Database } from '../db/client.js';
@@ -121,6 +124,10 @@ export async function applyCommand(
       const calendarIds = [...new Set(outcome.calendarIds)].sort();
       const schedules: DerivedSchedule[] = [];
       for (const calendarId of calendarIds) {
+        // Demand before the solve that places it: a period that has begun needs
+        // its occurrences to exist before anything can put them anywhere (§8.2).
+        await generateDemandFor(ctx, calendarId);
+
         const derived = await deriveCalendarSchedule({
           tx,
           tenantId: ctx.tenantId,
@@ -257,4 +264,24 @@ async function appendToLog(
     }
     throw error;
   }
+}
+
+/**
+ * Spawns any occurrences the horizon now needs (spec §8.2).
+ *
+ * The horizon is recomputed here rather than taken from the derive that
+ * follows, because the generator has to run *before* it: demand that does not
+ * exist yet cannot be placed. Both use `computeHardHorizon` over the same
+ * `now`, so they are looking at the same fortnight.
+ */
+async function generateDemandFor(ctx: CommandContext, calendarId: string): Promise<void> {
+  const timeZone = await calendarTimeZone(ctx, calendarId);
+
+  await generateDemand({
+    ctx,
+    calendarId,
+    timeZone,
+    horizon: computeHardHorizon(ctx.now, timeZone, ctx.config),
+    config: ctx.config,
+  });
 }

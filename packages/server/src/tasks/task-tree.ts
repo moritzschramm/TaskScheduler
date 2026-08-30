@@ -44,6 +44,10 @@ export interface TaskTreeNode extends Record<string, unknown> {
   /** Not inherited: a floor is something done to one task (spec §7.3). */
   manualFloor: string | null;
   manualBias: string | null;
+  /** The demand rule of §8.2. Not inherited: a subtask is not the recurrence. */
+  recurrencePeriod: 'day' | 'week' | 'month' | null;
+  recurrenceCount: number | null;
+  missedOccurrencePolicy: 'rollover' | 'expire';
 }
 
 /**
@@ -95,7 +99,10 @@ const selectedColumns = sql`
   n.cooldown_override_min as "ownCooldownOverrideMin",
   n.effective_cooldown_override_min as "effectiveCooldownOverrideMin",
   n.manual_floor         as "manualFloor",
-  n.manual_bias          as "manualBias"
+  n.manual_bias          as "manualBias",
+  n.recurrence_period    as "recurrencePeriod",
+  n.recurrence_count     as "recurrenceCount",
+  n.missed_occurrence_policy as "missedOccurrencePolicy"
 `;
 
 /**
@@ -120,6 +127,7 @@ export async function readCalendarTaskTree(
       select
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
+        t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
@@ -141,6 +149,7 @@ export async function readCalendarTaskTree(
       select
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
+        t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
@@ -214,6 +223,7 @@ export async function readTaskSubtree(
       select
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
+        t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
@@ -231,6 +241,7 @@ export async function readTaskSubtree(
       select
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
+        t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
         t.category_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,

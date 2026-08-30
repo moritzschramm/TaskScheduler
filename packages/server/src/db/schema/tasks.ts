@@ -267,9 +267,17 @@ export const taskOccurrences = pgTable(
       name: 'task_occurrences_rollover_same_tenant_fk',
     }).onDelete('set null'),
 
-    // One occurrence per task per period. NULLs are distinct in a unique
-    // constraint, so the non-recurring case needs its own partial index.
-    unique('task_occurrences_task_period_key').on(table.taskId, table.periodStart),
+    // **Not** unique on (task, period). M2 assumed one occurrence per period
+    // and the `recurrence_count` column two files up contradicted it in the
+    // same breath: "3 with period `week` = exercise 3× per week" needs three
+    // rows in one week, and a rollover needs to add a fourth to the next.
+    // Dropped in M14 (migration 0007); the generator's top-up-to-target is what
+    // keeps generation idempotent now, explicitly rather than by accident.
+    //
+    // The partial index for the non-recurring case stays: a task with no rule
+    // has exactly one occurrence, and NULLs being distinct in a unique
+    // constraint is why that needs an index of its own.
+    index('task_occurrences_task_period_idx').on(table.taskId, table.periodStart),
     uniqueIndex('task_occurrences_one_per_non_recurring_task')
       .on(table.taskId)
       .where(sql`${table.periodStart} is null`),

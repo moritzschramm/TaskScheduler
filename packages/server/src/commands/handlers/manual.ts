@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { deferFloor } from '@ambitime/scheduler';
 import { taskOccurrences } from '../../db/schema/index.js';
 import { lockTask, type CommandContext, type HandlerOutcome } from '../context.js';
@@ -134,13 +134,38 @@ export async function completeTask(
   await requireLeaf(ctx, task);
 
   const completedAt = params.actualEnd ?? ctx.nowIso;
+  const recurring = task.recurrencePeriod !== null;
 
-  await updateRow(ctx, 'tasks', task.id, { status: 'completed', completedAt, manualFloor: null });
+  /**
+   * A recurring task is never *finished* — one of its occurrences is (§8.2).
+   *
+   * "Exercise 3× per week" is a standing demand, so completing the task itself
+   * would end it for ever the first time somebody exercised, and next week
+   * would generate nothing. What completes is the earliest pending occurrence:
+   * the one whose period is running out soonest, which is the one a person who
+   * says "done" almost always means.
+   */
+  if (!recurring) {
+    await updateRow(ctx, 'tasks', task.id, { status: 'completed', completedAt, manualFloor: null });
+  } else {
+    // The floor still clears (§7.3): it was placed against the occurrence just
+    // finished, and keeping it would push the next one for no reason.
+    await updateRow(ctx, 'tasks', task.id, { manualFloor: null, manualBias: null });
+  }
+
+  const [earliest] = await ctx.tx
+    .select({ id: taskOccurrences.id })
+    .from(taskOccurrences)
+    .where(and(eq(taskOccurrences.taskId, task.id), eq(taskOccurrences.status, 'pending')))
+    .orderBy(asc(taskOccurrences.periodEnd), asc(taskOccurrences.id))
+    .limit(1);
 
   await updateWhere(
     ctx,
     'task_occurrences',
-    and(eq(taskOccurrences.taskId, task.id), eq(taskOccurrences.status, 'pending'))!,
+    recurring
+      ? eq(taskOccurrences.id, earliest?.id ?? task.id)
+      : and(eq(taskOccurrences.taskId, task.id), eq(taskOccurrences.status, 'pending'))!,
     { status: 'completed', completedAt },
   );
 

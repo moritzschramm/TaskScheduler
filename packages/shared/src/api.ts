@@ -356,6 +356,14 @@ export const taskNodeSchema = z.object({
    */
   manualFloor: instant.nullable(),
   manualBias: instant.nullable(),
+  /** The demand rule of §8.2, or `null`. Not inheritable — see `EditTask`. */
+  recurrence: z
+    .object({
+      period: z.enum(['day', 'week', 'month']),
+      count: z.int().min(1),
+      missedPolicy: z.enum(['rollover', 'expire']),
+    })
+    .nullable(),
 });
 
 export const taskListSchema = z.object({
