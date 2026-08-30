@@ -1,13 +1,16 @@
 import {
   calendarConfigurationSchema,
   commandResultSchema,
+  contextResponseSchema,
   historySchema,
+  toEngineContext,
   type CalendarConfiguration,
   type CommandRequest,
   type CommandResult,
   type CreatedEntity,
   type HistoryView,
 } from '@ambitime/shared';
+import type { ScheduleContext } from '@ambitime/scheduler';
 import { api, expectOk } from './api';
 
 /**
@@ -55,4 +58,16 @@ export async function fetchConfiguration(calendarId: string): Promise<CalendarCo
 export async function fetchHistory(): Promise<HistoryView> {
   const response = await api.api.history.$get();
   return historySchema.parse(await expectOk(response));
+}
+
+/**
+ * The solver's input, so the client can run the same solve (spec §3.3).
+ *
+ * `now` comes from the server and is used verbatim. Two solves over the same
+ * facts at different instants are legitimately different answers, and a client
+ * substituting its own clock would report a mismatch it could not explain.
+ */
+export async function fetchContext(calendarId: string): Promise<ScheduleContext> {
+  const response = await api.api.calendars[':calendarId'].context.$get({ param: { calendarId } });
+  return toEngineContext(contextResponseSchema.parse(await expectOk(response)).context);
 }

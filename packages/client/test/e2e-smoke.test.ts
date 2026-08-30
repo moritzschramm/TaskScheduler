@@ -40,6 +40,8 @@ let server: ReturnType<typeof createServer>;
 let mounted: ReturnType<typeof mount> | null = null;
 const jar = new Map<string, string>();
 const inFlight = new Set<Promise<Response>>();
+/** When set, `POST /api/commands` waits on this before the server sees it. */
+let held: Promise<void> | null = null;
 
 describe('seed via the API, render the client', () => {
   beforeAll(async () => {
@@ -72,6 +74,8 @@ describe('seed via the API, render the client', () => {
       const path = url.startsWith('http') ? new URL(url).pathname + new URL(url).search : url;
 
       const pending = (async () => {
+        if (held !== null && path === '/api/commands') await held;
+
         const headers = new Headers(init?.headers ?? {});
         if (jar.size > 0) {
           headers.set('cookie', [...jar].map(([name, value]) => `${name}=${value}`).join('; '));
@@ -114,6 +118,7 @@ describe('seed via the API, render the client', () => {
   afterEach(async () => {
     mounted?.unmount();
     mounted = null;
+    held = null;
     await settle();
   });
 
@@ -601,6 +606,60 @@ describe('seed via the API, render the client', () => {
       await wrapper.find('[data-testid="redo"]').trigger('click');
       await settle();
       expect((await taskNamed('Tuesday work')).manualFloor).toBeNull();
+    });
+  });
+
+  /**
+   * Plan M12b: the schedule moves before the server has answered.
+   *
+   * What makes this worth testing through the whole client rather than as a
+   * unit is the *timing*. The command is held open, so the only thing that
+   * could have moved the block is the client's own solve — and when the server
+   * finally replies, the block has to stay where the preview put it.
+   */
+  describe('optimistic compute', () => {
+    it('redraws before the command resolves, and agrees when it lands', async () => {
+      const email = `optimistic-${Date.now()}@example.test`;
+      await seed(email);
+
+      await signIn(email, PASSWORD);
+      await loadSession();
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+      const tuesdayTask = () =>
+        wrapper.findAll('[data-testid="day-column"]')[1]!.find('[data-testid="block-task"]');
+      expect(tuesdayTask().attributes('data-start-min')).toBe('540');
+
+      // Hold the command open. Anything that moves the block from here until it
+      // is released came from the client's own solve.
+      let release: (() => void) | undefined;
+      held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+
+      await tuesdayTask().trigger('keydown', { key: 'ArrowDown' });
+      await tuesdayTask().trigger('keydown', { key: 'ArrowDown' });
+      await tuesdayTask().trigger('keydown', { key: 'Enter' });
+      await flushPromises();
+      await flushPromises();
+
+      // 09:30 Berlin, drawn while the POST is still in flight.
+      expect(tuesdayTask().attributes('data-start-min')).toBe('570');
+
+      release!();
+      held = null;
+      await settle();
+
+      // And the server agreed, so nothing moved a second time and no divergence
+      // was reported.
+      expect(tuesdayTask().attributes('data-start-min')).toBe('570');
+      expect(wrapper.find('[data-testid="schedule-diverged"]').exists()).toBe(false);
     });
   });
 });

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import type { BacklogEntry, CalendarSummary, TaskNode } from '@ambitime/shared';
-import { wallClockToInstant } from '@ambitime/scheduler';
+import { wallClockToInstant, type ScheduleContext } from '@ambitime/scheduler';
 import type { CivilDate } from '@ambitime/scheduler';
 import UndoRedo from '@/components/UndoRedo.vue';
 import AppointmentEditor from '@/components/calendar/AppointmentEditor.vue';
@@ -19,7 +19,8 @@ import {
   type ScheduleView,
 } from '@/lib/schedule';
 import { ApiError } from '@/lib/api';
-import { fetchConfiguration, fetchHistory, runCommand } from '@/lib/commands';
+import { fetchConfiguration, fetchContext, fetchHistory, runCommand } from '@/lib/commands';
+import { optimisticBlocks, schedulesAgree } from '@/lib/optimistic';
 import { now } from '@/lib/clock';
 import { addDays, formatCivilDate, localDate, toIso, weekDays } from '@/lib/time';
 import type {
@@ -57,6 +58,25 @@ const backlog = ref<BacklogEntry[]>([]);
 const tasks = ref<TaskNode[]>([]);
 const categories = ref<Category[]>([]);
 const history = ref<HistoryView | null>(null);
+
+/**
+ * The solver's input, held so a gesture can be answered without asking.
+ *
+ * Refreshed with every read, so it is never more stale than the schedule drawn
+ * beside it.
+ */
+const engineContext = ref<ScheduleContext | null>(null);
+
+/**
+ * Set when a prediction turned out to be wrong (plan M12: "accept the server
+ * result on the rare mismatch").
+ *
+ * Shown rather than swallowed. The server's answer has already replaced what
+ * was drawn, so nothing is broken — but a user who saw the schedule settle and
+ * then move deserves to be told that is what happened, and a mismatch that
+ * happens often is a bug worth someone noticing.
+ */
+const diverged = ref(false);
 const error = ref<string | null>(null);
 const loading = ref(true);
 
@@ -96,16 +116,18 @@ async function load() {
     const id = selectedId.value;
     if (id === null) return;
 
-    const [schedule, entries, taskList, configuration, log] = await Promise.all([
+    const [schedule, entries, taskList, configuration, log, context] = await Promise.all([
       fetchSchedule(id),
       fetchBacklog(id),
       fetchTasks(id),
       fetchConfiguration(id),
       fetchHistory(),
+      fetchContext(id),
     ]);
 
     categories.value = configuration.categories;
     history.value = log;
+    engineContext.value = context;
 
     view.value = schedule;
     backlog.value = entries;
@@ -156,15 +178,37 @@ function parentOf(task: TaskNode): TaskNode | null {
     : (tasks.value.find((candidate) => candidate.id === task.parentId) ?? null);
 }
 
-/** One command, then a re-read. The response is what the screen believes. */
+/**
+ * Draw the answer, then ask for it (plan M12).
+ *
+ * The same engine the server runs is imported here, so the effect of a gesture
+ * can be shown at once rather than after a round trip. The command still goes
+ * to the server, the server still re-derives, and its answer still replaces
+ * this one — the prediction is a prediction, not a decision.
+ *
+ * A command with no projection simply skips the preview and waits, which is the
+ * right answer for anything whose effect depends on state the client does not
+ * hold. Guessing wrong would be worse than waiting: the user would watch the
+ * schedule move twice.
+ */
 async function submit(request: CommandRequest): Promise<boolean> {
   error.value = null;
+  const predicted = predict(request);
 
   try {
     await runCommand(request);
     await load();
+
+    // Accept the server's result, and say so if it differed from what was
+    // already on screen.
+    diverged.value =
+      predicted !== null && !schedulesAgree(predicted, view.value?.schedule.blocks ?? []);
     return true;
   } catch (cause) {
+    // A refused command means the preview was never real. Put back what the
+    // server last told us rather than leaving a schedule nobody agreed to.
+    if (predicted !== null) await load();
+
     error.value =
       cause instanceof ApiError
         ? cause.message
@@ -173,6 +217,30 @@ async function submit(request: CommandRequest): Promise<boolean> {
           : 'That change could not be applied';
     return false;
   }
+}
+
+/** Solves the command locally and draws it, returning what it drew. */
+function predict(request: CommandRequest): ScheduledBlock[] | null {
+  const context = engineContext.value;
+  const current = view.value;
+  if (context === null || current === null) return null;
+
+  const titles = new Map(tasks.value.map((task) => [task.id, task]));
+  const blocks = optimisticBlocks(context, request, (occurrenceId) => {
+    const schedulable = context.schedulables.find((s) => s.occurrenceId === occurrenceId);
+    const task = schedulable === undefined ? undefined : titles.get(schedulable.taskId);
+    return {
+      taskId: schedulable?.taskId ?? occurrenceId,
+      title: task?.title ?? '…',
+      categoryId: schedulable?.categoryId ?? null,
+    };
+  });
+
+  if (blocks === null) return null;
+
+  view.value = { ...current, schedule: { ...current.schedule, blocks } };
+  diverged.value = false;
+  return blocks;
 }
 
 function editBlock(block: GridBlock): void {
@@ -276,6 +344,15 @@ watch(selectedId, load);
     </header>
 
     <p v-if="error" class="text-destructive text-sm" data-testid="calendar-error">{{ error }}</p>
+    <p
+      v-else-if="diverged"
+      class="text-muted-foreground text-sm"
+      role="status"
+      data-testid="schedule-diverged"
+    >
+      The server placed things a little differently from the preview, and its answer is what you are
+      looking at now.
+    </p>
     <p v-else-if="loading" class="text-muted-foreground text-sm">Loading the schedule…</p>
 
     <template v-else-if="view && calendar">
