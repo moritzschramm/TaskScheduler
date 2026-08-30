@@ -1,16 +1,14 @@
 import {
-  addWeeks,
   civilFromDays,
   daysFromCivil,
   instantToZonedCivil,
-  startOfLocalDay,
-  weekStartDate,
+  toCivilDate,
   type CivilDate,
   type Instant,
   type Interval,
-  type TuningConfig,
-} from '@ambitime/scheduler';
-import { toCivilDate } from './instants.js';
+} from './time.js';
+import { addWeeks, computeHardHorizon, startOfLocalDay, weekStartDate } from './horizon.js';
+import type { TuningConfig } from './config.js';
 
 /**
  * Local days and weeks (spec §6.1, §13).
@@ -62,4 +60,35 @@ export function dayFromParam(value: string, timeZone: string): Interval {
 /** A `YYYY-MM-DD` command parameter as the local week containing it. */
 export function weekFromParam(value: string, timeZone: string, config: TuningConfig): Interval {
   return localWeek(toCivilDate(value), timeZone, config);
+}
+
+/** Spec §7.3's three deferral targets. */
+export type DeferTarget = 'tomorrow' | 'next_week' | 'backlog';
+
+/**
+ * Where a deferral floors a task (spec §7.3).
+ *
+ * One definition, called by the server's handler and by the client's optimistic
+ * projection. Two implementations of "what tomorrow means" would disagree the
+ * first time somebody changed `firstDayOfWeek`, and the disagreement would show
+ * up as the schedule jumping after a gesture that had looked settled.
+ *
+ * `backlog` is the end of the hard horizon rather than a special case in the
+ * solver: nothing can be placed past it, so the coarse weekly planner picks the
+ * task up and gives it an estimated week (§6.1).
+ */
+export function deferFloor(
+  target: DeferTarget,
+  now: Instant,
+  timeZone: string,
+  config: TuningConfig,
+): Instant {
+  switch (target) {
+    case 'tomorrow':
+      return startOfNextDay(now, timeZone);
+    case 'next_week':
+      return startOfNextWeek(now, timeZone, config);
+    case 'backlog':
+      return computeHardHorizon(now, timeZone, config).end;
+  }
 }

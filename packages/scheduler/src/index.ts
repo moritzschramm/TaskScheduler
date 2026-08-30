@@ -16,6 +16,7 @@ export const SCHEDULER_PACKAGE = '@ambitime/scheduler' as const;
 
 export * from './time.js';
 export * from './types.js';
+export * from './local-days.js';
 export * from './ordering.js';
 export * from './windows.js';
 export * from './spans.js';

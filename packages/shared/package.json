@@ -12,6 +12,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@ambitime/scheduler": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

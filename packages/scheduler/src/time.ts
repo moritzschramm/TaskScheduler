@@ -216,3 +216,16 @@ export function durationOf(interval: Interval): number {
 export function isEmpty(interval: Interval): boolean {
   return interval.end <= interval.start;
 }
+
+/**
+ * A `YYYY-MM-DD` string as a civil date.
+ *
+ * Lives beside the rest of the calendar arithmetic rather than in a server
+ * module, because both sides of the wire parse these: a command carries dates
+ * as text, and the client has to read the same ones the server does.
+ */
+export function toCivilDate(value: string): CivilDate {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new RangeError(`Not a YYYY-MM-DD date: ${value}`);
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+}
