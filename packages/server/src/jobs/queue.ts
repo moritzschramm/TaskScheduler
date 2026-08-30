@@ -5,6 +5,8 @@ import { calendars } from '../db/schema/index.js';
 import { withSystemPrivileges } from '../db/context.js';
 import { toInstant } from '../schedule/instants.js';
 import { refreshCalendar } from './refresh.js';
+import { dispatchNotifications } from '../notifications/deliver.js';
+import { loggingEmailSender, type EmailSender } from '../notifications/email.js';
 import type { Database } from '../db/client.js';
 import type { Clock } from '../app.js';
 
@@ -31,6 +33,9 @@ export const REFRESH_QUEUE = 'calendar.refresh';
 /** The fan-out itself, so one schedule serves every calendar. */
 export const ROLLOVER_QUEUE = 'calendar.rollover';
 
+/** Notification delivery (§11): in-app when online, email when not. */
+export const DELIVERY_QUEUE = 'notifications.deliver';
+
 export interface RefreshJob {
   tenantId: string;
   userId: string;
@@ -56,12 +61,24 @@ export interface WorkerOptions {
    * covers a user who is ahead of the schedule.
    */
   rolloverCron?: string;
+  /** Where email goes. Defaults to the logging sender; see `email.ts`. */
+  email?: EmailSender;
+  /**
+   * How often delivery runs.
+   *
+   * A minute is the smallest interval pg-boss's cron accepts and is the right
+   * order for this: an offline user waiting up to a minute for an email is
+   * unremarkable, and an online one already has the notification.
+   */
+  deliveryCron?: string;
 }
 
 export interface Worker {
   boss: PgBoss;
   /** Enqueues a refresh for every calendar. Exposed for tests and for ops. */
   runRollover: () => Promise<void>;
+  /** Sends whatever is waiting. Exposed for tests and for ops. */
+  runDelivery: () => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -71,6 +88,8 @@ export async function startWorker({
   clock = () => new Date(),
   config = DEFAULT_TUNING,
   rolloverCron = '5 0 * * 1',
+  email = loggingEmailSender(),
+  deliveryCron = '* * * * *',
 }: WorkerOptions): Promise<Worker> {
   const boss = new PgBoss({ connectionString: databaseUrl });
 
@@ -83,6 +102,7 @@ export async function startWorker({
   await boss.start();
   await boss.createQueue(REFRESH_QUEUE);
   await boss.createQueue(ROLLOVER_QUEUE);
+  await boss.createQueue(DELIVERY_QUEUE);
 
   const runRollover = async (): Promise<void> => {
     // Read on the system path: a scheduled job acts for everyone, so there is
@@ -126,11 +146,21 @@ export async function startWorker({
     await runRollover();
   });
 
+  const runDelivery = async (): Promise<void> => {
+    await dispatchNotifications({ db, email, now: clock() });
+  };
+
+  await boss.work(DELIVERY_QUEUE, async () => {
+    await runDelivery();
+  });
+
   await boss.schedule(ROLLOVER_QUEUE, rolloverCron);
+  await boss.schedule(DELIVERY_QUEUE, deliveryCron);
 
   return {
     boss,
     runRollover,
+    runDelivery,
     // `stop` waits for in-flight handlers rather than cutting them off: a
     // refresh interrupted mid-transaction would roll back and be redelivered,
     // which is safe but wasteful, and a deploy should not cost a re-solve of

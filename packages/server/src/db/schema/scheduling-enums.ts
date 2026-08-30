@@ -58,9 +58,13 @@ export const notificationType = pgEnum('notification_type', [
   'working_window_divergence',
 ]);
 
+/** Spec §11: in-app when the user is online, email when they are not. */
+export const notificationChannel = pgEnum('notification_channel', ['in_app', 'email']);
+
 /** Spec §6.5 / §6.7: soft due dates warn, hard ones alert. */
 export const notificationSeverity = pgEnum('notification_severity', ['info', 'warning', 'alert']);
 
 /** The vocabulary of §11, as types. */
 export type NotificationType = (typeof notificationType.enumValues)[number];
 export type NotificationSeverity = (typeof notificationSeverity.enumValues)[number];
+export type NotificationChannel = (typeof notificationChannel.enumValues)[number];

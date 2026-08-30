@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import {
   createdAtColumn,
   createdAtDateColumn,
@@ -42,6 +42,15 @@ export const users = pgTable(
     emailVerified: boolean('email_verified').notNull().default(false),
     /** Avatar URL. Better Auth's `image`; the app has no opinion about it yet. */
     image: text('image'),
+    /**
+     * The heartbeat behind online/offline (spec §11).
+     *
+     * On the user rather than the session, because presence is a fact about a
+     * person: someone signed in on a laptop and a phone is online once, and a
+     * notification should reach them once.
+     */
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'string' }),
+
     version: versionColumn(),
     // Date-mode: Better Auth writes this table (§10.1). See `columns.ts`.
     createdAt: createdAtDateColumn(),

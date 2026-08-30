@@ -14,7 +14,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { createdAtColumn, primaryKeyColumn, updatedAtColumn, versionColumn } from './columns.js';
-import { notificationSeverity, notificationType } from './scheduling-enums.js';
+import { notificationChannel, notificationSeverity, notificationType } from './scheduling-enums.js';
 import { tstzrange } from './appointments.js';
 import { calendars } from './calendars.js';
 import { taskOccurrences } from './tasks.js';
@@ -168,6 +168,16 @@ export const notifications = pgTable(
      * changed under you (§7.2) happened once and is not recomputed away.
      */
     dedupeKey: text('dedupe_key'),
+
+    /**
+     * When this reached the user, and by which channel (spec §11).
+     *
+     * Recorded because delivery is not repeatable: an email sent twice is a
+     * second email, which no amount of idempotent derivation makes acceptable.
+     * `NULL` means the dispatcher has not looked at it yet.
+     */
+    deliveredAt: timestamp('delivered_at', { withTimezone: true, mode: 'string' }),
+    deliveredChannel: notificationChannel('delivered_channel'),
 
     readAt: timestamp('read_at', { withTimezone: true, mode: 'string' }),
 

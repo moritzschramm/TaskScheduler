@@ -39,7 +39,13 @@ describe('every source write in the command layer is journalled', () => {
 
     // `apply.ts` writes the log itself, which is append-only and not source
     // state — nothing reverses a fact about what was intended.
-    expect(offenders).toEqual(['apply.ts']);
+    //
+    // `handlers/appointments.ts` tells the other participants of an internal
+    // appointment that it moved (§7.2). Undo restores your state, not somebody
+    // else's knowledge: by the time you take a move back they may have read the
+    // notice or been emailed it, and withdrawing the row would leave them
+    // remembering a message the system denies sending.
+    expect(offenders).toEqual(['apply.ts', 'handlers/appointments.ts']);
   });
 
   it('does not smuggle a write through raw SQL either', () => {

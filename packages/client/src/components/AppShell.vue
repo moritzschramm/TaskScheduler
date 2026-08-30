@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { session, signOut } from '@/lib/session';
+import { session, signOut, startHeartbeat, stopHeartbeat } from '@/lib/session';
 
 /**
  * The frame around every signed-in page.
@@ -17,11 +17,17 @@ import { session, signOut } from '@/lib/session';
 
 const router = useRouter();
 
+// Presence is a fact about a signed-in page being open (§11), so the beat
+// starts with the shell and stops with it.
+onMounted(startHeartbeat);
+onUnmounted(stopHeartbeat);
+
 const active = computed(() =>
   session.value?.contexts.find((context) => context.tenantId === session.value?.activeTenantId),
 );
 
 async function leave() {
+  stopHeartbeat();
   await signOut();
   await router.replace({ name: 'sign-in' });
 }

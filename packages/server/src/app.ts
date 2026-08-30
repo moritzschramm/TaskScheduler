@@ -73,7 +73,7 @@ export function createApp({
     .route('/', meRoute(auth))
     .route('/', commandRoutes(auth, clock))
     .route('/', calendarRoutes(auth, clock))
-    .route('/', notificationRoutes(auth));
+    .route('/', notificationRoutes(auth, clock));
 
   return routes;
 }

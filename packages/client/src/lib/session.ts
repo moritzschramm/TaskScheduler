@@ -72,3 +72,38 @@ export async function signOut(): Promise<void> {
   await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin' });
   current.value = null;
 }
+
+/**
+ * The presence heartbeat (spec §11).
+ *
+ * What decides whether the next notification arrives in the app or by email.
+ * Sent while a signed-in page is open and stopped when it is not — a tab left
+ * open in a browser that has been closed is not a person who is present, and
+ * `PRESENCE_TIMEOUT_MINUTES` on the server is what makes a missed beat mean
+ * absent rather than a dropped request mean absent.
+ *
+ * Failures are swallowed on purpose. A heartbeat that could not be sent is a
+ * heartbeat that did not happen, which is exactly what the server should
+ * conclude; showing the user an error about it would be reporting a problem
+ * they neither caused nor can fix.
+ */
+const HEARTBEAT_INTERVAL_MS = 60_000;
+
+let heartbeat: ReturnType<typeof setInterval> | undefined;
+
+export function startHeartbeat(): void {
+  if (heartbeat !== undefined) return;
+
+  const beat = () => {
+    void api.api.presence.$post().catch(() => undefined);
+  };
+
+  beat();
+  heartbeat = setInterval(beat, HEARTBEAT_INTERVAL_MS);
+}
+
+export function stopHeartbeat(): void {
+  if (heartbeat === undefined) return;
+  clearInterval(heartbeat);
+  heartbeat = undefined;
+}

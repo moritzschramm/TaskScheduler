@@ -9,6 +9,8 @@ import type {
   EditAppointmentParams,
 } from '@ambitime/shared';
 import type { Appointment, NewAppointment } from '../../db/schema/index.js';
+import { appointmentParticipants, notifications } from '../../db/schema/index.js';
+import { eq } from 'drizzle-orm';
 
 /**
  * Ad-hoc fixed blocks (spec §7.4).
@@ -98,7 +100,66 @@ export async function editAppointment(
     appointment.calendarId,
   );
 
+  if (values.during !== undefined) await notifyParticipants(ctx, appointment);
+
   return { calendarIds: [appointment.calendarId] };
+}
+
+/**
+ * Telling the other side that an internal appointment has moved (spec §7.2).
+ *
+ * §7.2 draws the line at whether the system can do anything: an **external**
+ * appointment is the user's to renegotiate, while an **internal** one — every
+ * participant an app user — is something the system can at least tell people
+ * about. So only internal ones notify, and only the participants who are not
+ * the person who moved it.
+ *
+ * An **event**, not a signal. It carries no dedupe key, so nothing recomputes
+ * it away: a meeting having moved is not a condition that stops being true, and
+ * "your Tuesday changed twice" is two facts rather than one restated.
+ *
+ * The change-request affordance §7.2 anticipates is the participant's `status`
+ * — `change_requested` has been in the enum since M2 — and is not yet an action
+ * anyone can take. What exists now is being told.
+ */
+async function notifyParticipants(ctx: CommandContext, appointment: Appointment): Promise<void> {
+  if (!appointment.isInternal) return;
+
+  const participants = await ctx.tx
+    .select({ userId: appointmentParticipants.userId })
+    .from(appointmentParticipants)
+    .where(eq(appointmentParticipants.appointmentId, appointment.id));
+
+  const others = participants.filter((row) => row.userId !== ctx.actorId);
+  if (others.length === 0) return;
+
+  /**
+   * **Outside the journal**, unlike everything else a handler writes.
+   *
+   * Undo restores *your* state (§12); it cannot restore somebody else's
+   * knowledge. By the time you take back a move, the counterparty may have
+   * read the notice or been emailed it, and withdrawing the row would leave
+   * them remembering a message the system denies sending.
+   *
+   * The mechanism agrees: the RLS policy lets a member *address* a
+   * notification to anyone in the tenant and read only their own, so this
+   * insert cannot use `RETURNING` — and the journal needs the id it would
+   * return. Two independent reasons pointing the same way.
+   */
+  await ctx.tx.insert(notifications).values(
+    others.map((row) => ({
+      tenantId: ctx.tenantId,
+      userId: row.userId,
+      type: 'internal_appointment_change' as const,
+      severity: 'warning' as const,
+      payload: {
+        appointmentId: appointment.id,
+        calendarId: appointment.calendarId,
+        title: appointment.title,
+        message: `"${appointment.title}" has been moved.`,
+      },
+    })),
+  );
 }
 
 function refuseWithoutInstance(scope: string): never {

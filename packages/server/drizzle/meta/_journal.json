@@ -64,6 +64,20 @@
       "when": 1788110134927,
       "tag": "0008_recurring_appointments",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788112756736,
+      "tag": "0009_presence_and_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788112757736,
+      "tag": "0010_notify_counterparties",
+      "breakpoints": true
     }
   ]
 }
