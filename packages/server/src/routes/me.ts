@@ -26,7 +26,14 @@ export function meRoute(auth: Auth) {
 
     const body = await withRequestContext(c.get('db'), context, async (tx) => {
       const [user] = await tx
-        .select({ id: users.id, email: users.email, displayName: users.displayName })
+        .select({
+          id: users.id,
+          email: users.email,
+          displayName: users.displayName,
+          locale: users.locale,
+          timeZone: users.timeZone,
+          firstDayOfWeek: users.firstDayOfWeek,
+        })
         .from(users)
         .where(eq(users.id, context.userId))
         .limit(1);
@@ -49,6 +56,15 @@ export function meRoute(auth: Auth) {
 
       return {
         user,
+        // §13's display settings, alongside who is asking. They travel with the
+        // session read because every screen needs them before it draws
+        // anything, and a second request would mean a first paint in the wrong
+        // format.
+        settings: {
+          locale: user?.locale ?? null,
+          timeZone: user?.timeZone ?? null,
+          firstDayOfWeek: user?.firstDayOfWeek ?? null,
+        },
         activeTenantId: context.tenantId,
         contexts: contexts.map((row) => ({
           tenantId: row.tenantId,

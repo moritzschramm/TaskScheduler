@@ -89,6 +89,7 @@ describe('the command envelope (spec §7.1)', () => {
       'SwapForward',
       'SwapTasks',
       'Undo',
+      'UpdateSettings',
     ]);
   });
 

@@ -8,6 +8,7 @@ import {
   notifications,
   taskOccurrences,
   tasks,
+  users,
   weekTypeOverrides,
 } from '../db/schema/index.js';
 import type { CommandContext } from './context.js';
@@ -20,6 +21,7 @@ import type {
   NewNotification,
   NewTask,
   NewTaskOccurrence,
+  NewUser,
   NewWeekTypeOverride,
 } from '../db/schema/index.js';
 import type { PgTable } from 'drizzle-orm/pg-core';
@@ -44,6 +46,10 @@ import type { PgTable } from 'drizzle-orm/pg-core';
  * derived (§3.3): they are recomputed from source after every command, undo
  * included, so recording them would be recording an answer rather than a fact.
  * Nothing here can reach them — `deriveCalendarSchedule` writes them directly.
+ *
+ * `users` is in for the same narrow reason as `notifications`: §13's display
+ * settings are a person's own decision, and changing one is exactly the kind of
+ * thing somebody wants back. Nothing else about a user is written here.
  *
  * `notifications` is in the set for one column's sake. The rows themselves are
  * derived — `produceSignals` replaces them wholesale, outside the journal, for
@@ -70,6 +76,7 @@ interface JournalInserts {
   availability_windows: NewAvailabilityWindow;
   week_type_overrides: NewWeekTypeOverride;
   notifications: NewNotification;
+  users: NewUser;
 }
 
 /**
@@ -87,6 +94,7 @@ const JOURNALLED = {
   availability_windows: availabilityWindows,
   week_type_overrides: weekTypeOverrides,
   notifications,
+  users,
 } satisfies Record<keyof JournalInserts, PgTable>;
 
 export type JournalTable = keyof typeof JOURNALLED;

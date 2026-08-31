@@ -22,10 +22,57 @@ export interface SessionContext {
   isPersonal: boolean;
 }
 
+/**
+ * Spec §13's display settings.
+ *
+ * All nullable, and `null` means *unset* rather than a default: a user who has
+ * never opened settings sees exactly what they saw before settings existed.
+ * Every fallback is decided at the point of use, where the alternative is
+ * known — the calendar's own zone, or the browser's locale.
+ */
+export interface DisplaySettings {
+  locale: string | null;
+  timeZone: string | null;
+  firstDayOfWeek: number | null;
+}
+
 export interface Session {
   user: { id: string; email: string; displayName: string | null };
+  settings: DisplaySettings;
   activeTenantId: string;
   contexts: SessionContext[];
+}
+
+/**
+ * The locale to format in.
+ *
+ * Falls back to the browser's rather than to a hard-coded `en-GB`: somebody who
+ * has not chosen is better served by their operating system's answer than by
+ * this application's guess.
+ */
+export function displayLocale(): string {
+  return current.value?.settings.locale ?? navigator.language ?? 'en-GB';
+}
+
+/**
+ * The zone to draw a calendar in (§13, §5.1).
+ *
+ * §13 says display respects the user's timezone; §5.1 makes a calendar's own
+ * zone the one its wall-clock rules mean. Both are true and they answer
+ * different questions — so the user's setting wins when they have made one, and
+ * the calendar's is the fallback, which is what every screen did before this
+ * setting existed.
+ *
+ * A viewer in Lisbon who has set nothing keeps seeing the Berlin working day
+ * they were shown yesterday; one who has set Europe/Lisbon sees their own.
+ */
+export function displayTimeZone(calendarTimeZone: string): string {
+  return current.value?.settings.timeZone ?? calendarTimeZone;
+}
+
+/** ISO weekday the week starts on. Display only — see the settings handler. */
+export function displayFirstDayOfWeek(): number {
+  return current.value?.settings.firstDayOfWeek ?? 1;
 }
 
 const current = ref<Session | null>(null);

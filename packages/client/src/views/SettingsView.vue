@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import AvailabilitySection from '@/components/settings/AvailabilitySection.vue';
 import CalendarSection from '@/components/settings/CalendarSection.vue';
+import DisplaySection from '@/components/settings/DisplaySection.vue';
 import CategoriesSection from '@/components/settings/CategoriesSection.vue';
 import OverridesSection from '@/components/settings/OverridesSection.vue';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { Select } from '@/components/ui/select';
 import { ApiError } from '@/lib/api';
 import { createdId, fetchConfiguration, runCommand } from '@/lib/commands';
 import { fetchCalendars } from '@/lib/schedule';
+import { loadSession } from '@/lib/session';
 import type { CalendarConfiguration, CalendarSummary, CommandRequest } from '@ambitime/shared';
 
 /**
@@ -66,6 +68,10 @@ async function submit(request: CommandRequest): Promise<boolean> {
 
   try {
     await runCommand(request);
+    // The session carries §13's settings, so a settings change has to refresh
+    // it as well as the configuration — otherwise the preview would update and
+    // every other screen would not.
+    await loadSession();
     await load();
     return true;
   } catch (cause) {
@@ -184,6 +190,7 @@ watch(selectedId, load);
     </section>
 
     <template v-else>
+      <DisplaySection :calendar-time-zone="configuration.calendar.timezone" :submit="submit" />
       <CalendarSection :configuration="configuration" :submit="submit" />
       <CategoriesSection :configuration="configuration" :submit="submit" />
       <AvailabilitySection :configuration="configuration" :submit="submit" />

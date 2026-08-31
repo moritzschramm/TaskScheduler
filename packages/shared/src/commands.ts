@@ -446,6 +446,29 @@ export const editWeekTypeOverrideParams = z.object({
 export const deleteWeekTypeOverrideParams = z.object({ weekTypeOverrideId: uuid });
 
 /**
+ * `UpdateSettings(patch)` — spec §13's user settings.
+ *
+ * "Date/time formatting, first-day-of-week, locale, and timezone are user
+ * settings." All three are nullable in the patch, and `null` means *unset*
+ * rather than a default: a user who clears their timezone goes back to
+ * following whichever calendar they are looking at, which is what they had
+ * before they ever opened this screen.
+ *
+ * A command like everything else. It changes no schedule and re-derives
+ * nothing, but the single write path (§3.2) has no exceptions worth carving.
+ */
+export const updateSettingsParams = z.object({
+  patch: z.object({
+    /** A BCP-47 tag, e.g. `en-GB`. Formatting only. */
+    locale: z.string().min(2).nullable().optional(),
+    /** An IANA zone name. Display only — a calendar keeps its own (§5.1). */
+    timeZone: timeZone.nullable().optional(),
+    /** 1 = Monday … 7 = Sunday. */
+    firstDayOfWeek: z.int().min(1).max(7).nullable().optional(),
+  }),
+});
+
+/**
  * `MarkNotificationsRead(ids)` — dismissing what the engine told you (§11).
  *
  * Not named in §7, and it changes nothing about the schedule. It is a command
@@ -522,6 +545,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   command('MoveToBacklog', moveToBacklogParams),
   command('AddUnavailability', addUnavailabilityParams),
   command('MarkNotificationsRead', markNotificationsReadParams),
+  command('UpdateSettings', updateSettingsParams),
   command('CreateCalendar', createCalendarParams),
   command('ConfigureCalendar', configureCalendarParams),
   command('SetCalendarWindows', setCalendarWindowsParams),
@@ -560,6 +584,7 @@ export type PromoteFromBacklogParams = z.infer<typeof promoteFromBacklogParams>;
 export type MoveToBacklogParams = z.infer<typeof moveToBacklogParams>;
 export type AddUnavailabilityParams = z.infer<typeof addUnavailabilityParams>;
 export type MarkNotificationsReadParams = z.infer<typeof markNotificationsReadParams>;
+export type UpdateSettingsParams = z.infer<typeof updateSettingsParams>;
 export type CreateCalendarParams = z.infer<typeof createCalendarParams>;
 export type ConfigureCalendarParams = z.infer<typeof configureCalendarParams>;
 export type SetCalendarWindowsParams = z.infer<typeof setCalendarWindowsParams>;

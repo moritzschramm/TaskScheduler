@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { boolean, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  pgTable,
+  smallint,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import {
   createdAtColumn,
   createdAtDateColumn,
@@ -43,6 +52,26 @@ export const users = pgTable(
     /** Avatar URL. Better Auth's `image`; the app has no opinion about it yet. */
     image: text('image'),
     /**
+     * Display settings (spec §13).
+     *
+     * All three are nullable, and unset means "follow the calendar" rather
+     * than "use a default": a user who has never opened settings should see
+     * exactly what they saw before the settings existed, and a stored default
+     * would be a decision made on their behalf that they then have to notice
+     * and undo.
+     *
+     * `firstDayOfWeek` is **display only**. It looks like §15's tuning value of
+     * the same name, and deliberately does not feed the solve: the derived
+     * schedule is a function of source state (§3.4), and letting a viewer's
+     * preference reach it would make two members of one tenant disagree about
+     * what the cache says.
+     */
+    locale: text('locale'),
+    timeZone: text('time_zone'),
+    /** ISO-8601 weekday: 1 = Monday … 7 = Sunday. */
+    firstDayOfWeek: smallint('first_day_of_week'),
+
+    /**
      * The heartbeat behind online/offline (spec §11).
      *
      * On the user rather than the session, because presence is a fact about a
@@ -56,7 +85,13 @@ export const users = pgTable(
     createdAt: createdAtDateColumn(),
     updatedAt: updatedAtDateColumn(),
   },
-  (table) => [uniqueIndex('users_email_lower_key').on(sql`lower(${table.email})`)],
+  (table) => [
+    uniqueIndex('users_email_lower_key').on(sql`lower(${table.email})`),
+    check(
+      'users_first_day_of_week_range',
+      sql`${table.firstDayOfWeek} is null or ${table.firstDayOfWeek} between 1 and 7`,
+    ),
+  ],
 );
 
 /**

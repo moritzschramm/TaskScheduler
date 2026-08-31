@@ -901,6 +901,94 @@ describe('seed via the API, render the client', () => {
       ).toBe(true);
     });
   });
+
+  /**
+   * Plan M16a: the end-to-end timezone audit (spec §13, §5.1).
+   *
+   * Two zones are in play and they answer different questions. A calendar's
+   * zone is what its availability windows *mean* — "09:00 Tuesday" is a
+   * wall-clock rule (§5.1). A user's zone is how anything is *shown* (§13).
+   * They are usually the same and the interesting case is when they are not.
+   *
+   * The point of walking it through the real client is that the same instant
+   * has to move on screen without moving in the database.
+   */
+  describe('timezone and locale settings', () => {
+    it('draws the calendar in the user’s zone once they set one', async () => {
+      const email = `tz-${Date.now()}@example.test`;
+      const { calendarId, command } = await seed(email);
+      const storedFloor = async () =>
+        (await readTasks(calendarId)).find((task) => task.title === 'Tuesday work')?.manualFloor;
+
+      await signIn(email, PASSWORD);
+      await loadSession();
+
+      // Read after signing in: the cookie jar is what carries the session, and
+      // the seed's own cookie never enters it.
+      const floorBefore = await storedFloor();
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+      // The seeded task sits at 09:00 Berlin on the Tuesday. With no user zone
+      // set, the grid follows the calendar — which is what it did before this
+      // setting existed, so nobody's view changes until they ask.
+      const tuesdayTask = () =>
+        wrapper.findAll('[data-testid="day-column"]')[1]!.find('[data-testid="block-task"]');
+      expect(tuesdayTask().attributes('data-start-min')).toBe('540');
+      expect(wrapper.find('[data-testid="zone-divergence"]').exists()).toBe(false);
+
+      // Lisbon is an hour behind Berlin in March.
+      await command({
+        type: 'UpdateSettings',
+        params: { patch: { timeZone: 'Europe/Lisbon' } },
+      });
+      await loadSession();
+      await router.replace('/settings');
+      await router.replace('/');
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+      // Same instant, an hour earlier on a Lisbon clock — and the calendar's
+      // own zone is named, because its windows still mean Berlin time.
+      expect(tuesdayTask().attributes('data-start-min')).toBe('480');
+      expect(wrapper.find('[data-testid="zone-divergence"]').text()).toContain('Europe/Berlin');
+
+      // And nothing moved in the database. Display is display: the stored
+      // instant is the same one it was before the setting changed (§5.1).
+      expect(await storedFloor()).toBe(floorBefore);
+    });
+
+    it('starts the week where the user says', async () => {
+      const email = `week-${Date.now()}@example.test`;
+      const { command } = await seed(email);
+
+      await command({
+        type: 'UpdateSettings',
+        params: { patch: { firstDayOfWeek: 7 } },
+      });
+
+      await signIn(email, PASSWORD);
+      await loadSession();
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+      // Sunday-first, so the week containing Monday 2026-03-23 starts on the
+      // 22nd. §13 makes this a user setting; it is display only, and the
+      // derived schedule is unchanged by it.
+      expect(wrapper.findAll('[data-testid="day-column"]')[0]!.attributes('data-day')).toBe(
+        '2026-03-22',
+      );
+    });
+  });
 });
 
 /** The task list as the server reports it, for assertions the DOM cannot make. */

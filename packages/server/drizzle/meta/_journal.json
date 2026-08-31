@@ -78,6 +78,13 @@
       "when": 1788112757736,
       "tag": "0010_notify_counterparties",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788174846175,
+      "tag": "0011_user_settings",
+      "breakpoints": true
     }
   ]
 }

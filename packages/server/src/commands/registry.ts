@@ -8,6 +8,7 @@ import { cancelTask, extendTask, moveToBacklog, promoteFromBacklog } from './han
 import { swapForward, swapTasks } from './handlers/swap.js';
 import { redo, undo } from './handlers/history.js';
 import { markNotificationsRead } from './handlers/notifications.js';
+import { updateSettings } from './handlers/settings.js';
 import {
   configureCalendar,
   createCalendar,
@@ -68,6 +69,8 @@ export function dispatch(command: Command, ctx: CommandContext): Promise<Handler
       return addUnavailability(command.params, ctx);
     case 'MarkNotificationsRead':
       return markNotificationsRead(command.params, ctx);
+    case 'UpdateSettings':
+      return updateSettings(command.params, ctx);
     case 'CreateCalendar':
       return createCalendar(command.params, ctx);
     case 'ConfigureCalendar':
@@ -131,6 +134,8 @@ export const COMMAND_TARGETS: Readonly<
   AddUnavailability: null,
   // Names a list, not one row, so there is no single version to lock.
   MarkNotificationsRead: null,
+  // Names the actor, who is never in doubt; there is nothing to lock against.
+  UpdateSettings: null,
   CreateCalendar: null,
   ConfigureCalendar: 'calendar',
   // The set is the unit, and a set has no version of its own — the calendar it

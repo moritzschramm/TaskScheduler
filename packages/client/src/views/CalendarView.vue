@@ -26,6 +26,7 @@ import { ApiError } from '@/lib/api';
 import { fetchConfiguration, fetchContext, fetchHistory, runCommand } from '@/lib/commands';
 import { optimisticBlocks, schedulesAgree } from '@/lib/optimistic';
 import { now } from '@/lib/clock';
+import { displayFirstDayOfWeek, displayLocale, displayTimeZone } from '@/lib/session';
 import { addDays, formatCivilDate, localDate, toIso, weekDays } from '@/lib/time';
 import type {
   CapacityCell,
@@ -52,10 +53,27 @@ import type { GridBlock } from '@/lib/grid';
  * until the server has re-derived it.
  */
 
-const props = withDefaults(defineProps<{ firstDayOfWeek?: number; locale?: string }>(), {
-  firstDayOfWeek: 1,
-  locale: 'en-GB',
-});
+/**
+ * Formatting comes from §13's user settings, not from props.
+ *
+ * The props survive as overrides so a component test can pin them, but nothing
+ * in the application passes them: a user who has chosen a locale has chosen it
+ * everywhere, and a screen that took its own default would be one more place
+ * for that choice to fail to apply.
+ */
+const props = defineProps<{ firstDayOfWeek?: number; locale?: string }>();
+
+const locale = computed(() => props.locale ?? displayLocale());
+const firstDayOfWeek = computed(() => props.firstDayOfWeek ?? displayFirstDayOfWeek());
+
+/**
+ * The zone the grid is drawn in (§13, §5.1).
+ *
+ * The user's setting when they have made one, and the calendar's own zone when
+ * they have not — which is exactly what every screen did before the setting
+ * existed, so nobody's view changes until they ask for it to.
+ */
+const zone = computed(() => displayTimeZone(calendar.value?.timezone ?? 'UTC'));
 
 const calendars = ref<CalendarSummary[]>([]);
 const selectedId = ref<string | null>(null);
@@ -106,11 +124,11 @@ const anchor = ref<CivilDate | null>(null);
 const calendar = computed(() => calendars.value.find((entry) => entry.id === selectedId.value));
 
 const days = computed<CivilDate[]>(() =>
-  anchor.value === null ? [] : weekDays(anchor.value, props.firstDayOfWeek),
+  anchor.value === null ? [] : weekDays(anchor.value, firstDayOfWeek.value),
 );
 
 const today = computed<CivilDate | null>(() =>
-  calendar.value ? localDate(now().toISOString(), calendar.value.timezone) : null,
+  calendar.value ? localDate(now().toISOString(), zone.value) : null,
 );
 
 async function load() {
@@ -287,10 +305,14 @@ async function moveBlock(payload: {
   const taskId = payload.block.taskId;
   if (taskId === undefined) return;
 
-  const zone = calendar.value?.timezone ?? 'UTC';
   await submit({
     type: 'MoveTask',
-    params: { taskId, datetime: toIso(wallClockToInstant(payload.day, payload.startMin, zone)) },
+    params: {
+      taskId,
+      // The grid speaks local minutes in the zone it drew, so the conversion
+      // has to use that same zone — not the calendar's, when the two differ.
+      datetime: toIso(wallClockToInstant(payload.day, payload.startMin, zone.value)),
+    },
   });
 }
 
@@ -316,8 +338,7 @@ const swapCandidates = computed<ScheduledBlock[]>(() => {
 });
 
 function addBlockOn(day: CivilDate): void {
-  const zone = calendar.value?.timezone ?? 'UTC';
-  const at = wallClockToInstant(day, 9 * 60, zone);
+  const at = wallClockToInstant(day, 9 * 60, zone.value);
   editing.value = { kind: 'block', block: null, defaultStart: toIso(at) };
 }
 
@@ -341,7 +362,16 @@ watch(selectedId, load);
           </option>
         </select>
         <span v-if="calendar" class="text-muted-foreground text-xs" data-testid="calendar-zone">
-          {{ calendar.timezone }}
+          {{ zone }}
+          <template v-if="zone !== calendar.timezone">
+            <!--
+              Said out loud when the two differ: the grid is in your zone, but
+              this calendar's availability windows are wall-clock rules in its
+              own (§5.1), so "09:00 Monday" means something different to the
+              scheduler than the row you are looking at.
+            -->
+            <span data-testid="zone-divergence">(calendar is {{ calendar.timezone }})</span>
+          </template>
         </span>
       </div>
 
@@ -371,7 +401,7 @@ watch(selectedId, load);
     <template v-else-if="view && calendar">
       <WeekGrid
         :days="days"
-        :time-zone="calendar.timezone"
+        :time-zone="zone"
         :blocks="view.schedule.blocks"
         :fixed-blocks="view.fixedBlocks"
         :today="today"
@@ -412,7 +442,7 @@ watch(selectedId, load);
             :parent="editing.parent"
             :calendar-id="calendar.id"
             :categories="categories"
-            :time-zone="calendar.timezone"
+            :time-zone="zone"
             :submit="submit"
             @cancel="editing = { kind: 'none' }"
           />
@@ -421,7 +451,7 @@ watch(selectedId, load);
               :task="editing.task"
               :placement="selectedPlacement"
               :others="swapCandidates"
-              :time-zone="calendar.timezone"
+              :time-zone="zone"
               :submit="submit"
             />
           </div>
@@ -431,7 +461,7 @@ watch(selectedId, load);
           :key="editing.block?.appointmentId ?? 'new-block'"
           :block="editing.block"
           :calendar-id="calendar.id"
-          :time-zone="calendar.timezone"
+          :time-zone="zone"
           :default-start="editing.defaultStart"
           :submit="submit"
           @cancel="editing = { kind: 'none' }"

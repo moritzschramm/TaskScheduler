@@ -72,6 +72,7 @@ const CREATED_ENTITY: Readonly<Record<JournalTable, CreatedEntity['entity']>> = 
   availability_windows: 'availability_window',
   week_type_overrides: 'week_type_override',
   notifications: 'notification',
+  users: 'user',
 };
 
 /** SQLSTATE for a unique violation — here, a command id already in the log. */
