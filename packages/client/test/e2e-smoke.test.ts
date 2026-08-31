@@ -996,6 +996,108 @@ describe('seed via the API, render the client', () => {
       );
     });
   });
+
+  /**
+   * Registering, with nothing seeded at all (spec §10.1, §4.2).
+   *
+   * Every other test here starts from a seeded account. This one starts from a
+   * stranger, because that is the path a real first user takes and the one
+   * nothing had ever exercised: sign-up screen, account, personal tenant, first
+   * calendar.
+   *
+   * M1's triggers are what make the account complete — the personal tenant, its
+   * owner membership and the primary email identity all appear without sign-up
+   * knowing they exist. What it does *not* get is a calendar, and landing on a
+   * blank page is what "you can register now" would otherwise have meant.
+   */
+  describe('registering', () => {
+    it('creates an account from the sign-up form and gets to a calendar', async () => {
+      const email = `newcomer-${Date.now()}@example.test`;
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/sign-up');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.find('[data-testid="sign-up"]').exists());
+
+      await wrapper.find('[data-testid="sign-up-name"]').setValue('Newcomer');
+      await wrapper.find('[data-testid="sign-up-email"]').setValue(email);
+      await wrapper.find('[data-testid="sign-up-password"]').setValue(PASSWORD);
+      await wrapper.find('[data-testid="sign-up"] form').trigger('submit');
+      await settle();
+
+      // Signed in already — the sign-up response carries the session, so there
+      // is no second step.
+      await waitFor(() => wrapper.find('[data-testid="app-shell-header"]').exists());
+      expect(wrapper.find('[data-testid="app-shell-header"]').text()).toContain(email);
+
+      // §4.2's triggers gave them a personal tenant without sign-up asking.
+      expect(wrapper.find('[data-testid="active-context"]').text()).toBe('Personal');
+
+      // And no calendar, so the schedule offers to make one rather than
+      // rendering nothing.
+      await waitFor(() => wrapper.find('[data-testid="no-calendar-yet"]').exists());
+
+      await wrapper.find('[data-testid="create-first-calendar"]').trigger('click');
+      await flushPromises();
+      await settle();
+
+      // The settings screen's own first-run path takes it from here (M11a).
+      expect(wrapper.find('[data-testid="no-calendar"]').exists()).toBe(true);
+
+      await wrapper.find('[data-testid="first-calendar-name"]').setValue('Work');
+      await wrapper.find('[data-testid="first-calendar-timezone"]').setValue('Europe/Berlin');
+      await wrapper.find('[data-testid="create-calendar"]').trigger('click');
+      await settle();
+
+      // A real calendar now exists, and the settings screen is editing it.
+      expect(wrapper.find('[data-testid="calendar-section"]').exists()).toBe(true);
+      expect(
+        (wrapper.find('[data-testid="calendar-name"]').element as HTMLInputElement).value,
+      ).toBe('Work');
+    });
+
+    it('refuses an address that is already registered, and says where to go', async () => {
+      const email = `taken-${Date.now()}@example.test`;
+      await seed(email);
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/sign-up');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.find('[data-testid="sign-up"]').exists());
+
+      await wrapper.find('[data-testid="sign-up-email"]').setValue(email);
+      await wrapper.find('[data-testid="sign-up-password"]').setValue(PASSWORD);
+      await wrapper.find('[data-testid="sign-up"] form').trigger('submit');
+      await settle();
+
+      // Sign-up cannot keep the existence of an address secret and still be
+      // usable, so it says the useful thing rather than the coy one.
+      expect(wrapper.find('[data-testid="sign-up-error"]').text()).toContain('already an account');
+      expect(wrapper.find('[data-testid="to-sign-in"]').exists()).toBe(true);
+    });
+
+    it('sends someone who has no account from the sign-in form', async () => {
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/sign-in?next=/settings');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.find('[data-testid="to-sign-up"]').exists());
+
+      await wrapper.find('[data-testid="to-sign-up"]').trigger('click');
+      // `settle` waits on in-flight requests and returns at once when there are
+      // none, so a navigation with no network behind it needs its own flush.
+      await flushPromises();
+
+      // And where they were going survives the crossing.
+      expect(wrapper.find('[data-testid="sign-up"]').exists()).toBe(true);
+      expect(router.currentRoute.value.query['next']).toBe('/settings');
+    });
+  });
 });
 
 /** The task list as the server reports it, for assertions the DOM cannot make. */

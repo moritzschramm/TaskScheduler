@@ -70,6 +70,17 @@ async function submit() {
           <Button type="submit" :disabled="busy">
             {{ busy ? 'Signing in…' : 'Sign in' }}
           </Button>
+
+          <p class="text-muted-foreground text-center text-sm">
+            No account yet?
+            <RouterLink
+              class="underline underline-offset-4"
+              :to="{ name: 'sign-up', query: route.query }"
+              data-testid="to-sign-up"
+            >
+              Create one
+            </RouterLink>
+          </p>
         </form>
       </CardContent>
     </Card>

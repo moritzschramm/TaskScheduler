@@ -96,6 +96,71 @@ export async function loadSession(): Promise<Session | null> {
   return current.value;
 }
 
+/**
+ * Creating an account (spec §10.1).
+ *
+ * Better Auth writes the `users` row and M1's triggers do the rest: the
+ * personal tenant, its `owner` membership and the primary email identity all
+ * appear without sign-up knowing any of them exist (§4.2). It also signs the
+ * new user in, so there is no second step.
+ *
+ * **The error wording is not blurred here, unlike `signIn`.** Sign-in refuses
+ * to say whether an address exists, because telling someone which half they got
+ * right is a gift to whoever is guessing. Sign-up cannot keep that secret and
+ * still be usable: somebody whose address is already registered has to be told
+ * so, or they cannot get in. The blur would also be theatre — a sign-up form
+ * reveals existence by succeeding or failing whatever it says.
+ *
+ * Closing that properly means not answering at the form at all: accept the
+ * address, send a message to it, and say "check your email" either way. That
+ * needs a working transport, and M15b's is an adapter that logs.
+ */
+export async function signUp(
+  email: string,
+  password: string,
+  displayName: string,
+): Promise<string | null> {
+  const response = await fetch('/api/auth/sign-up/email', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ email, password, name: displayName }),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { code?: string } | null;
+    return signUpMessage(body?.code);
+  }
+
+  // The response carries a session cookie, so the new account is already signed
+  // in; this is what puts it in front of the router guard.
+  await loadSession();
+  return null;
+}
+
+/**
+ * The server's codes, in words a person can act on.
+ *
+ * Mapped rather than passed through: Better Auth writes for a developer
+ * reading a response, and "User already exists. Use another email." is an
+ * instruction to do the one thing that is probably wrong.
+ */
+function signUpMessage(code: string | undefined): string {
+  switch (code) {
+    case 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL':
+      return 'There is already an account with that address. Try signing in instead.';
+    case 'PASSWORD_TOO_SHORT':
+      return `Passwords need at least ${MINIMUM_PASSWORD_LENGTH} characters.`;
+    case 'INVALID_EMAIL':
+      return 'That does not look like an email address.';
+    default:
+      return 'That account could not be created';
+  }
+}
+
+/** Better Auth's own minimum, repeated here so the form can say it up front. */
+export const MINIMUM_PASSWORD_LENGTH = 8;
+
 export async function signIn(email: string, password: string): Promise<string | null> {
   const response = await fetch('/api/auth/sign-in/email', {
     method: 'POST',
