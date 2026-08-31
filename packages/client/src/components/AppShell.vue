@@ -35,6 +35,19 @@ async function leave() {
 
 <template>
   <div class="bg-background min-h-full">
+    <!--
+      WCAG 2.4.1. The header is short, but the calendar behind it is a grid of
+      focusable blocks — without this, reaching the task panel by keyboard
+      means tabbing through everything on screen first.
+    -->
+    <a
+      class="bg-background focus:ring-ring sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:border focus:px-3 focus:py-2 focus:ring-2"
+      href="#main"
+      data-testid="skip-link"
+    >
+      Skip to the main content
+    </a>
+
     <header
       v-if="session"
       class="flex items-center justify-between gap-4 border-b px-6 py-3"
@@ -67,6 +80,8 @@ async function leave() {
       </div>
     </header>
 
-    <slot />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
   </div>
 </template>

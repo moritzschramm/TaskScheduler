@@ -467,12 +467,17 @@ describe('seed via the API, render the client', () => {
     };
 
     it('nudges a block with the keyboard and persists the drop', async () => {
-      // §14 requires a keyboard equivalent for every drag gesture. Two nudges
-      // down is half an hour, at the same 15-minute step the pointer snaps to.
+      // §14 requires a keyboard equivalent for every drag gesture, and M16b
+      // made it the shape WCAG expects: pick up, move, drop. Arrows alone now
+      // navigate the grid, so a user can reach the second block of a day
+      // without moving the first.
       const block = wrapper
         .findAll('[data-testid="day-column"]')[1]!
         .find('[data-testid="block-task"]');
       expect(block.attributes('data-start-min')).toBe('540');
+
+      await block.trigger('keydown', { key: 'Enter' });
+      expect(block.attributes('aria-grabbed')).toBe('true');
 
       await block.trigger('keydown', { key: 'ArrowDown' });
       await block.trigger('keydown', { key: 'ArrowDown' });
@@ -496,6 +501,7 @@ describe('seed via the API, render the client', () => {
         .findAll('[data-testid="day-column"]')[1]!
         .find('[data-testid="block-task"]');
 
+      await block.trigger('keydown', { key: 'Enter' });
       await block.trigger('keydown', { key: 'ArrowDown' });
       expect(block.attributes('data-start-min')).toBe('555');
 
@@ -643,6 +649,7 @@ describe('seed via the API, render the client', () => {
         release = resolve;
       });
 
+      await tuesdayTask().trigger('keydown', { key: 'Enter' });
       await tuesdayTask().trigger('keydown', { key: 'ArrowDown' });
       await tuesdayTask().trigger('keydown', { key: 'ArrowDown' });
       await tuesdayTask().trigger('keydown', { key: 'Enter' });

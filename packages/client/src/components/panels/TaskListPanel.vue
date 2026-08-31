@@ -49,7 +49,7 @@ const columns: ColumnDef<typeof features, TaskNode>[] = [
   { id: 'duration', header: 'Estimate', accessorKey: 'estimatedDurationMin' },
   { id: 'priority', header: 'Priority', accessorKey: 'effectivePriority' },
   { id: 'due', header: 'Due', accessorKey: 'effectiveDueDate' },
-  { id: 'actions', header: '', accessorKey: 'id' },
+  { id: 'actions', header: 'Actions', accessorKey: 'id' },
 ];
 
 const table = useTable({
@@ -95,8 +95,20 @@ function canHaveChildren(task: TaskNode): boolean {
     <table v-else class="w-full text-sm" data-testid="task-table">
       <thead>
         <tr class="text-muted-foreground border-b text-left text-xs">
-          <th v-for="header in headers" :key="header.id" class="py-1.5 pr-3 font-medium">
-            {{ header.column.columnDef.header }}
+          <th
+            v-for="header in headers"
+            :key="header.id"
+            scope="col"
+            class="py-1.5 pr-3 font-medium"
+          >
+            <!--
+              Every column needs a header a screen reader can announce, even the
+              one whose heading would be noise on screen (WCAG 1.3.1) — axe's
+              `empty-table-header` is exactly this, and it was real.
+            -->
+            <span :class="header.id === 'actions' ? 'sr-only' : ''">
+              {{ header.column.columnDef.header }}
+            </span>
           </th>
         </tr>
       </thead>

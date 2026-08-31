@@ -71,6 +71,25 @@ async function moveToExact(): Promise<void> {
   await run({ type: 'MoveTask', params: { taskId: props.task.id, datetime: instant } });
 }
 
+/**
+ * The single-pointer alternative to dragging (WCAG 2.2 success criterion 2.5.7,
+ * "Dragging Movements").
+ *
+ * 2.5.7 asks that anything achievable by dragging also be achievable with a
+ * single pointer *without* dragging — which the keyboard equivalent does not
+ * satisfy, since it is about pointing rather than about keyboards. Two buttons
+ * and an exact-minute field are that path.
+ */
+async function nudgeBy(minutes: number): Promise<void> {
+  if (props.placement === null) return;
+
+  const moved = new Date(Date.parse(props.placement.start) + minutes * 60_000);
+  await run({
+    type: 'MoveTask',
+    params: { taskId: props.task.id, datetime: moved.toISOString() },
+  });
+}
+
 async function defer(target: 'tomorrow' | 'next_week' | 'backlog'): Promise<void> {
   await run({ type: 'DeferTask', params: { taskId: props.task.id, target } });
 }
@@ -139,9 +158,34 @@ async function swap(): Promise<void> {
             Move
           </Button>
         </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-muted-foreground text-xs">Nudge:</span>
+          <Button
+            variant="outline"
+            size="sm"
+            :disabled="busy"
+            aria-label="Move 15 minutes earlier"
+            data-testid="nudge-earlier"
+            @click="nudgeBy(-15)"
+          >
+            −15m
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            :disabled="busy"
+            aria-label="Move 15 minutes later"
+            data-testid="nudge-later"
+            @click="nudgeBy(15)"
+          >
+            +15m
+          </Button>
+        </div>
+
         <p class="text-muted-foreground text-xs">
-          Dragging snaps to 15 minutes; this field takes any minute. Either way the task is
-          <em>delayed, not pinned</em> — it will not go earlier, but it may still go later.
+          Dragging snaps to 15 minutes; these do the same without dragging, and the field above
+          takes any minute. Either way the task is <em>delayed, not pinned</em> — it will not go
+          earlier than this, but it may still go later.
         </p>
       </div>
 

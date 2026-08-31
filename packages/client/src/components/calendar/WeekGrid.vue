@@ -38,7 +38,7 @@ const emit = defineEmits<{
 }>();
 
 /**
- * A move in progress: which block, and how far it has been dragged so far.
+ * A move in progress: which block, and how far it has been moved so far.
  *
  * Held here rather than committed on every pointer move because a drag is one
  * intent, not fifty. The block follows the pointer; only the drop emits a
@@ -48,6 +48,9 @@ const pending = ref<{ key: string; day: CivilDate; offsetMin: number } | null>(n
 
 /** Where the pointer went down, in pixels — the origin every delta is from. */
 let dragOriginY: number | null = null;
+
+/** Announced to assistive technology as a move progresses (WCAG 4.1.3). */
+const announcement = ref('');
 
 function isMoving(block: GridBlock): boolean {
   return pending.value?.key === block.key;
@@ -91,6 +94,7 @@ function endDrag(block: GridBlock): void {
     return;
   }
 
+  announcement.value = `${block.title} moved to ${formatMinuteOfDay(movedStartMin(block, move.offsetMin, props.dayStartMin))}.`;
   emit('moveBlock', {
     block,
     day: move.day,
@@ -99,29 +103,107 @@ function endDrag(block: GridBlock): void {
 }
 
 /**
- * The keyboard equivalent §14 requires: "every drag-and-drop action needs a
- * keyboard-accessible equivalent".
+ * The keyboard equivalent §14 requires, in the shape WCAG expects.
  *
- * Arrows nudge by the same 15 minutes the pointer snaps to and move the block
- * on screen; Enter commits, Escape abandons. That is the same three-part
- * gesture a drag is — pick up, move, drop — rather than a different feature
- * wearing its name.
+ * **Pick up, move, drop.** Enter or Space on a focused task picks it up;
+ * arrows then move it by the same fifteen minutes the pointer snaps to; Enter
+ * drops it and Escape puts it back. That is the same three-part gesture a drag
+ * is, rather than a different feature wearing its name — and `aria-grabbed`
+ * says which state it is in.
+ *
+ * M12a bound the arrows directly, which was simpler and wrong: arrows are how
+ * you *navigate* a grid, so a user could not reach the second block of a day
+ * without moving the first. Picking up first is what frees them.
  */
-function nudge(block: GridBlock, day: CivilDate, steps: number): void {
+function grab(block: GridBlock, day: CivilDate): void {
   if (!props.editable || block.kind !== 'task') return;
-  const offsetMin = (isMoving(block) ? pending.value!.offsetMin : 0) + steps * SNAP_MINUTES;
-  pending.value = { key: block.key, day, offsetMin };
+
+  pending.value = { key: block.key, day, offsetMin: 0 };
+  announcement.value = `${block.title} picked up. Use the arrow keys to move it, Enter to drop it, Escape to cancel.`;
 }
 
-function commitNudge(block: GridBlock): void {
+function nudge(block: GridBlock, day: CivilDate, steps: number): void {
   if (!isMoving(block)) return;
-  endDrag(block);
+
+  const offsetMin = pending.value!.offsetMin + steps * SNAP_MINUTES;
+  pending.value = { key: block.key, day, offsetMin };
+  announcement.value = formatMinuteOfDay(movedStartMin(block, offsetMin, props.dayStartMin));
+}
+
+/** Enter and Space do whichever half of the gesture is next. */
+function toggleGrab(block: GridBlock, day: CivilDate): void {
+  if (isMoving(block)) {
+    if (pending.value!.offsetMin === 0) {
+      pending.value = null;
+      announcement.value = `${block.title} put back.`;
+      return;
+    }
+    endDrag(block);
+    return;
+  }
+
+  // A block that cannot be moved is still selectable: Enter opens it.
+  if (!props.editable || block.kind !== 'task') {
+    emit('selectBlock', block);
+    return;
+  }
+
+  grab(block, day);
 }
 
 function abandonNudge(): void {
+  if (pending.value !== null) announcement.value = 'Move cancelled.';
   pending.value = null;
   dragOriginY = null;
 }
+
+/**
+ * Arrow keys navigate unless something is picked up (WCAG 2.1.1, 2.4.3).
+ *
+ * A grid whose arrows always moved things would be a grid you could not read
+ * with a keyboard, and reading is the commoner act by a wide margin.
+ */
+function onArrow(block: GridBlock, day: CivilDate, steps: number, event: KeyboardEvent): void {
+  if (isMoving(block)) {
+    nudge(block, day, steps);
+    return;
+  }
+  moveFocus(event.currentTarget as HTMLElement, steps > 0 ? 1 : -1);
+}
+
+/** Left and right cross to the neighbouring day at the same position. */
+function onHorizontal(event: KeyboardEvent, direction: 1 | -1): void {
+  moveFocusByColumn(event.currentTarget as HTMLElement, direction);
+}
+
+function focusables(): HTMLElement[] {
+  const root: Document | HTMLElement = grid.value ?? document;
+  return [...root.querySelectorAll<HTMLElement>('[data-grid-block]')];
+}
+
+function moveFocus(from: HTMLElement, delta: number): void {
+  const all = focusables();
+  const index = all.indexOf(from);
+  all[Math.min(Math.max(index + delta, 0), all.length - 1)]?.focus();
+}
+
+function moveFocusByColumn(from: HTMLElement, direction: 1 | -1): void {
+  const columns = [...(grid.value?.querySelectorAll('[data-testid="day-column"]') ?? [])];
+  const current = columns.findIndex((column) => column.contains(from));
+  if (current === -1) return;
+
+  // Walk to the next day that has anything to focus, so an empty Wednesday
+  // does not swallow the keypress.
+  for (let index = current + direction; index >= 0 && index < columns.length; index += direction) {
+    const first = columns[index]?.querySelector<HTMLElement>('[data-grid-block]');
+    if (first) {
+      first.focus();
+      return;
+    }
+  }
+}
+
+const grid = ref<HTMLElement | null>(null);
 
 // `SCALE` lives in `lib/grid` beside the drag arithmetic that depends on it.
 
@@ -158,6 +240,26 @@ function heightOf(block: GridBlock): number {
   return Math.max((block.endMin - block.startMin) * SCALE, 14);
 }
 
+/**
+ * What a screen reader says about a block (WCAG 4.1.2).
+ *
+ * The visible text is a title and a time range, which read as two unrelated
+ * fragments out of context. The label puts them in one sentence with the day
+ * and the kind of thing it is — and, for a task, what pressing Enter will do,
+ * because an affordance nobody can see needs saying.
+ */
+function labelFor(block: GridBlock, dayLabel: string): string {
+  const when = `${dayLabel}, ${formatMinuteOfDay(block.startMin)} to ${formatMinuteOfDay(block.endMin)}`;
+  const kind = block.kind === 'unavailability' ? 'Unavailable' : block.title;
+
+  if (!props.editable) return `${kind}. ${when}.`;
+  if (block.kind !== 'task') return `${kind}. ${when}. Press Enter to open.`;
+
+  return isMoving(block)
+    ? `${kind}. Moving. Now ${formatMinuteOfDay(startMinOf(block))}. Arrow keys to move, Enter to drop, Escape to cancel.`
+    : `${kind}. ${when}. Press Enter to pick up and move.`;
+}
+
 function classesFor(block: GridBlock): string {
   if (block.kind === 'task') return 'bg-primary/15 border-primary/40 text-foreground';
   if (block.kind === 'unavailability')
@@ -167,7 +269,21 @@ function classesFor(block: GridBlock): string {
 </script>
 
 <template>
-  <div class="flex w-full overflow-x-auto" data-testid="week-grid">
+  <div
+    ref="grid"
+    class="flex w-full overflow-x-auto"
+    role="group"
+    :aria-label="`Week grid, times in ${timeZone}`"
+    data-testid="week-grid"
+  >
+    <!--
+      What a move is doing, for anyone who cannot see it happen (WCAG 4.1.3).
+      Polite rather than assertive: a nudge is not an interruption, and the
+      running commentary of a long move would be one if it were.
+    -->
+    <p class="sr-only" role="status" aria-live="polite" data-testid="grid-announcement">
+      {{ announcement }}
+    </p>
     <!-- Hour axis. Labelled once, so every column reads against the same one. -->
     <div class="w-14 shrink-0 pt-8" aria-hidden="true">
       <div class="relative" :style="{ height: `${gridHeight}px` }">
@@ -236,7 +352,8 @@ function classesFor(block: GridBlock): string {
             v-for="block in column.blocks"
             :key="block.key"
             :type="editable ? 'button' : undefined"
-            class="absolute inset-x-1 touch-none overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight"
+            data-grid-block
+            class="focus-visible:ring-ring absolute inset-x-1 touch-none overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
             :class="[classesFor(block), isMoving(block) ? 'ring-primary z-10 ring-2' : '']"
             :style="{ top: `${offsetOf(startMinOf(block))}px`, height: `${heightOf(block)}px` }"
             :data-testid="`block-${block.kind}`"
@@ -244,13 +361,17 @@ function classesFor(block: GridBlock): string {
             :data-start-min="startMinOf(block)"
             :data-end-min="block.endMin"
             :data-moving="isMoving(block) ? 'true' : undefined"
+            :aria-label="labelFor(block, column.label)"
             :aria-grabbed="editable && block.kind === 'task' ? isMoving(block) : undefined"
             @pointerdown="beginDrag(block, column.day, $event)"
             @pointermove="duringDrag"
             @pointerup="endDrag(block)"
-            @keydown.up.prevent="nudge(block, column.day, -1)"
-            @keydown.down.prevent="nudge(block, column.day, 1)"
-            @keydown.enter.prevent="commitNudge(block)"
+            @keydown.up.prevent="onArrow(block, column.day, -1, $event)"
+            @keydown.down.prevent="onArrow(block, column.day, 1, $event)"
+            @keydown.left.prevent="onHorizontal($event, -1)"
+            @keydown.right.prevent="onHorizontal($event, 1)"
+            @keydown.enter.prevent="toggleGrab(block, column.day)"
+            @keydown.space.prevent="toggleGrab(block, column.day)"
             @keydown.esc.prevent="abandonNudge"
             @click="!isMoving(block) && editable && emit('selectBlock', block)"
           >
