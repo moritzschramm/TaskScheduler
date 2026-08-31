@@ -1,4 +1,11 @@
-import { rrulestr } from 'rrule';
+// `rrule` is CommonJS, so its named exports are not statically analysable by
+// Node's ESM loader: `import { rrulestr } from 'rrule'` type-checks, passes
+// under vitest — which transpiles the interop away — and then throws
+// "does not provide an export named 'rrulestr'" the moment the real server
+// boots. The default import is the form that works in both.
+import rrule from 'rrule';
+
+const { rrulestr } = rrule;
 import {
   instantToZonedCivil,
   wallClockToInstant,

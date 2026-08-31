@@ -60,6 +60,13 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # `test` runs under Vite, which smooths CommonJS interop away, and `build`
+      # does not bundle the server. Neither notices a named import from a CJS
+      # package that Node's ESM loader cannot resolve — which took the dev stack
+      # down for two milestones while CI stayed green.
+      - name: Check the server's imports resolve under Node
+        run: pnpm check:imports
+
   docker:
     runs-on: ubuntu-latest
     steps:
@@ -71,3 +78,24 @@ jobs:
         run: |
           docker build -f docker/node/prod.Dockerfile --target server -t ambitime-server:ci .
           docker build -f docker/node/prod.Dockerfile --target client -t ambitime-client:ci .
+
+      # M0's acceptance was "docker compose up works", and nothing checked it:
+      # the job above only *builds* the production images, so a dev stack that
+      # could not start stayed green through eleven milestones.
+      - name: Bring the dev stack up and serve a request
+        env:
+          BETTER_AUTH_SECRET: ci-secret-not-for-any-real-deployment-0123456789
+        run: |
+          docker compose up -d --build --wait --wait-timeout 300
+
+          # Through nginx, because that is the origin a browser sees.
+          curl --fail --silent --show-error http://localhost:8080/api/health
+          curl --fail --silent --show-error --output /dev/null http://localhost:8080/
+
+      - name: Show what went wrong
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down --volumes

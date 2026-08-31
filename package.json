@@ -15,6 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "pnpm -r --filter './packages/**' test",
+    "check:imports": "pnpm --filter @ambitime/server check:imports",
     "dev": "docker compose up --build",
     "db:generate": "pnpm --filter @ambitime/server db:generate",
     "db:migrate": "pnpm --filter @ambitime/server db:migrate"
