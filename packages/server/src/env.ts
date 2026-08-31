@@ -9,6 +9,13 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   SERVER_PORT: z.coerce.number().int().positive().default(3000),
+  /**
+   * How long the command log is kept, in days (spec §12's "configurable
+   * retention"). Unset keeps everything, which is the safe default: undo reads
+   * the same log, so a retention window is also a limit on how far back a
+   * mistake can be taken (see `pruneAudit`).
+   */
+  AUDIT_RETENTION_DAYS: z.coerce.number().int().positive().optional(),
   /** Comma-separated list of allowed origins; empty means same-origin only. */
   CORS_ORIGINS: z.string().default(''),
 

@@ -11,6 +11,7 @@ import { presentCapacityCell, presentSchedule, presentTaskNode } from '../api/pr
 import { readCalendarTaskTree } from '../tasks/task-tree.js';
 import { readCalendarConfiguration } from '../configuration/read.js';
 import { readHistory } from '../commands/history.js';
+import { readAudit } from '../audit/read.js';
 import { deriveCalendarSchedule } from '../schedule/derive.js';
 import { loadScheduleContext } from '../schedule/load-context.js';
 import { isoText, toInstant, toInstantCeil, toIso } from '../schedule/instants.js';
@@ -36,7 +37,7 @@ import type { Clock } from '../app.js';
  * The cache is still written on the way through, which is what §3.4 wants it
  * for: a baseline for change detection, not a source of truth.
  */
-export function calendarRoutes(auth: Auth, clock: Clock) {
+export function calendarRoutes(auth: Auth, clock: Clock, retentionDays?: number) {
   const range = z.object({
     from: z.iso.datetime({ offset: true }).optional(),
     to: z.iso.datetime({ offset: true }).optional(),
@@ -200,6 +201,31 @@ export function calendarRoutes(auth: Auth, clock: Clock) {
           return c.json(failure.body, failure.status);
         }
       })
+
+      /**
+       * The audit view (spec §12).
+       *
+       * The same log undo folds into stacks, read flat. Not per calendar and
+       * not per actor: an audit answers "who changed what in this context", and
+       * scoping it to the person asking would make it a diary instead. RLS
+       * keeps it to the tenant; §10.2's coarse RBAC is the lever for narrowing
+       * it further when there is a reason to.
+       */
+      .get(
+        '/audit',
+        requireContext(auth),
+        zValidator('query', z.object({ before: z.string().optional() }), validationHook),
+        async (c) => {
+          const context = c.get('context');
+          const { before } = c.req.valid('query');
+
+          const page = await withRequestContext(c.get('db'), context, (tx) =>
+            readAudit(tx, before === undefined ? {} : { before }),
+          );
+
+          return c.json({ ...page, retentionDays: retentionDays ?? null }, 200);
+        },
+      )
 
       /**
        * What undo and redo would do next (spec §7.5).

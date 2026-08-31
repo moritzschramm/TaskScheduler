@@ -70,6 +70,13 @@ async function leave() {
       <div class="flex items-center gap-3">
         <RouterLink
           class="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+          to="/history"
+          data-testid="history-link"
+        >
+          History
+        </RouterLink>
+        <RouterLink
+          class="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
           to="/settings"
           data-testid="settings-link"
         >

@@ -30,7 +30,7 @@ import type { ApiErrorCode, ErrorResponse } from '@ambitime/shared';
  * can then no longer narrow to the success body by checking for one. The union
  * below is what lets `if (response.status === 200)` mean something.
  */
-export type ApiErrorStatus = 400 | 401 | 404 | 409 | 422 | 500;
+export type ApiErrorStatus = 400 | 401 | 404 | 409 | 422 | 429 | 500;
 
 const STATUS: Readonly<Record<ApiErrorCode, ApiErrorStatus>> = {
   invalid_request: 400,
@@ -40,6 +40,7 @@ const STATUS: Readonly<Record<ApiErrorCode, ApiErrorStatus>> = {
   version_conflict: 409,
   precondition_failed: 409,
   invariant_violated: 409,
+  rate_limited: 429,
   internal: 500,
 };
 

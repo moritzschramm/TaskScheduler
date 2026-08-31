@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { AUTH_LIMIT, COMMAND_LIMIT, rateLimit, READ_LIMIT } from './api/rate-limit.js';
 import { logger } from 'hono/logger';
 import { authRoutes } from './auth/middleware.js';
 import { calendarRoutes } from './routes/calendars.js';
@@ -33,6 +34,8 @@ export interface CreateAppOptions {
   db: Database;
   auth: Auth;
   corsOrigins?: string[];
+  /** §12's retention window, surfaced by the audit view so a reader knows. */
+  auditRetentionDays?: number;
   /** Off in tests so the suite output stays readable. */
   requestLogging?: boolean;
   clock?: Clock;
@@ -51,12 +54,24 @@ export function createApp({
   db,
   auth,
   corsOrigins = [],
+  auditRetentionDays,
   requestLogging = true,
   clock = () => new Date(),
 }: CreateAppOptions) {
   const app = new Hono<AppEnv>().basePath('/api');
 
   if (requestLogging) app.use('*', logger());
+
+  /**
+   * §14's rate limits, by route class.
+   *
+   * Applied before authentication on purpose: a limiter that only counted
+   * *authenticated* requests would let an unauthenticated flood through to the
+   * session lookup, which is the expensive part of rejecting one.
+   */
+  app.use('/api/auth/*', rateLimit(AUTH_LIMIT));
+  app.use('/api/commands', rateLimit(COMMAND_LIMIT));
+  app.use('/api/*', rateLimit(READ_LIMIT));
 
   if (corsOrigins.length > 0) {
     app.use('*', cors({ origin: corsOrigins, credentials: true }));
@@ -72,7 +87,7 @@ export function createApp({
     .route('/', authRoutes(auth))
     .route('/', meRoute(auth))
     .route('/', commandRoutes(auth, clock))
-    .route('/', calendarRoutes(auth, clock))
+    .route('/', calendarRoutes(auth, clock, auditRetentionDays))
     .route('/', notificationRoutes(auth, clock));
 
   return routes;

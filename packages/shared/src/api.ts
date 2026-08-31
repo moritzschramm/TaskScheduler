@@ -404,6 +404,50 @@ export const historySchema = z.object({
 
 export type HistoryView = z.infer<typeof historySchema>;
 
+/**
+ * The audit view over the command log (spec §12).
+ *
+ * "One append-only command log serves all three: undo/redo, history, and
+ * audit — the same log, with configurable retention."
+ *
+ * So this is a read, not a second store. Every entry is a command somebody
+ * issued, in the order the database gave it: `seq` is a `bigserial` and is the
+ * only strict total order the log has, which is why it is the cursor rather
+ * than a timestamp two commands can share.
+ *
+ * `changed` counts rows rather than listing them. The before/after images are
+ * what undo runs on (§12) and can be large; an audit view answers "who did
+ * what, when, and how much did it touch", and a caller wanting the rest has
+ * the command id.
+ */
+export const auditEntrySchema = z.object({
+  id: uuid,
+  /** The log's strict total order, as a string — `bigserial` outruns JSON. */
+  seq: z.string(),
+  type: z.string(),
+  actorId: uuid,
+  actorEmail: z.string().nullable(),
+  /** What the command was asked to do. Parameters, not row images. */
+  params: z.unknown(),
+  groupId: uuid.nullable(),
+  /** How many source rows it changed. */
+  changed: z.int().nonnegative(),
+  /** Which calendars it re-derived, if any. */
+  calendarIds: z.array(uuid),
+  issuedAt: instant,
+});
+
+export const auditResponseSchema = z.object({
+  entries: z.array(auditEntrySchema),
+  /** Pass as `before` to fetch the page after this one; `null` at the end. */
+  nextCursor: z.string().nullable(),
+  /** How long entries are kept, in days. `null` means for ever (§12). */
+  retentionDays: z.int().positive().nullable(),
+});
+
+export type AuditEntry = z.infer<typeof auditEntrySchema>;
+export type AuditResponse = z.infer<typeof auditResponseSchema>;
+
 export const notificationSchema = z.object({
   id: uuid,
   type: z.string(),
@@ -490,6 +534,8 @@ export const API_ERROR_CODES = [
   'unauthenticated',
   /** The write would have left the schedule violating §6.2. See the commit hook. */
   'invariant_violated',
+  /** §14's rate limit; the response carries `Retry-After`. */
+  'rate_limited',
   'internal',
 ] as const;
 

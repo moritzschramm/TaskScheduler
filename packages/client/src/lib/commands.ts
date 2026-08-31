@@ -1,6 +1,7 @@
 import {
   calendarConfigurationSchema,
   commandResultSchema,
+  auditResponseSchema,
   contextResponseSchema,
   historySchema,
   toEngineContext,
@@ -8,6 +9,7 @@ import {
   type CommandRequest,
   type CommandResult,
   type CreatedEntity,
+  type AuditResponse,
   type HistoryView,
 } from '@ambitime/shared';
 import type { ScheduleContext } from '@ambitime/scheduler';
@@ -70,4 +72,13 @@ export async function fetchHistory(): Promise<HistoryView> {
 export async function fetchContext(calendarId: string): Promise<ScheduleContext> {
   const response = await api.api.calendars[':calendarId'].context.$get({ param: { calendarId } });
   return toEngineContext(contextResponseSchema.parse(await expectOk(response)).context);
+}
+
+/** The audit view over the command log (spec §12). */
+export async function fetchAudit(before?: string): Promise<AuditResponse> {
+  const response = await api.api.audit.$get({
+    query: before === undefined ? {} : { before },
+  });
+
+  return auditResponseSchema.parse(await expectOk(response));
 }

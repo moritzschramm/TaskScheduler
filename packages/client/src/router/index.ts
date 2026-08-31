@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type Router, type RouterHistory } from 'vue-router';
 import CalendarView from '@/views/CalendarView.vue';
+import AuditView from '@/views/AuditView.vue';
 import SettingsView from '@/views/SettingsView.vue';
 import SignInView from '@/views/SignInView.vue';
 import { loadSession, session } from '@/lib/session';
@@ -26,6 +27,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
         component: SettingsView,
         meta: { requiresAuth: true },
       },
+      { path: '/history', name: 'history', component: AuditView, meta: { requiresAuth: true } },
       { path: '/sign-in', name: 'sign-in', component: SignInView },
       { path: '/:pathMatch(.*)*', redirect: '/' },
     ],
