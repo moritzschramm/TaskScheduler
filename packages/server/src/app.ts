@@ -68,10 +68,25 @@ export function createApp({
    * Applied before authentication on purpose: a limiter that only counted
    * *authenticated* requests would let an unauthenticated flood through to the
    * session lookup, which is the expensive part of rejecting one.
+   *
+   * **The paths are relative to the base path, and that is the whole of a bug
+   * these three lines carried from M16c until it was measured.** `basePath`
+   * prefixes `use()` exactly as it prefixes `get()`, so `'/api/auth/*'` on an
+   * app already based at `/api` registers `/api/api/auth/*` — a path nothing
+   * can ever request. All three limiters existed, typechecked, and matched
+   * nothing; sign-in took thirty wrong passwords without complaint. Nothing
+   * caught it because nothing tested that a limit was ever *reached*, which is
+   * the one assertion a limiter needs. See `test/api/rate-limit.test.ts`.
+   *
+   * The catch-all counts auth and command requests too, since Hono runs every
+   * middleware whose path matches rather than only the most specific. That is
+   * left alone deliberately: it costs a command-heavy client 120 of its 600
+   * reads, and the alternative is a second list of route classes to keep in
+   * step with this one.
    */
-  app.use('/api/auth/*', rateLimit(AUTH_LIMIT));
-  app.use('/api/commands', rateLimit(COMMAND_LIMIT));
-  app.use('/api/*', rateLimit(READ_LIMIT));
+  app.use('/auth/*', rateLimit(AUTH_LIMIT));
+  app.use('/commands', rateLimit(COMMAND_LIMIT));
+  app.use('/*', rateLimit(READ_LIMIT));
 
   if (corsOrigins.length > 0) {
     app.use('*', cors({ origin: corsOrigins, credentials: true }));

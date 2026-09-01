@@ -4,6 +4,13 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { organization } from 'better-auth/plugins';
 import { eq } from 'drizzle-orm';
 import {
+  emailVerificationMessage,
+  EMAIL_VERIFICATION_TTL_MINUTES,
+  passwordResetMessage,
+  PASSWORD_RESET_TTL_MINUTES,
+} from './emails.js';
+import { loggingEmailSender, type EmailSender } from '../notifications/email.js';
+import {
   accounts,
   invitations,
   memberships,
@@ -40,11 +47,39 @@ export interface AuthOptions {
   baseURL: string;
   /** Origins allowed to carry credentials; the CORS list, reused. */
   trustedOrigins?: string[];
+  /**
+   * Where the reset and verification links go. Defaults to the logging sender
+   * for the same reason §11's delivery does — see `notifications/email.ts`.
+   */
+  email?: EmailSender;
+  /**
+   * Whether an unverified address may sign in.
+   *
+   * **Off by default, and that default is about the transport rather than
+   * about security.** The email sender above logs unless a deployment
+   * configures a real one, so requiring verification out of the box would mean
+   * a fresh install where nobody can sign in and the reason is in a log file.
+   * `REQUIRE_EMAIL_VERIFICATION=true` is the deliberate act of a deployment
+   * that has wired a provider up.
+   *
+   * Turning it on also closes something the sign-up form cannot: Better Auth
+   * stops distinguishing "address taken" from "account created" once
+   * verification is required, because with nothing revealed at the form the
+   * answer arrives in the mailbox or not at all.
+   */
+  requireEmailVerification?: boolean;
 }
 
 export type Auth = ReturnType<typeof createAuth>;
 
-export function createAuth({ db, secret, baseURL, trustedOrigins = [] }: AuthOptions) {
+export function createAuth({
+  db,
+  secret,
+  baseURL,
+  trustedOrigins = [],
+  email = loggingEmailSender(),
+  requireEmailVerification = false,
+}: AuthOptions) {
   return betterAuth({
     secret,
     baseURL,
@@ -82,11 +117,51 @@ export function createAuth({ db, secret, baseURL, trustedOrigins = [] }: AuthOpt
 
     emailAndPassword: {
       enabled: true,
+      requireEmailVerification,
+
       /**
-       * Verification is a delivery problem, and delivery is M15's (pg-boss,
-       * §11). Requiring it now would mean nobody could sign in.
+       * Forgotten passwords (spec §10.1).
+       *
+       * The endpoint answers "if this email exists in our system, check your
+       * email" whether or not it does, and this callback is simply not reached
+       * for an address with no account — which is what makes that answer true
+       * rather than a polite fiction. The sign-up form cannot manage the same
+       * trick; this one can, and does.
        */
-      requireEmailVerification: false,
+      sendResetPassword: async ({ user, url }) => {
+        await email.send(passwordResetMessage({ to: user.email, url }));
+      },
+      resetPasswordTokenExpiresIn: PASSWORD_RESET_TTL_MINUTES * 60,
+
+      /**
+       * Every other session ends when the password does.
+       *
+       * The common reason to reset a password is suspecting somebody else has
+       * it, and a reset that left their session alone would answer the symptom
+       * and not the problem.
+       */
+      revokeSessionsOnPasswordReset: true,
+    },
+
+    emailVerification: {
+      sendVerificationEmail: async ({ user, url }) => {
+        await email.send(emailVerificationMessage({ to: user.email, url }));
+      },
+      /**
+       * Sent at sign-up rather than on first need, whether or not verification
+       * is *required*: §11 sends notifications to this address, and finding
+       * out it was mistyped when a hard due date is already at risk is finding
+       * out too late.
+       */
+      sendOnSignUp: true,
+      expiresIn: EMAIL_VERIFICATION_TTL_MINUTES * 60,
+      /**
+       * Following the link signs you in. It is a link mailed to an address and
+       * good once, which is the same bearer proof the reset link is; refusing
+       * to act on it and then asking for a password would be ceremony, and the
+       * person who just signed up usually has a session in the tab already.
+       */
+      autoSignInAfterVerification: true,
     },
 
     user: {

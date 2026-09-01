@@ -16,10 +16,56 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Set only on 429 — see `retryAfterSeconds`. */
+    readonly retryAfter: number | null = null,
   ) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+/** The status §14's limiter answers with. Named because three call sites test it. */
+export const RATE_LIMITED = 429;
+
+/**
+ * How long a rate-limited caller has to wait, in seconds.
+ *
+ * **Two headers, because there are two limiters.** §14's own middleware sets
+ * the standard `Retry-After`; Better Auth's built-in limiter — which is on by
+ * default in production and guards `/api/auth/*` with its own stricter rules —
+ * sets `X-Retry-After` instead. A client that read only one of them would tell
+ * the truth on some routes and shrug on others.
+ *
+ * `null` means the server refused without saying for how long, which is a
+ * weaker answer but still a different one from "your password is wrong".
+ */
+export function retryAfterSeconds(response: Response): number | null {
+  const header = response.headers.get('retry-after') ?? response.headers.get('x-retry-after');
+  if (header === null) return null;
+
+  const seconds = Number(header);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
+}
+
+/**
+ * What to show somebody the limiter has stopped.
+ *
+ * The wait is worth stating: a refusal with no horizon reads as "broken", and
+ * the reaction to broken is to retry immediately, which is the one thing that
+ * keeps the window from closing.
+ */
+export function rateLimitMessage(response: Response): string {
+  const seconds = retryAfterSeconds(response);
+  return seconds === null
+    ? 'Too many attempts. Wait a moment and try again.'
+    : `Too many attempts. Try again in ${describeWait(seconds)}.`;
+}
+
+/** Seconds, in units a person waits in. "3600 seconds" is not an answer. */
+function describeWait(seconds: number): string {
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'}`;
+  const minutes = Math.ceil(seconds / 60);
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
 }
 
 /**
@@ -39,5 +85,5 @@ export async function expectOk(response: Response): Promise<unknown> {
       ? String((body as { error: { message?: string } }).error.message ?? response.statusText)
       : response.statusText;
 
-  throw new ApiError(response.status, message);
+  throw new ApiError(response.status, message, retryAfterSeconds(response));
 }

@@ -7,6 +7,7 @@
     ".": "./src/app.ts",
     "./auth": "./src/auth/index.ts",
     "./db": "./src/db/client.ts",
+    "./email": "./src/notifications/email.ts",
     "./migrate": "./src/db/migrate.ts",
     "./schema": "./src/db/schema/index.ts"
   },

@@ -11,6 +11,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // One repair to that environment; see the file for why it is needed.
+    setupFiles: ['./test/setup.ts'],
     include: ['test/**/*.test.ts'],
   },
 });

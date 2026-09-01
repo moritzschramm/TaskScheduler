@@ -4,7 +4,10 @@ import AuditView from '@/views/AuditView.vue';
 import SettingsView from '@/views/SettingsView.vue';
 import SignInView from '@/views/SignInView.vue';
 import SignUpView from '@/views/SignUpView.vue';
-import { loadSession, session } from '@/lib/session';
+import ForgotPasswordView from '@/views/ForgotPasswordView.vue';
+import ResetPasswordView from '@/views/ResetPasswordView.vue';
+import VerifyEmailView from '@/views/VerifyEmailView.vue';
+import { loadSession, RESET_PASSWORD_PATH, session, VERIFY_EMAIL_PATH } from '@/lib/session';
 
 /**
  * Auth-aware routing (plan M10).
@@ -31,6 +34,18 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
       { path: '/history', name: 'history', component: AuditView, meta: { requiresAuth: true } },
       { path: '/sign-in', name: 'sign-in', component: SignInView },
       { path: '/sign-up', name: 'sign-up', component: SignUpView },
+      { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordView },
+      /**
+       * The two an email links to, so their paths come from the module that
+       * promised them rather than being retyped here (§10.1).
+       *
+       * Both are public and both must stay that way. A reset link is followed
+       * by somebody who by definition cannot sign in, and a confirmation link
+       * by somebody whose session may be in another browser entirely — sending
+       * either to the sign-in form would strand exactly the person it is for.
+       */
+      { path: RESET_PASSWORD_PATH, name: 'reset-password', component: ResetPasswordView },
+      { path: VERIFY_EMAIL_PATH, name: 'verify-email', component: VerifyEmailView },
       { path: '/:pathMatch(.*)*', redirect: '/' },
     ],
   });

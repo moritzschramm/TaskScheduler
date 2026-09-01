@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { session, signOut, startHeartbeat, stopHeartbeat } from '@/lib/session';
+import { resendVerification, session, signOut, startHeartbeat, stopHeartbeat } from '@/lib/session';
 
 /**
  * The frame around every signed-in page.
@@ -30,6 +30,42 @@ async function leave() {
   stopHeartbeat();
   await signOut();
   await router.replace({ name: 'sign-in' });
+}
+
+/**
+ * The unconfirmed-address notice (spec §10.1, §11).
+ *
+ * A strip rather than a modal, and one that never blocks: with verification
+ * not required, an unconfirmed address costs the user nothing today and only
+ * costs them §11's email when they are offline — so the notice states a
+ * consequence and offers the fix, rather than standing in the way of an
+ * application that works fine without it.
+ *
+ * Dismissible for the same reason. Somebody who cannot reach that mailbox
+ * right now should not have to look at this on every page for a week.
+ */
+const dismissed = ref(false);
+const resent = ref(false);
+const resendError = ref<string | null>(null);
+const resending = ref(false);
+
+const unverified = computed(
+  () => session.value !== null && !session.value.user.emailVerified && !dismissed.value,
+);
+
+async function confirmAgain() {
+  const address = session.value?.user.email;
+  if (address === undefined) return;
+
+  resending.value = true;
+  resendError.value = null;
+
+  try {
+    resendError.value = await resendVerification(address);
+    if (resendError.value === null) resent.value = true;
+  } finally {
+    resending.value = false;
+  }
 }
 </script>
 
@@ -86,6 +122,44 @@ async function leave() {
         <Button variant="ghost" size="sm" data-testid="sign-out" @click="leave">Sign out</Button>
       </div>
     </header>
+
+    <!--
+      `role="status"` rather than `alert`: nothing is wrong, and interrupting a
+      screen reader mid-sentence to say so would be the wrong volume for it.
+    -->
+    <div
+      v-if="unverified"
+      class="flex flex-wrap items-center justify-between gap-3 border-b bg-amber-50 px-6 py-2 text-sm text-amber-950 dark:bg-amber-950 dark:text-amber-50"
+      role="status"
+      data-testid="unverified-banner"
+    >
+      <p v-if="resent" data-testid="verification-resent">
+        Sent. Check <strong>{{ session?.user.email }}</strong> for the link.
+      </p>
+      <p v-else-if="resendError" data-testid="verification-resend-error">{{ resendError }}</p>
+      <p v-else>Confirm your email address so Ambitime can reach you when a due date is at risk.</p>
+
+      <div class="flex items-center gap-2">
+        <Button
+          v-if="!resent"
+          variant="outline"
+          size="sm"
+          :disabled="resending"
+          data-testid="resend-verification"
+          @click="confirmAgain"
+        >
+          {{ resending ? 'Sending…' : 'Send the link again' }}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid="dismiss-verification"
+          @click="dismissed = true"
+        >
+          Not now
+        </Button>
+      </div>
+    </div>
 
     <main id="main" tabindex="-1">
       <slot />

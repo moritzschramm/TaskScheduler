@@ -31,6 +31,15 @@ const envSchema = z.object({
 
   /** Public origin the app is reached at; cookie domain and callback URLs. */
   BETTER_AUTH_URL: z.url().default('http://localhost:8080'),
+
+  /**
+   * Whether an unverified address may sign in (spec §10.1).
+   *
+   * Off by default because the email transport is a logging adapter until a
+   * deployment configures one, and requiring verification without a way to
+   * deliver it is an install nobody can sign in to. See `createAuth`.
+   */
+  REQUIRE_EMAIL_VERIFICATION: z.stringbool().default(false),
 });
 
 export type Env = z.infer<typeof envSchema> & { corsOrigins: string[] };

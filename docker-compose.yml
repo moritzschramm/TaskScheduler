@@ -34,6 +34,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-ambitime}:${POSTGRES_PASSWORD:-ambitime}@postgres:5432/${POSTGRES_DB:-ambitime}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:8080}
+      REQUIRE_EMAIL_VERIFICATION: ${REQUIRE_EMAIL_VERIFICATION:-false}
     volumes:
       - .:/app
       # Keep container-installed node_modules; the host's are for the host.

@@ -52,7 +52,21 @@ async function submit() {
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-sm font-medium" for="password">Password</label>
+            <div class="flex items-baseline justify-between gap-2">
+              <label class="text-sm font-medium" for="password">Password</label>
+              <!--
+                Beside the field it is about, and visible before the attempt
+                fails. Somebody who has forgotten a password does not learn it
+                by being told the pair did not match.
+              -->
+              <RouterLink
+                class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
+                to="/forgot-password"
+                data-testid="to-forgot-password"
+              >
+                Forgot it?
+              </RouterLink>
+            </div>
             <input
               id="password"
               v-model="password"

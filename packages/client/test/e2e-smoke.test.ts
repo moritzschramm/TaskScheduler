@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { createApp as createServer } from '@ambitime/server';
 import { createAuth } from '@ambitime/server/auth';
 import { createDatabase, type DatabaseHandle } from '@ambitime/server/db';
+import { recordingEmailSender } from '@ambitime/server/email';
 import { runMigrations } from '@ambitime/server/migrate';
 import App from '@/App.vue';
 import { resetClock, setClock } from '@/lib/clock';
@@ -37,6 +38,28 @@ const PASSWORD = 'correct-horse-battery-staple';
 
 let handle: DatabaseHandle;
 let server: ReturnType<typeof createServer>;
+/** The outbox. §10.1's links are only reachable by reading what was sent. */
+let outbox: ReturnType<typeof recordingEmailSender>;
+/**
+ * Which client this test is, as the proxy would report it (§14).
+ *
+ * One server serves the whole file, and its rate limiters count per caller for
+ * as long as it lives — so without this every test after the twentieth sign-up
+ * is refused for volume. Giving each test its own address is not a way around
+ * the limiter but a description of the truth: these are separate users on
+ * separate machines, and only the harness made them look like one flood.
+ *
+ * TEST-NET-2, which exists for exactly this.
+ */
+let clientAddress = '';
+let clientCount = 0;
+
+/** Adds this test's address to a request the way nginx would. */
+function fromThisClient(init: RequestInit = {}): RequestInit {
+  const headers = new Headers(init.headers ?? {});
+  if (!headers.has('x-forwarded-for')) headers.set('x-forwarded-for', clientAddress);
+  return { ...init, headers };
+}
 let mounted: ReturnType<typeof mount> | null = null;
 const jar = new Map<string, string>();
 const inFlight = new Set<Promise<Response>>();
@@ -48,10 +71,13 @@ describe('seed via the API, render the client', () => {
     await runMigrations(TEST_DATABASE_URL);
     handle = createDatabase(TEST_DATABASE_URL, { max: 4 });
 
+    outbox = recordingEmailSender();
+
     const auth = createAuth({
       db: handle.db,
       secret: 'test-secret-not-for-any-real-deployment-0123456789',
       baseURL: 'http://localhost',
+      email: outbox,
     });
 
     server = createServer({
@@ -81,7 +107,7 @@ describe('seed via the API, render the client', () => {
           headers.set('cookie', [...jar].map(([name, value]) => `${name}=${value}`).join('; '));
         }
 
-        const response = await server.request(path, { ...init, headers });
+        const response = await server.request(path, fromThisClient({ ...init, headers }));
 
         for (const cookie of response.headers.getSetCookie()) {
           const [pair] = cookie.split(';');
@@ -113,6 +139,9 @@ describe('seed via the API, render the client', () => {
     const { users } = await import('@ambitime/server/schema');
     await handle.db.delete(users);
     jar.clear();
+    outbox.sent.length = 0;
+    clientCount += 1;
+    clientAddress = `198.51.100.${clientCount}`;
   });
 
   afterEach(async () => {
@@ -1010,6 +1039,132 @@ describe('seed via the API, render the client', () => {
    * knowing they exist. What it does *not* get is a calendar, and landing on a
    * blank page is what "you can register now" would otherwise have meant.
    */
+  /**
+   * Getting back in after forgetting the password (spec §10.1).
+   *
+   * The one flow whose middle step leaves the application entirely. Everything
+   * else in this file can be checked by driving the UI; this cannot, because
+   * the only way from "I asked for a link" to "I can set a password" is
+   * through a mailbox — so the test reads the outbox, follows the link the way
+   * a mail client would, and carries on driving.
+   *
+   * That is the point of doing it here rather than in a component test. A form
+   * that posts the right body, a mailer that composes the right link and an
+   * endpoint that mints the right token can each be correct while the round
+   * trip is broken, and only the round trip is what a locked-out user needs.
+   */
+  describe('recovering an account', () => {
+    it('walks from a forgotten password to a working one', async () => {
+      const email = `forgetful-${Date.now()}@example.test`;
+      const NEW_PASSWORD = 'a-brand-new-passphrase';
+      await seed(email);
+      outbox.sent.length = 0;
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/forgot-password');
+      await router.isReady();
+
+      let wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.find('[data-testid="forgot-password"]').exists());
+
+      await wrapper.find('[data-testid="forgot-email"]').setValue(email);
+      await wrapper.find('form').trigger('submit');
+      await waitFor(() => wrapper.find('[data-testid="reset-requested"]').exists());
+
+      // --- through the mailbox ---
+      const message = outbox.sent.at(-1);
+      expect(message?.to).toBe(email);
+      const link = /https?:\/\/\S+/.exec(message?.body ?? '')?.[0];
+      expect(link).toBeDefined();
+
+      // Followed as a mail client would: the endpoint checks the token and
+      // redirects to the page that can spend it.
+      const followed = await server.request(
+        new URL(link!).pathname + new URL(link!).search,
+        fromThisClient({ redirect: 'manual' }),
+      );
+      expect(followed.status).toBe(302);
+      const landing = new URL(followed.headers.get('location')!, 'http://localhost');
+      expect(landing.pathname).toBe('/reset-password');
+
+      // --- and back into the application ---
+      await router.push(landing.pathname + landing.search);
+      await waitFor(() => wrapper.find('[data-testid="reset-password"]').exists());
+      expect(wrapper.find('[data-testid="reset-link-dead"]').exists()).toBe(false);
+
+      await wrapper.find('[data-testid="new-password"]').setValue(NEW_PASSWORD);
+      await wrapper.find('form').trigger('submit');
+
+      // Sign-in, not the schedule: the reset revoked every session there was.
+      await waitFor(() => router.currentRoute.value.name === 'sign-in');
+
+      expect(await signIn(email, PASSWORD)).toBe('Those details did not match an account');
+      expect(await signIn(email, NEW_PASSWORD)).toBeNull();
+      await loadSession();
+
+      wrapper.unmount();
+      await router.push('/');
+      wrapper = mounted = mount(App, { global: { plugins: [router] } });
+
+      // All the way back to a rendered week, which is the only proof that the
+      // account the new password opens is the same one that was locked.
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+      expect(wrapper.find('[data-testid="task-panel"]').text()).toContain('Tuesday work');
+    });
+
+    it('refuses a link that has already been spent', async () => {
+      const email = `spender-${Date.now()}@example.test`;
+      await seed(email);
+      outbox.sent.length = 0;
+
+      await server.request(
+        '/api/auth/request-password-reset',
+        fromThisClient({
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email, redirectTo: '/reset-password' }),
+        }),
+      );
+
+      const link = /https?:\/\/\S+/.exec(outbox.sent.at(-1)?.body ?? '')?.[0];
+      const url = new URL(link!);
+      const first = await server.request(
+        url.pathname + url.search,
+        fromThisClient({ redirect: 'manual' }),
+      );
+      const token = new URL(first.headers.get('location')!, 'http://localhost').searchParams.get(
+        'token',
+      );
+
+      await server.request(
+        '/api/auth/reset-password',
+        fromThisClient({
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ token, newPassword: 'a-brand-new-passphrase' }),
+        }),
+      );
+
+      // A forwarded email, a browser history, a proxy log. Somebody who reads
+      // the link after it has been used must not be able to take the account.
+      const router = createAppRouter(createMemoryHistory());
+      await router.push(`/reset-password?token=${token}`);
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.find('[data-testid="reset-password"]').exists());
+
+      await wrapper.find('[data-testid="new-password"]').setValue('an-attackers-passphrase');
+      await wrapper.find('form').trigger('submit');
+      await waitFor(() => wrapper.find('[data-testid="reset-error"]').exists());
+
+      expect(wrapper.find('[data-testid="reset-error"]').text()).toContain('expired');
+      expect(await signIn(email, 'an-attackers-passphrase')).toBe(
+        'Those details did not match an account',
+      );
+    });
+  });
+
   describe('registering', () => {
     it('creates an account from the sign-up form and gets to a calendar', async () => {
       const email = `newcomer-${Date.now()}@example.test`;
@@ -1142,11 +1297,14 @@ async function waitFor(ready: () => boolean, timeoutMs = 5_000): Promise<void> {
  * what each command reports having created.
  */
 async function seed(email: string): Promise<Seeded> {
-  const signUp = await server.request('/api/auth/sign-up/email', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email, password: PASSWORD, name: 'Smoke' }),
-  });
+  const signUp = await server.request(
+    '/api/auth/sign-up/email',
+    fromThisClient({
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password: PASSWORD, name: 'Smoke' }),
+    }),
+  );
   if (!signUp.ok) throw new Error(`sign-up failed: ${await signUp.text()}`);
 
   const cookie = signUp.headers
@@ -1155,11 +1313,14 @@ async function seed(email: string): Promise<Seeded> {
     .join('; ');
 
   const command = async (body: unknown) => {
-    const response = await server.request('/api/commands', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie },
-      body: JSON.stringify(body),
-    });
+    const response = await server.request(
+      '/api/commands',
+      fromThisClient({
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify(body),
+      }),
+    );
     if (!response.ok) throw new Error(`command failed: ${await response.text()}`);
     return (await response.json()) as CommandBody;
   };

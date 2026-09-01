@@ -1,5 +1,5 @@
 import { readonly, ref } from 'vue';
-import { api } from './api';
+import { api, RATE_LIMITED, rateLimitMessage } from './api';
 
 /**
  * Who is signed in, and where they are acting (spec §9.3, §10.1).
@@ -37,7 +37,7 @@ export interface DisplaySettings {
 }
 
 export interface Session {
-  user: { id: string; email: string; displayName: string | null };
+  user: { id: string; email: string; displayName: string | null; emailVerified: boolean };
   settings: DisplaySettings;
   activeTenantId: string;
   contexts: SessionContext[];
@@ -97,6 +97,34 @@ export async function loadSession(): Promise<Session | null> {
 }
 
 /**
+ * Where a link mailed by the server comes back to.
+ *
+ * The client owns these because they are its route table, and it sends them
+ * with the request that causes the email — Better Auth has no way to know what
+ * the application's URLs are. They live here rather than in the router because
+ * the router is where they are *served* and this is where they are *promised*;
+ * `router.ts` imports them so the two cannot drift apart.
+ */
+export const RESET_PASSWORD_PATH = '/reset-password';
+export const VERIFY_EMAIL_PATH = '/verify-email';
+
+/**
+ * A call to Better Auth.
+ *
+ * Not the `hc` RPC client: these routes are the library's rather than the
+ * app's, so they are outside `AppType` and there is no contract to inherit.
+ * `same-origin` credentials are what carry the session cookie back (§10.1).
+ */
+async function authRequest(path: string, body: unknown): Promise<Response> {
+  return fetch(`/api/auth/${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
  * Creating an account (spec §10.1).
  *
  * Better Auth writes the `users` row and M1's triggers do the rest: the
@@ -120,12 +148,17 @@ export async function signUp(
   password: string,
   displayName: string,
 ): Promise<string | null> {
-  const response = await fetch('/api/auth/sign-up/email', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    credentials: 'same-origin',
-    body: JSON.stringify({ email, password, name: displayName }),
+  const response = await authRequest('sign-up/email', {
+    email,
+    password,
+    name: displayName,
+    // Where the confirmation link lands. Better Auth validates this against
+    // the trusted origins before it puts it in an email, which is what stops
+    // a crafted sign-up from mailing somebody a link to somewhere else.
+    callbackURL: VERIFY_EMAIL_PATH,
   });
+
+  if (response.status === RATE_LIMITED) return rateLimitMessage(response);
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { code?: string } | null;
@@ -162,14 +195,24 @@ function signUpMessage(code: string | undefined): string {
 export const MINIMUM_PASSWORD_LENGTH = 8;
 
 export async function signIn(email: string, password: string): Promise<string | null> {
-  const response = await fetch('/api/auth/sign-in/email', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    credentials: 'same-origin',
-    body: JSON.stringify({ email, password }),
-  });
+  const response = await authRequest('sign-in/email', { email, password });
+
+  // Checked before the blur below, and this order is the whole point. A
+  // limiter's refusal used to be reported as "those details did not match an
+  // account" — telling somebody with the right password that it is wrong, at
+  // the exact moment they are most likely to retype it and stay locked out.
+  if (response.status === RATE_LIMITED) return rateLimitMessage(response);
 
   if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { code?: string } | null;
+
+    // Only reachable where the deployment requires verification. Somebody who
+    // has already given the right password learns nothing from being told the
+    // account exists, and everything from being told which door is shut.
+    if (body?.code === 'EMAIL_NOT_VERIFIED') {
+      return 'Confirm your email address first. Check your inbox for the link we sent.';
+    }
+
     // Deliberately not the server's wording. "No account with that address"
     // and "wrong password" are the same message here, because distinguishing
     // them tells someone which half they got right.
@@ -177,6 +220,93 @@ export async function signIn(email: string, password: string): Promise<string | 
   }
 
   await loadSession();
+  return null;
+}
+
+/**
+ * Asking for a reset link (spec §10.1).
+ *
+ * **This one can keep the secret the sign-up form cannot.** The server answers
+ * the same way whether or not the address has an account, and the callback that
+ * writes the email is simply not reached for one that does not — so "if that
+ * address has an account, a link is on its way" is a description of what
+ * happened rather than a form of words.
+ *
+ * Which is why it returns `null` for both. There is no failure here to report
+ * except the network and the limiter.
+ */
+export async function requestPasswordReset(email: string): Promise<string | null> {
+  const response = await authRequest('request-password-reset', {
+    email,
+    redirectTo: RESET_PASSWORD_PATH,
+  });
+
+  if (response.status === RATE_LIMITED) return rateLimitMessage(response);
+  if (!response.ok) return 'That link could not be sent. Try again in a moment.';
+  return null;
+}
+
+/**
+ * Redeeming one (spec §10.1).
+ *
+ * The token arrives in the query string, put there by Better Auth's own
+ * redirect after it has checked the token is real and unexpired — so a link
+ * that was forged, spent or stale never reaches this form. Every session the
+ * account had ends here as well; see `revokeSessionsOnPasswordReset`.
+ */
+export async function resetPassword(token: string, newPassword: string): Promise<string | null> {
+  const response = await authRequest('reset-password', { token, newPassword });
+
+  if (response.status === RATE_LIMITED) return rateLimitMessage(response);
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { code?: string } | null;
+    return resetMessage(body?.code);
+  }
+
+  return null;
+}
+
+function resetMessage(code: string | undefined): string {
+  switch (code) {
+    case 'INVALID_TOKEN':
+      return 'That link has expired or has already been used. Ask for a new one.';
+    case 'PASSWORD_TOO_SHORT':
+      return `Passwords need at least ${MINIMUM_PASSWORD_LENGTH} characters.`;
+    case 'PASSWORD_TOO_LONG':
+      return 'That password is too long.';
+    default:
+      return 'That password could not be changed. Ask for a new link and try again.';
+  }
+}
+
+/**
+ * Sending the confirmation again (spec §10.1).
+ *
+ * Wanted more often than it sounds: the first one is sent while somebody is
+ * still typing their address, so the commonest reason to need a second is that
+ * the first went to a mistyped version of the right one.
+ *
+ * Signed out, the endpoint answers identically for an unknown address, an
+ * already-confirmed one and a fresh send — including a floor on how long it
+ * takes, so the wait does not give the answer away either.
+ */
+export async function resendVerification(email: string): Promise<string | null> {
+  const response = await authRequest('send-verification-email', {
+    email,
+    callbackURL: VERIFY_EMAIL_PATH,
+  });
+
+  if (response.status === RATE_LIMITED) return rateLimitMessage(response);
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { code?: string } | null;
+    // Signed *in*, the server does distinguish these; there is no one to hide
+    // them from, since the asker is the account.
+    if (body?.code === 'EMAIL_ALREADY_VERIFIED') return 'That address is already confirmed.';
+    return 'That message could not be sent. Try again in a moment.';
+  }
+
   return null;
 }
 

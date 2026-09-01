@@ -30,6 +30,10 @@ export function meRoute(auth: Auth) {
           id: users.id,
           email: users.email,
           displayName: users.displayName,
+          // §10.1's verification state, so the shell can offer to send the
+          // confirmation again rather than leaving a stalled sign-up looking
+          // like a working account.
+          emailVerified: users.emailVerified,
           locale: users.locale,
           timeZone: users.timeZone,
           firstDayOfWeek: users.firstDayOfWeek,

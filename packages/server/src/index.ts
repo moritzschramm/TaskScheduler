@@ -3,16 +3,29 @@ import { createApp } from './app.js';
 import { createAuth } from './auth/auth.js';
 import { createDatabase } from './db/client.js';
 import { loadEnv } from './env.js';
+import { loggingEmailSender } from './notifications/email.js';
 import { startWorker } from './jobs/queue.js';
 
 const env = loadEnv();
 const { db, close } = createDatabase(env.DATABASE_URL);
+
+/**
+ * One transport for everything this deployment sends.
+ *
+ * §11's notifications and §10.1's reset and verification links are the same
+ * kind of outbound message and there is no reason for a deployment to
+ * configure two providers to get them. Swapping the logging default for a real
+ * sender is this one line.
+ */
+const email = loggingEmailSender();
 
 const auth = createAuth({
   db,
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
   trustedOrigins: env.corsOrigins,
+  email,
+  requireEmailVerification: env.REQUIRE_EMAIL_VERIFICATION,
 });
 
 const app = createApp({
@@ -37,7 +50,7 @@ const server = serve({ fetch: app.fetch, port: env.SERVER_PORT }, (info) => {
  * locking means running several copies is a scaling decision rather than a
  * design change. Splitting it out is a deployment change later, not a rewrite.
  */
-const worker = await startWorker({ db, databaseUrl: env.DATABASE_URL });
+const worker = await startWorker({ db, databaseUrl: env.DATABASE_URL, email });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
