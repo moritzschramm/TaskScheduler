@@ -3,8 +3,7 @@
 A mix between a todo and calendar app. Creates tasks from todos by inserting them into the calendar
 while avoiding conflicts with existing entries. A task is scheduled in a predefined timespan.
 
-- [`specification.md`](./specification.md) — the source of truth for what is being built.
-- [`implementation-plan.md`](./implementation-plan.md) — the milestone sequence. **Current: M0 complete.**
+- [`specification.md`](./specification.md): the source of truth for what is being built.
 
 ## Quick start
 
@@ -13,14 +12,14 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Then open <http://localhost:8080>. The page reports whether the server reached Postgres.
+Then open <http://localhost:8080>
 
 ## Layout
 
 ```
 packages/
   shared/     Zod schemas + types, imported by both client and server
-  scheduler/  the scheduling engine — a pure package (no DB, no HTTP, no clock)
+  scheduler/  the scheduling engine (a pure package: no DB, no HTTP, no clock)
   server/     Hono API + Drizzle
   client/     Vue 3 + Tailwind + Reka UI / shadcn-vue
 docker/
@@ -39,12 +38,12 @@ the client. There is no cross-origin configuration in either environment.
 | `pnpm build`       | Build every package                               |
 | `pnpm typecheck`   | Typecheck every package                           |
 | `pnpm lint`        | ESLint, warnings treated as errors                |
-| `pnpm format`      | Prettier write (the two design docs are excluded) |
+| `pnpm format`      | Prettier write                                    |
 | `pnpm test`        | Vitest across every package                       |
 | `pnpm db:generate` | Generate a Drizzle migration from the schema      |
 | `pnpm db:migrate`  | Apply pending migrations                          |
 
-Server tests need a real Postgres — `docker compose up -d postgres` is enough. Override the
+Server tests need a real Postgres (`docker compose up -d postgres`). Override the
 connection with `TEST_DATABASE_URL` if it is not on `localhost:5432`.
 
 ## Production
@@ -53,17 +52,15 @@ connection with `TEST_DATABASE_URL` if it is not on `localhost:5432`.
 docker compose -f docker-compose.prod.yml up --build
 ```
 
-Requires `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` in the environment. The server
-container applies migrations on start, which suits the current single-replica setup; a multi-replica
-deploy should run them as a separate release step instead.
+Requires `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` in the environment.
 
-## Conventions
+## Coding Conventions
 
-These hold across every milestone (see the implementation plan for the full list):
-
-- TypeScript strict mode; Zod schemas live in `packages/shared` and are the single source of both
-  types and validation.
-- Intervals are half-open `[start, end)`. Instants are stored as `timestamptz` (UTC).
-- `packages/scheduler` stays pure: no DB or HTTP imports, no wall-clock reads, no randomness. Lint
+- TypeScript strict mode
+- Zod schemas live in `packages/shared` and are the single source of both
+  types and validation
+- Intervals are half-open `[start, end)`
+- Instants are stored as `timestamptz` (UTC)
+- `packages/scheduler` is pure: no DB or HTTP imports, no wall-clock reads, no randomness. Lint
   rules and `packages/scheduler/test/purity.test.ts` both enforce this.
-- All writes go through the command layer (from M6 onwards); nothing else mutates source state.
+- All writes go through the command layer, nothing else mutates source state.
