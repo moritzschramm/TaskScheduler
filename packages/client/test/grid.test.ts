@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { FixedBlock, ScheduledBlock } from '@ambitime/shared';
-import { blocksForDay, dragOffsetMinutes, movedStartMin, SCALE, snapToGrid } from '@/lib/grid';
-import { minuteOfDay, parseCivilDate, weekDays } from '@/lib/time';
+import type { CalendarConfiguration, FixedBlock, ScheduledBlock } from '@ambitime/shared';
+import type { ResolvedWindow } from '@ambitime/scheduler';
+import {
+  blocksForDay,
+  clipBand,
+  dragOffsetMinutes,
+  movedStartMin,
+  openBandsForDay,
+  SCALE,
+  snapToGrid,
+  windowsForWeek,
+} from '@/lib/grid';
+import { minuteOfDay, parseCivilDate, toInstant, weekDays } from '@/lib/time';
 
 /**
  * Grid arithmetic (plan M10's review focus: grid correctness, timezone
@@ -193,5 +203,201 @@ describe('drag arithmetic', () => {
 
     // And off the bottom, where a one-hour block can start no later than 23:00.
     expect(movedStartMin(drawn!, 10_000)).toBe(23 * 60);
+  });
+});
+
+/**
+ * The shading behind the blocks (spec §4.3, §9.1).
+ *
+ * The bug these are written against was an empty grid that looked exactly like
+ * a full one with nothing on it. A calendar whose columns are uniformly blank
+ * cannot tell you that it has nowhere to put anything, which is precisely the
+ * state a new calendar is in and precisely the state that needs saying.
+ */
+function window_(startIso: string, endIso: string, categoryId = 'cat-1'): ResolvedWindow {
+  return {
+    ruleId: `rule-${categoryId}`,
+    calendarId: 'cal-1',
+    categoryId,
+    interval: { start: toInstant(startIso), end: toInstant(endIso) },
+  };
+}
+
+describe('the hours a day is open', () => {
+  const MONDAY = parseCivilDate('2026-03-23');
+
+  it('reads a window in local minutes, like everything else on the grid', () => {
+    // 08:00Z–16:00Z in March is 09:00–17:00 Berlin.
+    const bands = openBandsForDay(MONDAY, BERLIN, [
+      window_('2026-03-23T08:00:00.000Z', '2026-03-23T16:00:00.000Z'),
+    ]);
+
+    expect(bands).toEqual([{ startMin: 540, endMin: 1020 }]);
+  });
+
+  it('ignores a window belonging to another day', () => {
+    const bands = openBandsForDay(MONDAY, BERLIN, [
+      window_('2026-03-24T08:00:00.000Z', '2026-03-24T16:00:00.000Z'),
+    ]);
+
+    expect(bands).toEqual([]);
+  });
+
+  it('merges two categories into one band where they overlap', () => {
+    // Otherwise the overlap is painted twice, and a translucent fill painted
+    // twice is a different colour — a seam where the day is most available.
+    const bands = openBandsForDay(MONDAY, BERLIN, [
+      window_('2026-03-23T08:00:00.000Z', '2026-03-23T12:00:00.000Z', 'work'),
+      window_('2026-03-23T10:00:00.000Z', '2026-03-23T16:00:00.000Z', 'admin'),
+    ]);
+
+    expect(bands).toEqual([{ startMin: 540, endMin: 1020 }]);
+  });
+
+  it('joins two that merely touch', () => {
+    // 09:00–12:00 then 12:00–17:00 is one working day. A seam drawn at noon
+    // would read as a break that nobody configured.
+    const bands = openBandsForDay(MONDAY, BERLIN, [
+      window_('2026-03-23T08:00:00.000Z', '2026-03-23T11:00:00.000Z', 'work'),
+      window_('2026-03-23T11:00:00.000Z', '2026-03-23T16:00:00.000Z', 'admin'),
+    ]);
+
+    expect(bands).toEqual([{ startMin: 540, endMin: 1020 }]);
+  });
+
+  it('keeps a genuine gap as two bands', () => {
+    const bands = openBandsForDay(MONDAY, BERLIN, [
+      window_('2026-03-23T08:00:00.000Z', '2026-03-23T11:00:00.000Z', 'work'),
+      window_('2026-03-23T12:00:00.000Z', '2026-03-23T16:00:00.000Z', 'admin'),
+    ]);
+
+    expect(bands).toEqual([
+      { startMin: 540, endMin: 720 },
+      { startMin: 780, endMin: 1020 },
+    ]);
+  });
+
+  it('answers an unconfigured calendar with a closed day', () => {
+    // Not an edge case: it is what every calendar looks like before anyone has
+    // been to settings, and the grid has to be able to draw it.
+    expect(openBandsForDay(MONDAY, BERLIN, [])).toEqual([]);
+  });
+
+  it('clips a band to the span the grid actually draws', () => {
+    // A window from midnight would otherwise be positioned at a negative
+    // offset and paint over the day headings.
+    expect(clipBand({ startMin: 0, endMin: 1440 }, 360, 1320)).toEqual({
+      startMin: 360,
+      endMin: 1320,
+    });
+    expect(clipBand({ startMin: 540, endMin: 1020 }, 360, 1320)).toEqual({
+      startMin: 540,
+      endMin: 1020,
+    });
+    expect(clipBand({ startMin: 0, endMin: 300 }, 360, 1320)).toBeNull();
+  });
+});
+
+/**
+ * Which windows the grid draws (spec §3.3, §4.3, §9.1).
+ *
+ * The first version of this shaded from the schedule context's own windows,
+ * which are resolved against the *placeable* horizon — it starts at `now`. That
+ * drew this morning as closed because it had passed, and every week the user
+ * paged back to as closed entirely. Neither is a fact about the calendar.
+ */
+function configuration(overrides: Partial<CalendarConfiguration> = {}): CalendarConfiguration {
+  return {
+    calendar: {
+      id: 'cal-1',
+      name: 'Primary',
+      timezone: BERLIN,
+      visibilityScope: 'private',
+      version: 1,
+      isOwner: true,
+    },
+    windows: [],
+    categories: [{ id: 'cat-1', name: 'Work', defaultCooldownMin: 0, version: 1 }],
+    availability: [
+      {
+        id: 'win-1',
+        categoryId: 'cat-1',
+        weekTypeOverrideId: null,
+        focusLevel: null,
+        weekday: 1,
+        startMin: 9 * 60,
+        endMin: 17 * 60,
+      },
+    ],
+    weekTypeOverrides: [],
+    ...overrides,
+  };
+}
+
+describe('the windows behind the week on screen', () => {
+  const THIS_WEEK = weekDays(parseCivilDate('2026-03-23'), 1);
+  const LAST_YEAR = weekDays(parseCivilDate('2025-03-24'), 1);
+
+  it('expands a weekday rule onto the Monday being drawn', () => {
+    const resolved = windowsForWeek(THIS_WEEK, BERLIN, 'cal-1', configuration());
+
+    expect(openBandsForDay(THIS_WEEK[0]!, BERLIN, resolved)).toEqual([
+      { startMin: 540, endMin: 1020 },
+    ]);
+  });
+
+  it('draws a week in the past exactly the same', () => {
+    // The rules have no horizon. A week already gone is still a week whose
+    // Monday mornings were working hours, and paging back must not black it out.
+    const resolved = windowsForWeek(LAST_YEAR, BERLIN, 'cal-1', configuration());
+
+    expect(openBandsForDay(LAST_YEAR[0]!, BERLIN, resolved)).toEqual([
+      { startMin: 540, endMin: 1020 },
+    ]);
+  });
+
+  it('lets the working window clip the category window', () => {
+    // §9.1: the calendar says when tasks may be placed at all, and it wins.
+    const resolved = windowsForWeek(
+      THIS_WEEK,
+      BERLIN,
+      'cal-1',
+      configuration({
+        windows: [{ id: 'cw-1', kind: 'working', weekday: 1, startMin: 780, endMin: 1080 }],
+      }),
+    );
+
+    expect(openBandsForDay(THIS_WEEK[0]!, BERLIN, resolved)).toEqual([
+      { startMin: 780, endMin: 1020 },
+    ]);
+  });
+
+  it('treats no working window as unrestricted, not as closed', () => {
+    // `[]` would mean "nothing may be placed anywhere", which is a setting
+    // nobody made — and it would shade every calendar closed until someone did.
+    const resolved = windowsForWeek(THIS_WEEK, BERLIN, 'cal-1', configuration({ windows: [] }));
+
+    expect(openBandsForDay(THIS_WEEK[0]!, BERLIN, resolved)).toHaveLength(1);
+  });
+
+  it('closes a week a week-type override has emptied', () => {
+    const resolved = windowsForWeek(
+      THIS_WEEK,
+      BERLIN,
+      'cal-1',
+      configuration({
+        weekTypeOverrides: [
+          { id: 'ov-1', name: 'Leave', startDate: '2026-03-23', endDate: '2026-03-30', version: 1 },
+        ],
+      }),
+    );
+
+    // The override replaces the default set entirely (§4.3), and it has no
+    // windows of its own — so the week really is shut.
+    expect(resolved).toEqual([]);
+  });
+
+  it('answers an empty week with no windows rather than throwing', () => {
+    expect(windowsForWeek([], BERLIN, 'cal-1', configuration())).toEqual([]);
   });
 });

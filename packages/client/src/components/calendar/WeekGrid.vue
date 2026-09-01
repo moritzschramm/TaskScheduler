@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import type { FixedBlock, ScheduledBlock } from '@ambitime/shared';
-import type { CivilDate } from '@ambitime/scheduler';
+import type { CivilDate, ResolvedWindow } from '@ambitime/scheduler';
 import {
   blocksForDay,
+  clipBand,
   dragOffsetMinutes,
   movedStartMin,
+  openBandsForDay,
   SCALE,
   SNAP_MINUTES,
+  type DayBand,
   type GridBlock,
 } from '@/lib/grid';
 import { formatDayLabel, formatMinuteOfDay, sameCivilDate } from '@/lib/time';
@@ -18,6 +21,15 @@ const props = withDefaults(
     timeZone: string;
     blocks: ScheduledBlock[];
     fixedBlocks: FixedBlock[];
+    /**
+     * The hours something may be scheduled in, resolved by the engine (§4.3).
+     *
+     * Drawn as the lit part of each column. Empty is meaningful and is left to
+     * render as a wholly closed week: a calendar with no availability windows
+     * genuinely cannot have anything placed in it, and a grid that hid that
+     * would be the same blank week as one that simply had nothing to do.
+     */
+    windows?: readonly ResolvedWindow[];
     today?: CivilDate | null;
     /** Visible span, in local minutes. Outside it there is nothing to show. */
     dayStartMin?: number;
@@ -26,7 +38,14 @@ const props = withDefaults(
     /** M11: the grid becomes a way in to the editors, not only a picture. */
     editable?: boolean;
   }>(),
-  { today: null, dayStartMin: 6 * 60, dayEndMin: 22 * 60, locale: 'en-GB', editable: false },
+  {
+    windows: () => [],
+    today: null,
+    dayStartMin: 6 * 60,
+    dayEndMin: 22 * 60,
+    locale: 'en-GB',
+    editable: false,
+  },
 );
 
 const emit = defineEmits<{
@@ -223,11 +242,18 @@ const columns = computed(() =>
     label: formatDayLabel(day, props.locale),
     isToday: props.today !== null && sameCivilDate(day, props.today),
     blocks: blocksForDay(day, props.timeZone, props.blocks, props.fixedBlocks),
+    open: openBandsForDay(day, props.timeZone, props.windows)
+      .map((band) => clipBand(band, props.dayStartMin, props.dayEndMin))
+      .filter((band): band is DayBand => band !== null),
   })),
 );
 
 function offsetOf(minute: number): number {
   return (minute - props.dayStartMin) * SCALE;
+}
+
+function heightOfBand(band: DayBand): number {
+  return (band.endMin - band.startMin) * SCALE;
 }
 
 /**
@@ -269,9 +295,16 @@ function classesFor(block: GridBlock): string {
 </script>
 
 <template>
+  <!--
+    `overflow-y-hidden` is load-bearing, not tidiness. A box with `overflow-x`
+    set and `overflow-y` visible computes the second to `auto`, so this used to
+    grow its own vertical scrollbar over the eight pixels of the last hour label
+    that hang below the grid — a second scrollbar inside the page's own. The
+    padding leaves that overhang somewhere to be rather than clipping it.
+  -->
   <div
     ref="grid"
-    class="flex w-full overflow-x-auto"
+    class="flex w-full overflow-x-auto overflow-y-hidden pb-2"
     role="group"
     :aria-label="`Week grid, times in ${timeZone}`"
     data-testid="week-grid"
@@ -334,11 +367,27 @@ function classesFor(block: GridBlock): string {
           </span>
         </div>
 
-        <div
-          class="bg-card relative border-l"
-          :class="column.isToday ? 'bg-primary/[0.03]' : ''"
-          :style="{ height: `${gridHeight}px` }"
-        >
+        <div class="bg-muted relative border-l" :style="{ height: `${gridHeight}px` }">
+          <!--
+            The hours something may actually be placed in (§4.3, §9.1).
+
+            Drawn as the lit part of a column that is otherwise closed, rather
+            than the other way round, because "closed" is the default a calendar
+            with no windows configured should fall back to — and that calendar
+            is exactly the one whose emptiness needs explaining.
+          -->
+          <div
+            v-for="band in column.open"
+            :key="`open-${band.startMin}`"
+            class="absolute inset-x-0"
+            :class="column.isToday ? 'bg-primary/[0.06]' : 'bg-card'"
+            :style="{ top: `${offsetOf(band.startMin)}px`, height: `${heightOfBand(band)}px` }"
+            data-testid="open-band"
+            :data-start-min="band.startMin"
+            :data-end-min="band.endMin"
+            aria-hidden="true"
+          />
+
           <div
             v-for="mark in hourMarks"
             :key="`line-${mark}`"

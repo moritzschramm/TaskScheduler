@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createMemoryHistory } from 'vue-router';
+import axe from 'axe-core';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp as createServer } from '@ambitime/server';
 import { createAuth } from '@ambitime/server/auth';
@@ -1251,6 +1252,148 @@ describe('seed via the API, render the client', () => {
       // And where they were going survives the crossing.
       expect(wrapper.find('[data-testid="sign-up"]').exists()).toBe(true);
       expect(router.currentRoute.value.query['next']).toBe('/settings');
+    });
+  });
+
+  /**
+   * A calendar nobody has configured yet — which is every calendar, for a while.
+   *
+   * The report was "nothing is shown in the calendar", and it was accurate: a
+   * task with no category is one the solver is never offered, so it appeared on
+   * no grid and in no backlog, and the screen said "everything fits inside the
+   * horizon" while holding it. The server had been reporting `unschedulable`
+   * since M9 and the client had never read the field.
+   *
+   * Seeded deliberately without `seed()`: its category and windows are exactly
+   * what the state under test is missing.
+   */
+  describe('a calendar with nothing set up', () => {
+    async function bareCalendar(email: string): Promise<void> {
+      const signUp = await server.request(
+        '/api/auth/sign-up/email',
+        fromThisClient({
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email, password: PASSWORD, name: 'Bare' }),
+        }),
+      );
+      if (!signUp.ok) throw new Error(`sign-up failed: ${await signUp.text()}`);
+
+      const cookie = signUp.headers
+        .getSetCookie()
+        .map((value) => value.split(';')[0])
+        .join('; ');
+
+      const command = async (body: unknown): Promise<CommandBody> => {
+        const response = await server.request(
+          '/api/commands',
+          fromThisClient({
+            method: 'POST',
+            headers: { 'content-type': 'application/json', cookie },
+            body: JSON.stringify(body),
+          }),
+        );
+        if (!response.ok) throw new Error(`command failed: ${await response.text()}`);
+        return (await response.json()) as CommandBody;
+      };
+
+      const created = await command({
+        type: 'CreateCalendar',
+        params: { name: 'Testcal', timezone: 'Europe/Berlin' },
+      });
+      const calendarId = created.created.find((row) => row.entity === 'calendar')!.id;
+
+      // No category and no estimate: one task that cannot be placed for each
+      // of the two reasons the loader distinguishes.
+      await command({
+        type: 'CreateTask',
+        params: { calendarId, title: 'Uncategorised', estimatedDurationMin: 40 },
+      });
+    }
+
+    it('says why the week is empty instead of claiming everything fits', async () => {
+      const email = `bare-${Date.now()}@example.test`;
+      await bareCalendar(email);
+
+      await signIn(email, PASSWORD);
+      await loadSession();
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/');
+      await router.isReady();
+
+      // Attached to the document because axe below will not audit a detached
+      // tree — it has no way to resolve what a screen reader would reach.
+      const wrapper = (mounted = mount(App, {
+        global: { plugins: [router] },
+        attachTo: document.body,
+      }));
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+      // Nothing is placed, and that part was never in doubt.
+      expect(wrapper.findAll('[data-testid="block-task"]')).toHaveLength(0);
+
+      // The task is named, with the reason it was never offered to the solver.
+      const notice = wrapper.find('[data-testid="unschedulable-notice"]');
+      expect(notice.exists()).toBe(true);
+      expect(notice.text()).toContain('Uncategorised');
+      expect(notice.text()).toContain('category');
+
+      // And the calendar-level cause is stated once, where it can be fixed.
+      expect(wrapper.find('[data-testid="no-windows-yet"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="set-up-availability"]').text()).toContain('availability');
+
+      // §14: the screen that explains an empty calendar is the first screen a
+      // new account sees, so it is the last one that may be unreadable.
+      const results = await axe.run(wrapper.element as Element, {
+        rules: { 'color-contrast': { enabled: false } },
+      });
+      expect(results.violations).toEqual([]);
+    });
+
+    it('draws the whole week closed, because it is', async () => {
+      const email = `closed-${Date.now()}@example.test`;
+      await bareCalendar(email);
+
+      await signIn(email, PASSWORD);
+      await loadSession();
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+      expect(wrapper.findAll('[data-testid="open-band"]')).toHaveLength(0);
+    });
+
+    it('lights the working hours once they exist', async () => {
+      // The other half of the same assertion: `seed()` configures 09:00–17:00
+      // on weekdays, so the grid must show five lit columns and two closed.
+      const email = `lit-${Date.now()}@example.test`;
+      await seed(email);
+
+      await signIn(email, PASSWORD);
+      await loadSession();
+
+      const router = createAppRouter(createMemoryHistory());
+      await router.push('/');
+      await router.isReady();
+
+      const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+      const columns = wrapper.findAll('[data-testid="day-column"]');
+      const lit = columns.map((column) => column.find('[data-testid="open-band"]'));
+
+      expect(lit.slice(0, 5).every((band) => band.exists())).toBe(true);
+      expect(lit[5]?.exists()).toBe(false);
+      expect(lit[6]?.exists()).toBe(false);
+
+      // 09:00–17:00 Berlin, in the local minutes the grid positions with.
+      expect(lit[1]?.attributes('data-start-min')).toBe('540');
+      expect(lit[1]?.attributes('data-end-min')).toBe('1020');
     });
   });
 });

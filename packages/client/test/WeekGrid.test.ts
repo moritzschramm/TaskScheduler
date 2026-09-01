@@ -1,8 +1,9 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import type { FixedBlock, ScheduledBlock } from '@ambitime/shared';
+import type { ResolvedWindow } from '@ambitime/scheduler';
 import WeekGrid from '@/components/calendar/WeekGrid.vue';
-import { parseCivilDate, weekDays } from '@/lib/time';
+import { parseCivilDate, toInstant, weekDays } from '@/lib/time';
 
 /**
  * Rendering the week (plan M10's review focus: grid correctness, timezones).
@@ -113,5 +114,80 @@ describe('WeekGrid', () => {
     // One axis, labelled once; every column reads against it.
     expect(wrapper.text()).toContain('09:00');
     expect(wrapper.text()).toContain('21:00');
+  });
+});
+
+/**
+ * The week has to look like a week (spec §4.3, §9.1, §13).
+ *
+ * Two separate failures met here. The grid drew every hour identically, so an
+ * unschedulable week was indistinguishable from an idle one; and its scroll
+ * container grew a second vertical scrollbar inside the page's own, because a
+ * box with `overflow-x` set computes a visible `overflow-y` to `auto` and the
+ * last hour label hangs a few pixels below the grid.
+ */
+const OPEN_MONDAY: ResolvedWindow = {
+  ruleId: 'rule-1',
+  calendarId: 'cal-1',
+  categoryId: 'cat-1',
+  // 09:00–17:00 Berlin, on the Monday of the week under test.
+  interval: {
+    start: toInstant('2026-03-23T08:00:00.000Z'),
+    end: toInstant('2026-03-23T16:00:00.000Z'),
+  },
+};
+
+describe('the hours the calendar is open', () => {
+  it('lights the window and leaves the rest of the day closed', () => {
+    const wrapper = mount(WeekGrid, {
+      props: { days: WEEK, timeZone: BERLIN, blocks: [], fixedBlocks: [], windows: [OPEN_MONDAY] },
+    });
+
+    const monday = wrapper.findAll('[data-testid="day-column"]')[0];
+    const band = monday?.find('[data-testid="open-band"]');
+
+    expect(band?.attributes('data-start-min')).toBe('540');
+    expect(band?.attributes('data-end-min')).toBe('1020');
+
+    // And Tuesday has no window, so nothing on it is lit.
+    expect(
+      wrapper.findAll('[data-testid="day-column"]')[1]?.find('[data-testid="open-band"]').exists(),
+    ).toBe(false);
+  });
+
+  it('draws a calendar with no windows as a wholly closed week', () => {
+    // The state every calendar is in before anyone visits settings. Drawing it
+    // the same as a configured week is what made an empty schedule unreadable.
+    const wrapper = mount(WeekGrid, {
+      props: { days: WEEK, timeZone: BERLIN, blocks: [], fixedBlocks: [] },
+    });
+
+    expect(wrapper.findAll('[data-testid="open-band"]')).toHaveLength(0);
+  });
+
+  it('keeps the shading behind the blocks, not in the tab order', () => {
+    const wrapper = mount(WeekGrid, {
+      props: {
+        days: WEEK,
+        timeZone: BERLIN,
+        blocks: [block],
+        fixedBlocks: [],
+        windows: [OPEN_MONDAY],
+      },
+    });
+
+    const band = wrapper.find('[data-testid="open-band"]');
+    expect(band.attributes('aria-hidden')).toBe('true');
+    expect(band.attributes('data-grid-block')).toBeUndefined();
+  });
+
+  it('never grows a vertical scrollbar of its own', () => {
+    // jsdom does not lay out, so the class is the assertion. Leaving
+    // `overflow-y` to compute from `overflow-x` is exactly what produced the
+    // second scrollbar; saying it explicitly is what stops it coming back.
+    const classes = render().find('[data-testid="week-grid"]').classes();
+
+    expect(classes).toContain('overflow-x-auto');
+    expect(classes).toContain('overflow-y-hidden');
   });
 });

@@ -29,6 +29,7 @@ import { now } from '@/lib/clock';
 import { displayFirstDayOfWeek, displayLocale, displayTimeZone } from '@/lib/session';
 import { addDays, formatCivilDate, localDate, toIso, weekDays } from '@/lib/time';
 import type {
+  CalendarConfiguration,
   CapacityCell,
   Category,
   CommandRequest,
@@ -37,7 +38,7 @@ import type {
   Notification,
   ScheduledBlock,
 } from '@ambitime/shared';
-import type { GridBlock } from '@/lib/grid';
+import { windowsForWeek, type GridBlock } from '@/lib/grid';
 
 /**
  * The week view, and from M11 the place tasks and appointments are made.
@@ -81,6 +82,11 @@ const view = ref<ScheduleView | null>(null);
 const backlog = ref<BacklogEntry[]>([]);
 const tasks = ref<TaskNode[]>([]);
 const categories = ref<Category[]>([]);
+/**
+ * Held whole, not just its categories: the grid shades the hours the calendar
+ * is open, and the rules for those live here rather than on the schedule.
+ */
+const configuration = ref<CalendarConfiguration | null>(null);
 const history = ref<HistoryView | null>(null);
 const notifications = ref<Notification[]>([]);
 const capacity = ref<CapacityCell[]>([]);
@@ -142,19 +148,19 @@ async function load() {
     const id = selectedId.value;
     if (id === null) return;
 
-    const [schedule, entries, taskList, configuration, log, context, signals, cells] =
-      await Promise.all([
-        fetchSchedule(id),
-        fetchBacklog(id),
-        fetchTasks(id),
-        fetchConfiguration(id),
-        fetchHistory(),
-        fetchContext(id),
-        fetchNotifications(),
-        fetchCapacity(id),
-      ]);
+    const [schedule, entries, taskList, config, log, context, signals, cells] = await Promise.all([
+      fetchSchedule(id),
+      fetchBacklog(id),
+      fetchTasks(id),
+      fetchConfiguration(id),
+      fetchHistory(),
+      fetchContext(id),
+      fetchNotifications(),
+      fetchCapacity(id),
+    ]);
 
-    categories.value = configuration.categories;
+    configuration.value = config;
+    categories.value = config.categories;
     history.value = log;
     engineContext.value = context;
     notifications.value = signals;
@@ -337,6 +343,56 @@ const swapCandidates = computed<ScheduledBlock[]>(() => {
   return (view.value?.schedule.blocks ?? []).filter((block) => block.taskId !== open.task!.id);
 });
 
+/** The hours the calendar is open across the seven days being drawn (§4.3). */
+const openWindows = computed(() =>
+  configuration.value === null || calendar.value === undefined
+    ? []
+    : windowsForWeek(days.value, zone.value, calendar.value.id, configuration.value),
+);
+
+/**
+ * Why the week is empty, when it is (spec §6.7).
+ *
+ * The schedule read has carried `unschedulable` since M9 and nothing looked at
+ * it, so a task with no category or no estimate simply vanished: not on the
+ * grid, not in the backlog — which reports on demand that *competed* for time —
+ * and not in the signals. The screen said "everything fits inside the horizon"
+ * while holding a task it had never once tried to place.
+ *
+ * These two are separate on purpose. A missing window is a fact about the
+ * calendar and is fixed once in settings; a missing category or estimate is a
+ * fact about one task and is fixed in its editor. Collapsing them would send
+ * half the readers to the wrong screen.
+ */
+const REASONS: Record<string, string> = {
+  no_category: 'needs a category before a window can apply to it',
+  no_duration: 'needs an estimate before there is anything to fit',
+};
+
+const unschedulable = computed(() =>
+  (view.value?.schedule.unschedulable ?? []).map((entry) => ({
+    ...entry,
+    title: tasks.value.find((task) => task.id === entry.taskId)?.title ?? 'Untitled task',
+    reasonText: REASONS[entry.reason] ?? entry.reason,
+  })),
+);
+
+/**
+ * True when the engine resolves no window at all across the week on screen.
+ *
+ * Read from what the engine returns rather than counted from the categories,
+ * because those are not the same question: a calendar can have categories whose
+ * windows are all empty, or a working window that clips every one of them away,
+ * or a week-type override that closes the week — and in all three the answer to
+ * "can anything be scheduled here" is still no.
+ */
+const noWindows = computed(() => configuration.value !== null && openWindows.value.length === 0);
+
+function openTask(taskId: string): void {
+  const task = tasks.value.find((candidate) => candidate.id === taskId);
+  if (task !== undefined) editing.value = { kind: 'task', task, parent: parentOf(task) };
+}
+
 function addBlockOn(day: CivilDate): void {
   const at = wallClockToInstant(day, 9 * 60, zone.value);
   editing.value = { kind: 'block', block: null, defaultStart: toIso(at) };
@@ -421,11 +477,59 @@ watch(selectedId, load);
     </section>
 
     <template v-else-if="view && calendar">
+      <!--
+        Ahead of the grid rather than below it: this is the answer to the
+        question an empty week has just made the reader ask, and an answer
+        underneath two panels is an answer they have to go looking for.
+      -->
+      <section
+        v-if="noWindows"
+        class="max-w-prose space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950"
+        role="status"
+        data-testid="no-windows-yet"
+      >
+        <h2 class="text-sm font-semibold">Nothing can be scheduled in this calendar yet.</h2>
+        <p class="text-sm">
+          There are no availability windows, so the engine has nowhere to put anything — the whole
+          week below is closed. Add a category and the hours it may be worked in.
+        </p>
+        <Button as-child size="sm" data-testid="set-up-availability">
+          <RouterLink to="/settings">Set up availability</RouterLink>
+        </Button>
+      </section>
+
+      <section
+        v-if="unschedulable.length > 0"
+        class="max-w-prose space-y-2 rounded-lg border p-4"
+        role="status"
+        data-testid="unschedulable-notice"
+      >
+        <h2 class="text-sm font-semibold">
+          {{ unschedulable.length }}
+          {{ unschedulable.length === 1 ? 'task is' : 'tasks are' }} not being scheduled
+        </h2>
+        <ul class="space-y-1">
+          <li v-for="entry in unschedulable" :key="entry.occurrenceId" class="text-sm">
+            <button
+              type="button"
+              class="underline underline-offset-4"
+              data-testid="unschedulable-task"
+              :data-task-id="entry.taskId"
+              @click="openTask(entry.taskId)"
+            >
+              {{ entry.title }}
+            </button>
+            <span class="text-muted-foreground"> — {{ entry.reasonText }}.</span>
+          </li>
+        </ul>
+      </section>
+
       <WeekGrid
         :days="days"
         :time-zone="zone"
         :blocks="view.schedule.blocks"
         :fixed-blocks="view.fixedBlocks"
+        :windows="openWindows"
         :today="today"
         :locale="locale"
         editable

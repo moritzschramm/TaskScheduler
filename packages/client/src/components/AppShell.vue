@@ -70,7 +70,16 @@ async function confirmAgain() {
 </script>
 
 <template>
-  <div class="bg-background min-h-full">
+  <!--
+    The shell owns the viewport, and `main` is the only thing that scrolls.
+
+    It used to be `min-h-full` on a page that grew as tall as its content, which
+    left the document scrolling *and* the week grid scrolling inside it — two
+    vertical scrollbars for one page. Pinning the frame to the viewport also
+    keeps the header and the verification notice in place, which is what a
+    person navigating a long week actually wants from them.
+  -->
+  <div class="bg-background flex h-full flex-col">
     <!--
       WCAG 2.4.1. The header is short, but the calendar behind it is a grid of
       focusable blocks — without this, reaching the task panel by keyboard
@@ -86,7 +95,7 @@ async function confirmAgain() {
 
     <header
       v-if="session"
-      class="flex items-center justify-between gap-4 border-b px-6 py-3"
+      class="flex shrink-0 items-center justify-between gap-4 border-b px-6 py-3"
       data-testid="app-shell-header"
     >
       <div class="flex items-baseline gap-3">
@@ -129,7 +138,7 @@ async function confirmAgain() {
     -->
     <div
       v-if="unverified"
-      class="flex flex-wrap items-center justify-between gap-3 border-b bg-amber-50 px-6 py-2 text-sm text-amber-950 dark:bg-amber-950 dark:text-amber-50"
+      class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-amber-50 px-6 py-2 text-sm text-amber-950 dark:bg-amber-950 dark:text-amber-50"
       role="status"
       data-testid="unverified-banner"
     >
@@ -161,7 +170,18 @@ async function confirmAgain() {
       </div>
     </div>
 
-    <main id="main" tabindex="-1">
+    <!--
+      `min-h-0` so the flex item may shrink below its content and scroll, and
+      `relative` so it is the containing block for what it holds.
+
+      The second is not decoration. `sr-only` positions absolutely, so every
+      visually-hidden label in a long page resolved against the initial
+      containing block and escaped this element's clip — one of them sits a
+      thousand pixels down the task table and was stretching the *document* to
+      reach it, which is where the second scrollbar came from. Any descendant
+      that positions itself now resolves against this box and scrolls with it.
+    -->
+    <main id="main" class="relative min-h-0 flex-1 overflow-y-auto" tabindex="-1">
       <slot />
     </main>
   </div>
