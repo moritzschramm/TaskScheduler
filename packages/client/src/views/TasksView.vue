@@ -5,6 +5,7 @@ import TaskListPanel from '@/components/panels/TaskListPanel.vue';
 import TaskActions from '@/components/tasks/TaskActions.vue';
 import TaskEditor from '@/components/tasks/TaskEditor.vue';
 import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
+import { Dialog } from '@/components/ui/dialog';
 import { useWorkspace } from '@/lib/workspace';
 import type { ScheduledBlock } from '@ambitime/shared';
 
@@ -29,6 +30,7 @@ const {
   calendar,
   zone,
   editing,
+  taskDialogOpen,
   unschedulable,
   ensureLoaded,
   submit,
@@ -101,9 +103,15 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         <BacklogPanel :entries="backlog" />
       </div>
 
-      <div
+      <!--
+        A modal, because editing a task is a modal act: the tree behind it is
+        the thing you picked from, and a form that shares the page with its own
+        list invites saving the one you are no longer looking at.
+      -->
+      <Dialog
         v-if="editing.kind === 'task'"
-        class="bg-card rounded-lg border p-5"
+        v-model:open="taskDialogOpen"
+        :title="editing.task === null ? 'New task' : 'Edit task'"
         data-testid="editor-panel"
       >
         <TaskEditor
@@ -115,6 +123,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           :time-zone="zone"
           :submit="submit"
           @cancel="editing = { kind: 'none' }"
+          @saved="editing = { kind: 'none' }"
         />
         <div v-if="editing.task && editing.task.isLeaf" class="mt-6 border-t pt-5">
           <TaskActions
@@ -125,7 +134,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
             :submit="submit"
           />
         </div>
-      </div>
+      </Dialog>
     </template>
   </div>
 </template>

@@ -1,4 +1,4 @@
-import { computed, ref, watch, type ComputedRef, type Ref } from 'vue';
+import { computed, ref, watch, type ComputedRef, type Ref, type WritableComputedRef } from 'vue';
 import {
   wallClockToInstant,
   type CivilDate,
@@ -99,6 +99,27 @@ const editing = ref<Editing>({ kind: 'none' });
 /** The Monday (or configured first day) of the week being shown. */
 const anchor = ref<CivilDate | null>(null);
 
+/**
+ * The slice of the day the grid draws.
+ *
+ * A preference about looking, not about scheduling — nothing outside it is
+ * hidden from the engine, and a block that falls outside is still placed. Held
+ * here rather than in a component so it survives moving between Schedule and
+ * Appointments, and deliberately **not** a command: §13's settings are the ones
+ * that change what the schedule *means*, and this changes only how much of it
+ * fits on a screen.
+ */
+const dayStartMin = ref(6 * 60);
+const dayEndMin = ref(22 * 60);
+
+/** Keeps the pair ordered and at least an hour apart, whichever end moved. */
+function setDayRange(startMin: number, endMin: number): void {
+  const start = Math.min(Math.max(startMin, 0), 23 * 60);
+  const end = Math.min(Math.max(endMin, start + 60), 24 * 60);
+  dayStartMin.value = Math.min(start, end - 60);
+  dayEndMin.value = end;
+}
+
 let started = false;
 
 const calendar = computed(() => calendars.value.find((entry) => entry.id === selectedId.value));
@@ -182,6 +203,20 @@ const scheduledElsewhere = computed<ScheduledBlock[]>(() => {
     const at = Date.parse(block.start) / 60_000;
     return at < start || at >= end;
   });
+});
+
+/**
+ * The task editor's open state, as a modal wants it.
+ *
+ * Derived from `editing` rather than kept beside it: two sources for "is the
+ * editor open" is how a dialog ends up dismissed with the form still mounted
+ * behind it, or the other way round.
+ */
+const taskDialogOpen = computed({
+  get: () => editing.value.kind === 'task',
+  set: (open: boolean) => {
+    if (!open) editing.value = { kind: 'none' };
+  },
 });
 
 /** The local date a block outside this week was placed on. */
@@ -374,7 +409,11 @@ export interface Workspace {
   error: Ref<string | null>;
   loading: Ref<boolean>;
   editing: Ref<Editing>;
+  taskDialogOpen: WritableComputedRef<boolean>;
   anchor: Ref<CivilDate | null>;
+  dayStartMin: Ref<number>;
+  dayEndMin: Ref<number>;
+  setDayRange: (startMin: number, endMin: number) => void;
   calendar: ComputedRef<CalendarSummary | undefined>;
   locale: ComputedRef<string>;
   zone: ComputedRef<string>;
@@ -421,7 +460,11 @@ export function useWorkspace(): Workspace {
     error,
     loading,
     editing,
+    taskDialogOpen,
     anchor,
+    dayStartMin,
+    dayEndMin,
+    setDayRange,
     calendar,
     locale,
     zone,

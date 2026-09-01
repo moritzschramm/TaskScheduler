@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import AvailabilitySection from '@/components/settings/AvailabilitySection.vue';
 import CalendarSection from '@/components/settings/CalendarSection.vue';
 import DisplaySection from '@/components/settings/DisplaySection.vue';
-import CategoriesSection from '@/components/settings/CategoriesSection.vue';
-import OverridesSection from '@/components/settings/OverridesSection.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -122,7 +119,7 @@ watch(selectedId, load);
           v-if="calendars.length > 1"
           v-model="selectedId as string"
           class="w-auto"
-          aria-label="Calendar"
+          aria-label="Planner"
           data-testid="settings-calendar-select"
         >
           <option v-for="entry in calendars" :key="entry.id" :value="entry.id">
@@ -157,10 +154,11 @@ watch(selectedId, load);
       data-testid="no-calendar"
     >
       <header>
-        <h2 class="text-lg font-semibold">Create a calendar</h2>
+        <h2 class="text-lg font-semibold">Create a planner</h2>
         <p class="text-muted-foreground text-sm">
-          A calendar is a scheduling context. You can have several — work and personal keep their
-          own windows and their own week.
+          A planner is one self-contained world to schedule in: its own time zone, its own hours,
+          its own categories, its own tasks. Most people need exactly one. A second is for a life
+          that genuinely has two — a job whose hours and holidays have nothing to do with your own.
         </p>
       </header>
 
@@ -190,16 +188,43 @@ watch(selectedId, load);
         data-testid="create-calendar"
         @click="createCalendar"
       >
-        Create calendar
+        Create planner
       </Button>
     </section>
 
     <template v-else>
       <DisplaySection :calendar-time-zone="configuration.calendar.timezone" :submit="submit" />
       <CalendarSection :configuration="configuration" :submit="submit" />
-      <CategoriesSection :configuration="configuration" :submit="submit" />
-      <AvailabilitySection :configuration="configuration" :submit="submit" />
-      <OverridesSection :configuration="configuration" :submit="submit" />
+
+      <!--
+        The two that used to be here and are not settings.
+        Categories decide whether anything can be scheduled at all (§6.2 rule
+        1), and week types are a fact about a stretch of calendar. Both now
+        live where they are acted on, and this says where that is rather than
+        leaving somebody hunting for a section that moved.
+      -->
+      <nav class="text-muted-foreground max-w-prose space-y-2 border-t pt-6 text-sm">
+        <p>
+          <RouterLink
+            class="underline underline-offset-4"
+            to="/categories"
+            data-testid="to-categories"
+          >
+            Categories and their hours
+          </RouterLink>
+          — what kinds of thing you do, and when. Every task needs one.
+        </p>
+        <p>
+          <RouterLink
+            class="underline underline-offset-4"
+            to="/appointments"
+            data-testid="to-week-types"
+          >
+            Week types
+          </RouterLink>
+          — holidays and special weeks that replace your usual hours.
+        </p>
+      </nav>
     </template>
   </div>
 </template>

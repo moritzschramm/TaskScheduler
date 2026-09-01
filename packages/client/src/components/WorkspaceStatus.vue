@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button } from '@/components/ui/button';
+import GettingStarted from '@/components/GettingStarted.vue';
 import { useWorkspace } from '@/lib/workspace';
 
 /**
@@ -9,7 +9,7 @@ import { useWorkspace } from '@/lib/workspace';
  * so three times in three slightly different wordings would be three chances
  * to drift.
  */
-const { calendars, error, diverged, loading } = useWorkspace();
+const { calendars, categories, error, diverged, loading } = useWorkspace();
 </script>
 
 <template>
@@ -26,23 +26,15 @@ const { calendars, error, diverged, loading } = useWorkspace();
   <p v-else-if="loading" class="text-muted-foreground text-sm">Loading the schedule…</p>
 
   <!--
-    A new account has a tenant but no calendar: §4.3 says a user may own
-    several, so nothing creates one for them. Without this the schedule
-    rendered nothing at all — signing up and landing on a blank page is not
-    a working registration.
+    A new account can schedule nothing until a category has hours, and a
+    planner alone gets it no closer — so that, not the planner, is what the
+    first screen asks for. It stays up until there is a category, because an
+    account with a planner and no categories is in exactly the same position
+    as one with neither.
   -->
-  <section
-    v-else-if="calendars.length === 0"
-    class="max-w-prose space-y-3"
-    data-testid="no-calendar-yet"
-  >
-    <h2 class="text-lg font-semibold">Welcome. Let's make you a calendar.</h2>
-    <p class="text-muted-foreground text-sm">
-      A calendar is a scheduling context — a set of hours you work in and the kinds of thing you do
-      in them. You can have several; work and personal keep their own windows and their own week.
-    </p>
-    <Button as-child data-testid="create-first-calendar">
-      <RouterLink to="/settings">Set up my first calendar</RouterLink>
-    </Button>
-  </section>
+  <!--
+    No `data-testid` here: a fallthrough attribute overrides the component's
+    own, and this one would have replaced the name the component answers to.
+  -->
+  <GettingStarted v-else-if="calendars.length === 0 || categories.length === 0" />
 </template>

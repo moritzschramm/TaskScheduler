@@ -100,8 +100,8 @@ async function remove(id: string, version: number): Promise<void> {
     <header>
       <h2 class="text-lg font-semibold">Categories</h2>
       <p class="text-muted-foreground text-sm">
-        Shared across every calendar in this context. The cooldown is protected time after each task
-        of the kind, and cannot be compressed.
+        Shared across every planner you own. The cooldown is protected time after each task of the
+        kind, and cannot be compressed.
       </p>
     </header>
 

@@ -10,6 +10,7 @@ import TaskActions from '@/components/tasks/TaskActions.vue';
 import TaskEditor from '@/components/tasks/TaskEditor.vue';
 import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import { formatCivilDate, formatDayLabel, toIso } from '@/lib/time';
 import { dayOf, useWorkspace } from '@/lib/workspace';
 import type { GridBlock } from '@/lib/grid';
@@ -36,7 +37,10 @@ const {
   today,
   locale,
   editing,
+  taskDialogOpen,
   openWindows,
+  dayStartMin,
+  dayEndMin,
   unschedulable,
   noWindows,
   scheduledElsewhere,
@@ -200,6 +204,8 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         :blocks="view.schedule.blocks"
         :fixed-blocks="view.fixedBlocks"
         :windows="openWindows"
+        :day-start-min="dayStartMin"
+        :day-end-min="dayEndMin"
         :today="today"
         :locale="locale"
         editable
@@ -214,34 +220,46 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         <CapacityPanel :cells="capacity" :categories="categories" />
       </div>
 
+      <!--
+        A task opens over the week; an appointment opens beside it. The
+        asymmetry is deliberate — a task's form is long and has nothing to do
+        with the grid behind it, while an appointment is a time you are reading
+        off that grid as you type.
+      -->
+      <Dialog
+        v-if="editing.kind === 'task'"
+        v-model:open="taskDialogOpen"
+        :title="editing.task === null ? 'New task' : 'Edit task'"
+        data-testid="editor-panel"
+      >
+        <TaskEditor
+          :key="editing.task?.id ?? `new-${editing.parent?.id ?? 'root'}`"
+          :task="editing.task"
+          :parent="editing.parent"
+          :calendar-id="calendar.id"
+          :categories="categories"
+          :time-zone="zone"
+          :submit="submit"
+          @cancel="editing = { kind: 'none' }"
+          @saved="editing = { kind: 'none' }"
+        />
+        <div v-if="editing.task && editing.task.isLeaf" class="mt-6 border-t pt-5">
+          <TaskActions
+            :task="editing.task"
+            :placement="placementOf(editing.task.id)"
+            :others="swapCandidates(editing.task.id)"
+            :time-zone="zone"
+            :submit="submit"
+          />
+        </div>
+      </Dialog>
+
       <div
-        v-if="editing.kind !== 'none'"
+        v-else-if="editing.kind === 'block'"
         class="bg-card rounded-lg border p-5"
         data-testid="editor-panel"
       >
-        <template v-if="editing.kind === 'task'">
-          <TaskEditor
-            :key="editing.task?.id ?? `new-${editing.parent?.id ?? 'root'}`"
-            :task="editing.task"
-            :parent="editing.parent"
-            :calendar-id="calendar.id"
-            :categories="categories"
-            :time-zone="zone"
-            :submit="submit"
-            @cancel="editing = { kind: 'none' }"
-          />
-          <div v-if="editing.task && editing.task.isLeaf" class="mt-6 border-t pt-5">
-            <TaskActions
-              :task="editing.task"
-              :placement="placementOf(editing.task.id)"
-              :others="swapCandidates(editing.task.id)"
-              :time-zone="zone"
-              :submit="submit"
-            />
-          </div>
-        </template>
         <AppointmentEditor
-          v-else-if="editing.kind === 'block'"
           :key="editing.block?.appointmentId ?? 'new-block'"
           :block="editing.block"
           :calendar-id="calendar.id"

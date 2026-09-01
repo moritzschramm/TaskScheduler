@@ -35,7 +35,14 @@ const props = defineProps<{
   submit: (request: CommandRequest) => Promise<boolean>;
 }>();
 
-const emit = defineEmits<{ cancel: [] }>();
+/**
+ * `saved` is separate from `cancel` because the caller does different things
+ * with them — and because a modal that stayed open after a successful save
+ * left its overlay across the whole page with no obvious way past it. Found by
+ * driving the real browser; nothing in the suite was looking at what the
+ * editor did *after* the command landed.
+ */
+const emit = defineEmits<{ cancel: []; saved: [] }>();
 
 interface Draft {
   title: string;
@@ -65,7 +72,11 @@ function emptyDraft(): Draft {
     title: '',
     notes: '',
     estimate: '',
-    category: { overridden: false, value: '' },
+    // "Set here" only when there is nothing to inherit. A root task has no
+    // ancestor to take a category from, so the switch has one valid position;
+    // a subtask under a categorised parent is already covered, and defaulting
+    // it to an override would ask for an answer §4.4 has already given.
+    category: { overridden: props.parent?.effectiveCategoryId == null, value: '' },
     priority: { overridden: false, value: '' },
     due: { overridden: false, value: '', kind: 'soft' },
     preferred: { overridden: false, start: '09:00', end: '17:00' },
@@ -96,7 +107,7 @@ watch(
       notes: task.notes ?? '',
       estimate: task.estimatedDurationMin === null ? '' : String(task.estimatedDurationMin),
       category: {
-        overridden: task.ownCategoryId !== null,
+        overridden: task.ownCategoryId !== null || task.effectiveCategoryId === null,
         value: task.ownCategoryId ?? task.effectiveCategoryId ?? '',
       },
       priority: {
@@ -184,8 +195,34 @@ const dueConflict = computed(() => {
   return `Its container is due ${displayDue(containerDue.value)}, and a subtask cannot be due after it.`;
 });
 
+/**
+ * What this task's category would be if it set none of its own (§4.4).
+ *
+ * The parent's *effective* value, so a grandparent's category binds through a
+ * parent that has none — which is what nearest-ancestor-wins means.
+ */
+const inheritedCategoryId = computed(() => props.parent?.effectiveCategoryId ?? null);
+
+/**
+ * Every task needs a category, but not every task needs its *own* (§4.4, §6.2).
+ *
+ * The rule the engine enforces is that a leaf has an **effective** category,
+ * because without one no availability window applies to it and it is never
+ * offered to the solver at all — it simply disappears, which is the bug this
+ * form now refuses to create. Inheritance still satisfies it: a subtask under a
+ * categorised parent is already covered, and demanding its own would make
+ * §4.4's whole mechanism unusable in the one place it is most useful.
+ */
+const effectiveCategoryId = computed(() =>
+  draft.value.category.overridden ? draft.value.category.value || null : inheritedCategoryId.value,
+);
+
 const canSave = computed(
-  () => draft.value.title.trim() !== '' && dueConflict.value === null && !busy.value,
+  () =>
+    draft.value.title.trim() !== '' &&
+    effectiveCategoryId.value !== null &&
+    dueConflict.value === null &&
+    !busy.value,
 );
 
 /** `null` clears the override; a value sets one (§4.4). */
@@ -238,7 +275,10 @@ async function save(): Promise<void> {
   busy.value = true;
   try {
     const applied = await props.submit(isCreate.value ? createRequest() : editRequest());
-    if (applied && isCreate.value) draft.value = emptyDraft();
+    if (!applied) return;
+
+    if (isCreate.value) draft.value = emptyDraft();
+    emit('saved');
   } finally {
     busy.value = false;
   }
@@ -378,13 +418,37 @@ async function complete(): Promise<void> {
         v-model:overridden="draft.category.overridden"
         label="Category"
         :inherited="inherited?.category ?? null"
+        :disabled="inheritedCategoryId === null"
       >
-        <Select v-model="draft.category.value" data-testid="task-category">
-          <option value="">None</option>
+        <Select
+          v-model="draft.category.value"
+          aria-label="Category"
+          :aria-invalid="draft.category.value === '' ? 'true' : undefined"
+          data-testid="task-category"
+        >
+          <!--
+            No "None". A task without an effective category matches no
+            availability window, so it is never offered to the solver — it does
+            not schedule badly, it vanishes. The placeholder is unselectable
+            rather than absent so an existing task with no category still shows
+            what is missing instead of silently adopting the first one.
+          -->
+          <option value="" disabled>Choose a category…</option>
           <option v-for="category in categories" :key="category.id" :value="category.id">
             {{ category.name }}
           </option>
         </Select>
+        <p
+          v-if="categories.length === 0"
+          class="text-muted-foreground text-xs"
+          data-testid="no-categories-yet"
+        >
+          There are none yet.
+          <RouterLink class="underline underline-offset-4" to="/categories">
+            Add one and give it some hours
+          </RouterLink>
+          — a task cannot be scheduled without it.
+        </p>
       </InheritedField>
 
       <InheritedField
@@ -392,7 +456,12 @@ async function complete(): Promise<void> {
         label="Priority"
         :inherited="inherited?.priority === null ? null : String(inherited?.priority)"
       >
-        <Input v-model="draft.priority.value" type="number" data-testid="task-priority" />
+        <Input
+          v-model="draft.priority.value"
+          type="number"
+          aria-label="Priority"
+          data-testid="task-priority"
+        />
       </InheritedField>
 
       <InheritedField
@@ -410,7 +479,12 @@ async function complete(): Promise<void> {
             aria-label="Due date and time"
             data-testid="task-due"
           />
-          <Select v-model="draft.due.kind" class="h-9 w-32" data-testid="task-due-kind">
+          <Select
+            v-model="draft.due.kind"
+            class="h-9 w-32"
+            aria-label="How the due date is enforced"
+            data-testid="task-due-kind"
+          >
             <option value="soft">Soft</option>
             <option value="hard">Hard</option>
           </Select>
@@ -452,7 +526,7 @@ async function complete(): Promise<void> {
         :inherited="inherited?.focus === null ? null : String(inherited?.focus)"
         hint="Matched against a window's focus profile."
       >
-        <Select v-model="draft.focus.value" data-testid="task-focus">
+        <Select v-model="draft.focus.value" aria-label="Focus level" data-testid="task-focus">
           <option v-for="level in 5" :key="level" :value="String(level)">{{ level }}</option>
         </Select>
       </InheritedField>
@@ -463,7 +537,13 @@ async function complete(): Promise<void> {
         :inherited="inherited?.cooldown === null ? null : String(inherited?.cooldown)"
         hint="Overrides the category default. Non-compressible."
       >
-        <Input v-model="draft.cooldown.value" type="number" min="0" data-testid="task-cooldown" />
+        <Input
+          v-model="draft.cooldown.value"
+          type="number"
+          min="0"
+          aria-label="Cooldown in minutes"
+          data-testid="task-cooldown"
+        />
       </InheritedField>
     </div>
 

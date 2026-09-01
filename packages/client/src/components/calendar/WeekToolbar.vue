@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
+import DayRangeSlider from '@/components/calendar/DayRangeSlider.vue';
 import UndoRedo from '@/components/UndoRedo.vue';
 import { useWorkspace } from '@/lib/workspace';
 
@@ -39,9 +40,10 @@ const { calendars, selectedId, calendar, zone, history, submit, shiftWeek } = us
             own (§5.1), so "09:00 Monday" means something different to the
             scheduler than the row you are looking at.
           -->
-          <span data-testid="zone-divergence">(calendar is {{ calendar.timezone }})</span>
+          <span data-testid="zone-divergence">(planner is {{ calendar.timezone }})</span>
         </template>
       </span>
+      <DayRangeSlider v-if="calendar" />
     </div>
 
     <div class="flex items-center gap-2">

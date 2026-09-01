@@ -31,6 +31,8 @@ const {
   configuration,
   editing,
   openWindows,
+  dayStartMin,
+  dayEndMin,
   ensureLoaded,
   submit,
   newBlockAt,
@@ -64,6 +66,8 @@ function editBlock(block: GridBlock): void {
         :blocks="[]"
         :fixed-blocks="view.fixedBlocks"
         :windows="openWindows"
+        :day-start-min="dayStartMin"
+        :day-end-min="dayEndMin"
         :today="today"
         :locale="locale"
         editable

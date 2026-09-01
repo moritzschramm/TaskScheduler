@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type Router, type RouterHistory } from 'vue-router';
 import ScheduleView from '@/views/ScheduleView.vue';
 import TasksView from '@/views/TasksView.vue';
+import CategoriesView from '@/views/CategoriesView.vue';
 import AppointmentsView from '@/views/AppointmentsView.vue';
 import AuditView from '@/views/AuditView.vue';
 import SettingsView from '@/views/SettingsView.vue';
@@ -37,6 +38,12 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
        */
       { path: '/', name: 'schedule', component: ScheduleView, meta: { requiresAuth: true } },
       { path: '/tasks', name: 'tasks', component: TasksView, meta: { requiresAuth: true } },
+      {
+        path: '/categories',
+        name: 'categories',
+        component: CategoriesView,
+        meta: { requiresAuth: true },
+      },
       {
         path: '/appointments',
         name: 'appointments',

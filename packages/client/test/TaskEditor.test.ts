@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils';
+import axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
 import TaskEditor from '@/components/tasks/TaskEditor.vue';
 import type { Category, CommandRequest, TaskNode } from '@ambitime/shared';
@@ -34,8 +35,12 @@ function task(overrides: Partial<TaskNode> = {}): TaskNode {
     status: 'active',
     version: 3,
     estimatedDurationMin: 60,
-    ownCategoryId: null,
-    effectiveCategoryId: null,
+    // Categorised by default, because an uncategorised task is now the state
+    // the form refuses to produce: no window applies to it, so the solver is
+    // never offered it at all (§6.2 rule 1). Tests about the *other* inherited
+    // properties should not have to keep re-establishing that.
+    ownCategoryId: '018f0000-0000-7000-8000-0000000000c1',
+    effectiveCategoryId: '018f0000-0000-7000-8000-0000000000c1',
     ownPriority: null,
     effectivePriority: null,
     ownDueDate: null,
@@ -57,7 +62,11 @@ function task(overrides: Partial<TaskNode> = {}): TaskNode {
   };
 }
 
-function editor(props: { task: TaskNode | null; parent?: TaskNode | null }) {
+function editor(props: {
+  task: TaskNode | null;
+  parent?: TaskNode | null;
+  categories?: Category[];
+}) {
   const submit = vi.fn<(request: CommandRequest) => Promise<boolean>>().mockResolvedValue(true);
 
   const wrapper = mount(TaskEditor, {
@@ -65,10 +74,13 @@ function editor(props: { task: TaskNode | null; parent?: TaskNode | null }) {
       task: props.task,
       parent: props.parent ?? null,
       calendarId: '018f0000-0000-7000-8000-0000000000ca',
-      categories: CATEGORIES,
+      categories: props.categories ?? CATEGORIES,
       timeZone: 'Europe/Berlin',
       submit,
     },
+    // The empty-categories hint links to where they are made; the form is
+    // mounted here without a router.
+    global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
   });
 
   return { wrapper, submit };
@@ -304,5 +316,109 @@ describe('the task editor', () => {
 
       expect(patchOf(submit)['recurrence']).toBeNull();
     });
+  });
+});
+
+/**
+ * Every task needs a category (spec §4.4, §6.2 rule 1).
+ *
+ * Not a nicety: a task with no *effective* category matches no availability
+ * window, so it is never offered to the solver — it does not schedule badly, it
+ * disappears. The form used to allow it and offered "None" as a choice, which
+ * is how a calendar ends up empty with nothing to explain why.
+ *
+ * The rule is about the effective value, not the own one. §4.4's inheritance
+ * has to keep working, or the mechanism is unusable exactly where it is most
+ * useful: a subtask under a categorised parent is already covered.
+ */
+describe('a task cannot be saved without a category', () => {
+  it('refuses a root task that has none', async () => {
+    const { wrapper, submit } = editor({ task: null });
+
+    await wrapper.find('[data-testid="task-title"]').setValue('Write the report');
+    expect(wrapper.find('[data-testid="save-task"]').attributes('disabled')).toBeDefined();
+
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('accepts it once one is chosen', async () => {
+    const { wrapper, submit } = editor({ task: null });
+
+    await wrapper.find('[data-testid="task-title"]').setValue('Write the report');
+    await wrapper.find('[data-testid="task-category"]').setValue(CATEGORIES[0]!.id);
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+
+    expect(submit.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: 'CreateTask',
+      params: { categoryId: CATEGORIES[0]!.id },
+    });
+  });
+
+  it('takes an inherited one as satisfying the rule', async () => {
+    // A subtask under a categorised parent already has an effective category,
+    // and demanding its own would defeat §4.4 in its commonest case.
+    const parent = task({
+      ownCategoryId: CATEGORIES[1]!.id,
+      effectiveCategoryId: CATEGORIES[1]!.id,
+    });
+    const { wrapper, submit } = editor({ task: null, parent });
+
+    await wrapper.find('[data-testid="task-title"]').setValue('A subtask');
+    expect(wrapper.find('[data-testid="save-task"]').attributes('disabled')).toBeUndefined();
+
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+    // Sent without a category of its own: inheriting is the point.
+    expect(submit.mock.calls.at(-1)?.[0]).not.toHaveProperty('params.categoryId');
+  });
+
+  it('offers no way to choose "none"', async () => {
+    const { wrapper } = editor({ task: null });
+
+    const options = wrapper.findAll('[data-testid="task-category"] option');
+    const selectable = options.filter((option) => option.attributes('disabled') === undefined);
+
+    expect(selectable).toHaveLength(CATEGORIES.length);
+    expect(selectable.map((option) => option.attributes('value'))).toEqual(
+      CATEGORIES.map((category) => category.id),
+    );
+  });
+
+  it('says where categories come from when there are none', async () => {
+    const { wrapper } = editor({ task: null, categories: [] });
+
+    expect(wrapper.find('[data-testid="no-categories-yet"]').text()).toContain(
+      'cannot be scheduled',
+    );
+    expect(wrapper.find('[data-testid="save-task"]').attributes('disabled')).toBeDefined();
+  });
+});
+
+/**
+ * §14: the form is the longest one in the application, and it is now a modal.
+ *
+ * The check is here rather than only in the browser because the failure it
+ * caught is invisible without one: `InheritedField` prints a `<Label>` it
+ * cannot associate with whatever its slot renders, so three of these selects
+ * had no accessible name at all — a screen reader announced them as "combo
+ * box", three times, with nothing to tell them apart.
+ */
+describe('the editor is readable without seeing it', () => {
+  it('names every control, including the ones inside an inherited field', async () => {
+    const { wrapper } = editor({ task: null });
+    document.body.appendChild(wrapper.element);
+
+    // Every override on, so the fields that only render when set are rendered.
+    for (const toggle of wrapper.findAll('[data-testid="override-toggle"]')) {
+      if (toggle.attributes('aria-checked') === 'false') await toggle.trigger('click');
+    }
+
+    const results = await axe.run(wrapper.element as Element, {
+      rules: { 'color-contrast': { enabled: false } },
+    });
+
+    expect(results.violations).toEqual([]);
+    wrapper.unmount();
+    document.body.innerHTML = '';
   });
 });

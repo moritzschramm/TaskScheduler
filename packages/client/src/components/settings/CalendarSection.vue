@@ -8,12 +8,22 @@ import WeekdayWindowEditor, { type WindowRule } from './WeekdayWindowEditor.vue'
 import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
 
 /**
- * The calendar itself, and the two windows of spec §9.1.
+ * The planner itself, and the two windows of spec §9.1.
  *
- * The **working** window is when the scheduler may place tasks here; the
- * **shareable** window is what other users see as busy (§9.2). They are edited
- * side by side because the difference between them is the whole point, and a
- * screen that showed one at a time would invite setting them to the same thing.
+ * **"Planner", not "calendar", in every string a person reads.** The row is
+ * still `calendars` and the API still says `calendarId` — but on screen the
+ * word already meant the grid of days, so the same word for the container of
+ * hours, categories and tasks was the collision. The rename is only in the
+ * copy; nothing in the model moved.
+ *
+ * Both windows are folded away, and for the same reason: **neither is needed.**
+ * The hours that actually schedule are the category's (§6.2 rule 1). The
+ * working window is an optional ceiling over all of them, and absent means
+ * unrestricted rather than closed — while the shareable window is read by
+ * nothing at all until there is a second person to share with (§9.2). Left open
+ * beside the fields that matter, they read as three settings you must fill in,
+ * which is how a personal planner ends up with the same hours typed three
+ * times.
  */
 const props = defineProps<{
   configuration: CalendarConfiguration;
@@ -112,9 +122,13 @@ async function saveWindows(kind: 'working' | 'shareable'): Promise<void> {
 <template>
   <section class="space-y-4" data-testid="calendar-section">
     <header>
-      <h2 class="text-lg font-semibold">Calendar</h2>
+      <h2 class="text-lg font-semibold">Planner</h2>
+      <p class="text-muted-foreground max-w-prose text-sm">
+        One self-contained world to schedule in — its own time zone, its own hours, its own
+        categories and tasks. Most people need exactly one.
+      </p>
       <p v-if="readOnly" class="text-muted-foreground text-sm" data-testid="calendar-read-only">
-        This calendar belongs to someone else, so its settings are read-only.
+        This planner belongs to someone else, so its settings are read-only.
       </p>
     </header>
 
@@ -152,53 +166,58 @@ async function saveWindows(kind: 'working' | 'shareable'): Promise<void> {
     </div>
 
     <Button :disabled="readOnly || busy" data-testid="save-calendar" @click="saveCalendar">
-      Save calendar
+      Save planner
     </Button>
 
     <div class="grid gap-6 lg:grid-cols-2">
-      <div class="space-y-3">
-        <div>
-          <h3 class="text-sm font-semibold">Working window</h3>
-          <p class="text-muted-foreground text-xs">When tasks may be scheduled here.</p>
-        </div>
-        <WeekdayWindowEditor
-          v-model="working"
-          :time-zone="configuration.calendar.timezone"
-          :disabled="readOnly"
-          data-testid="working-window"
-        />
-        <Button
-          variant="outline"
-          :disabled="readOnly || busy"
-          data-testid="save-working-window"
-          @click="saveWindows('working')"
-        >
-          Save working window
-        </Button>
-      </div>
-
-      <div class="space-y-3">
-        <div>
-          <h3 class="text-sm font-semibold">Shareable window</h3>
+      <details class="rounded-lg border p-4" data-testid="working-window-details">
+        <summary class="cursor-pointer text-sm font-semibold">Working window (optional)</summary>
+        <div class="space-y-3 pt-3">
           <p class="text-muted-foreground text-xs">
-            What other people see as busy. Anything outside it stays private.
+            A ceiling over <em>every</em> category in this planner — set it only if there are hours
+            you never want used whatever the category says. Leave it empty and nothing is
+            restricted; the category hours decide on their own.
           </p>
+          <WeekdayWindowEditor
+            v-model="working"
+            :time-zone="configuration.calendar.timezone"
+            :disabled="readOnly"
+            data-testid="working-window"
+          />
+          <Button
+            variant="outline"
+            :disabled="readOnly || busy"
+            data-testid="save-working-window"
+            @click="saveWindows('working')"
+          >
+            Save working window
+          </Button>
         </div>
-        <WeekdayWindowEditor
-          v-model="shareable"
-          :time-zone="configuration.calendar.timezone"
-          :disabled="readOnly"
-          data-testid="shareable-window"
-        />
-        <Button
-          variant="outline"
-          :disabled="readOnly || busy"
-          data-testid="save-shareable-window"
-          @click="saveWindows('shareable')"
-        >
-          Save shareable window
-        </Button>
-      </div>
+      </details>
+
+      <details class="rounded-lg border p-4" data-testid="shareable-window-details">
+        <summary class="cursor-pointer text-sm font-semibold">Shareable window (optional)</summary>
+        <div class="space-y-3 pt-3">
+          <p class="text-muted-foreground text-xs">
+            What other people would see as busy once this planner is shared. It has no effect on
+            your own scheduling, and none at all while you are the only person here.
+          </p>
+          <WeekdayWindowEditor
+            v-model="shareable"
+            :time-zone="configuration.calendar.timezone"
+            :disabled="readOnly"
+            data-testid="shareable-window"
+          />
+          <Button
+            variant="outline"
+            :disabled="readOnly || busy"
+            data-testid="save-shareable-window"
+            @click="saveWindows('shareable')"
+          >
+            Save shareable window
+          </Button>
+        </div>
+      </details>
     </div>
   </section>
 </template>

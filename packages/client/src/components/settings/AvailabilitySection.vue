@@ -7,7 +7,7 @@ import WeekdayWindowEditor, { type WindowRule } from './WeekdayWindowEditor.vue'
 import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
 
 /**
- * When each category may be scheduled in this calendar (spec §4.3).
+ * When each category may be scheduled in this planner (spec §4.3).
  *
  * Two selectors address one set: the **category**, and the **week type** — the
  * default set, or the replacement set belonging to one week-type override. That

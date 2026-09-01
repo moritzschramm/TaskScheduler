@@ -100,7 +100,7 @@ async function save(): Promise<void> {
     <header>
       <h2 class="text-lg font-semibold">Dates and times</h2>
       <p class="text-muted-foreground text-sm">
-        How things are shown to you. Scheduling itself follows each calendar's own zone, so changing
+        How things are shown to you. Scheduling itself follows each planner's own zone, so changing
         these moves nothing.
       </p>
     </header>
@@ -117,7 +117,7 @@ async function save(): Promise<void> {
       <div class="space-y-1">
         <Label for="settings-timezone">Time zone</Label>
         <Select id="settings-timezone" v-model="timeZone" data-testid="settings-timezone">
-          <option value="">Follow each calendar ({{ calendarTimeZone }})</option>
+          <option value="">Follow each planner ({{ calendarTimeZone }})</option>
           <option v-for="zone in timeZones" :key="zone" :value="zone">{{ zone }}</option>
         </Select>
       </div>

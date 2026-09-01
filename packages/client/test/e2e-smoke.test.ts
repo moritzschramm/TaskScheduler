@@ -223,11 +223,13 @@ describe('seed via the API, render the client', () => {
     await loadSession();
 
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/settings');
+    // Categories moved off Settings: they decide whether anything can be
+    // scheduled at all, which is not a preference.
+    await router.push('/categories');
     await router.isReady();
 
     const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
-    await waitFor(() => wrapper.find('[data-testid="calendar-section"]').exists());
+    await waitFor(() => wrapper.find('[data-testid="categories-section"]').exists());
 
     // A category, created through the form. Its id comes back on the command,
     // which is what lets the page select it without re-reading and guessing.
@@ -247,6 +249,14 @@ describe('seed via the API, render the client', () => {
     // A working window covering Tuesday afternoons only. Naming one weekday
     // makes every other weekday unworkable (§9.1), which is the whole
     // difference between "unset" and "empty".
+    //
+    // On Settings, and folded away: it is an optional ceiling over the category
+    // hours rather than a second copy of them, so it opens only when asked for.
+    await router.push('/settings');
+    await waitFor(() => wrapper.find('[data-testid="calendar-section"]').exists());
+    wrapper.find('[data-testid="working-window-details"]').element.setAttribute('open', 'open');
+    await flushPromises();
+
     const tuesday = wrapper.find('[data-testid="working-window"] [data-testid="weekday-2"]');
     await wrapper.find('[data-testid="add-range-2"]').trigger('click');
     await flushPromises();
@@ -264,7 +274,13 @@ describe('seed via the API, render the client', () => {
     expect(wrapper.find('[data-testid="settings-error"]').exists()).toBe(false);
 
     // Back to the grid, which re-derives from the source the form just changed.
+    //
+    // `settle` rather than a bare `waitFor` on the columns: the three views
+    // share one copy of the schedule, so the grid is still on screen with the
+    // *previous* answer while the re-read is in flight — and seven columns
+    // would be satisfied by exactly the render this is trying to look past.
     await router.push('/');
+    await settle();
     await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
 
     const columns = wrapper.findAll('[data-testid="day-column"]');
@@ -291,7 +307,7 @@ describe('seed via the API, render the client', () => {
    */
   it('builds a task tree and overrides an inherited property', async () => {
     const email = `tree-${Date.now()}@example.test`;
-    const { calendarId } = await seed(email);
+    const { calendarId, categoryId } = await seed(email);
 
     await signIn(email, PASSWORD);
     await loadSession();
@@ -307,6 +323,9 @@ describe('seed via the API, render the client', () => {
     await wrapper.find('[data-testid="add-root-task"]').trigger('click');
     await flushPromises();
     await wrapper.find('[data-testid="task-title"]').setValue('Ship the thing');
+    // Required now: a task with no effective category matches no availability
+    // window and is never offered to the solver at all (§6.2 rule 1).
+    await wrapper.find('[data-testid="task-category"]').setValue(categoryId);
     await wrapper
       .find('[data-testid="field-priority"] [data-testid="override-toggle"]')
       .trigger('click');
@@ -357,6 +376,15 @@ describe('seed via the API, render the client', () => {
 
     // And clearing it puts the inheritance back — the half of §4.4 a plain
     // form cannot express at all.
+    //
+    // Re-opened first: the editor is a modal now and a successful save closes
+    // it, rather than leaving an overlay across the page with the form still
+    // in it.
+    await wrapper
+      .findAll('[data-testid="select-task"]')
+      .find((button) => button.text() === 'Write the docs')!
+      .trigger('click');
+    await flushPromises();
     await wrapper
       .find('[data-testid="field-priority"] [data-testid="override-toggle"]')
       .trigger('click');
@@ -370,7 +398,7 @@ describe('seed via the API, render the client', () => {
 
   it('refuses a subtask due after its container, in the form', async () => {
     const email = `due-${Date.now()}@example.test`;
-    await seed(email);
+    const { categoryId } = await seed(email);
 
     await signIn(email, PASSWORD);
     await loadSession();
@@ -385,6 +413,7 @@ describe('seed via the API, render the client', () => {
     await wrapper.find('[data-testid="add-root-task"]').trigger('click');
     await flushPromises();
     await wrapper.find('[data-testid="task-title"]').setValue('Ship the thing');
+    await wrapper.find('[data-testid="task-category"]').setValue(categoryId);
     await wrapper
       .find('[data-testid="field-due"] [data-testid="override-toggle"]')
       .trigger('click');
@@ -1184,6 +1213,8 @@ describe('seed via the API, render the client', () => {
   });
 
   describe('registering', () => {
+    // Longer than the default: registering, then setting up a category and
+    // its hours, is four round trips to a real database.
     it('creates an account from the sign-up form and gets to a calendar', async () => {
       const email = `newcomer-${Date.now()}@example.test`;
 
@@ -1208,28 +1239,28 @@ describe('seed via the API, render the client', () => {
       // §4.2's triggers gave them a personal tenant without sign-up asking.
       expect(wrapper.find('[data-testid="active-context"]').text()).toBe('Personal');
 
-      // And no calendar, so the schedule offers to make one rather than
-      // rendering nothing.
-      await waitFor(() => wrapper.find('[data-testid="no-calendar-yet"]').exists());
+      // Nothing can be scheduled yet, and what is missing is a category with
+      // hours — not a planner, which on its own gets them no closer. So that is
+      // what the first screen asks for, in place.
+      await waitFor(() => wrapper.find('[data-testid="getting-started"]').exists());
 
-      await wrapper.find('[data-testid="create-first-calendar"]').trigger('click');
-      await flushPromises();
+      await wrapper.find('[data-testid="first-category-name"]').setValue('Work');
+      await wrapper.find('[data-testid="first-start"]').setValue('09:00');
+      await wrapper.find('[data-testid="first-end"]').setValue('17:00');
+      await wrapper.find('[data-testid="begin"]').trigger('click');
       await settle();
 
-      // The settings screen's own first-run path takes it from here (M11a).
-      expect(wrapper.find('[data-testid="no-calendar"]').exists()).toBe(true);
+      // One gesture, three commands, and a week that is open for business:
+      // Monday through Friday lit, the weekend closed.
+      await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+      expect(wrapper.find('[data-testid="getting-started"]').exists()).toBe(false);
 
-      await wrapper.find('[data-testid="first-calendar-name"]').setValue('Work');
-      await wrapper.find('[data-testid="first-calendar-timezone"]').setValue('Europe/Berlin');
-      await wrapper.find('[data-testid="create-calendar"]').trigger('click');
-      await settle();
-
-      // A real calendar now exists, and the settings screen is editing it.
-      expect(wrapper.find('[data-testid="calendar-section"]').exists()).toBe(true);
-      expect(
-        (wrapper.find('[data-testid="calendar-name"]').element as HTMLInputElement).value,
-      ).toBe('Work');
-    });
+      const lit = wrapper
+        .findAll('[data-testid="day-column"]')
+        .map((column) => column.find('[data-testid="open-band"]').exists());
+      expect(lit.slice(0, 5)).toEqual([true, true, true, true, true]);
+      expect(lit.slice(5)).toEqual([false, false]);
+    }, 15_000);
 
     it('refuses an address that is already registered, and says where to go', async () => {
       const email = `taken-${Date.now()}@example.test`;

@@ -29,6 +29,7 @@ function routerFor(initial: string): Router {
     routes: [
       { path: '/', name: 'schedule', component: stub },
       { path: '/tasks', name: 'tasks', component: stub },
+      { path: '/categories', name: 'categories', component: stub },
       { path: '/appointments', name: 'appointments', component: stub },
       { path: '/settings', name: 'settings', component: stub },
       { path: '/history', name: 'history', component: stub },
@@ -62,14 +63,19 @@ describe('the primary navigation', () => {
     document.body.innerHTML = '';
   });
 
-  it('offers the three screens', async () => {
+  it('offers the four screens, in the order they are used', async () => {
     const wrapper = await shell('/');
 
-    expect(wrapper.find('[data-testid="nav-schedule"]').text()).toBe('Schedule');
-    expect(wrapper.find('[data-testid="nav-tasks"]').attributes('href')).toBe('/tasks');
-    expect(wrapper.find('[data-testid="nav-appointments"]').attributes('href')).toBe(
-      '/appointments',
-    );
+    // Categories sits between Tasks and Appointments because that is the order
+    // a person meets them: what to do, what kind of thing it is and when that
+    // kind may happen, then the fixed time it all works around.
+    expect(wrapper.findAll('nav a').map((link) => link.text())).toEqual([
+      'Schedule',
+      'Tasks',
+      'Categories',
+      'Appointments',
+    ]);
+    expect(wrapper.find('[data-testid="nav-categories"]').attributes('href')).toBe('/categories');
     wrapper.unmount();
   });
 
