@@ -10,8 +10,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Integration tests hit a real Postgres — /health proves the query path, so
-  # there is nothing meaningful to assert against a fake.
   TEST_DATABASE_URL: postgres://ambitime:ambitime@localhost:5432/ambitime
 
 jobs:
@@ -60,10 +58,6 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # `test` runs under Vite, which smooths CommonJS interop away, and `build`
-      # does not bundle the server. Neither notices a named import from a CJS
-      # package that Node's ESM loader cannot resolve — which took the dev stack
-      # down for two milestones while CI stayed green.
       - name: Check the server's imports resolve under Node
         run: pnpm check:imports
 
@@ -79,9 +73,6 @@ jobs:
           docker build -f docker/node/prod.Dockerfile --target server -t ambitime-server:ci .
           docker build -f docker/node/prod.Dockerfile --target client -t ambitime-client:ci .
 
-      # M0's acceptance was "docker compose up works", and nothing checked it:
-      # the job above only *builds* the production images, so a dev stack that
-      # could not start stayed green through eleven milestones.
       - name: Bring the dev stack up and serve a request
         env:
           BETTER_AUTH_SECRET: ci-secret-not-for-any-real-deployment-0123456789
