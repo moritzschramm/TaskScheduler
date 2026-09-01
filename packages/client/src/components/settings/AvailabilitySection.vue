@@ -102,19 +102,19 @@ async function save(): Promise<void> {
     <header>
       <h2 class="text-lg font-semibold">Availability</h2>
       <p class="text-muted-foreground text-sm">
-        When each category may be scheduled. A week type replaces the default set for its dates
+        When each activity type may be scheduled. A week type replaces the default set for its dates
         rather than adding to it.
       </p>
     </header>
 
     <p v-if="configuration.categories.length === 0" class="text-muted-foreground text-sm">
-      Add a category first — availability belongs to one.
+      Add an activity type first — availability belongs to one.
     </p>
 
     <template v-else>
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1">
-          <Label for="availability-category">Category</Label>
+          <Label for="availability-category">Activity type</Label>
           <Select
             id="availability-category"
             v-model="categoryId"
@@ -164,7 +164,7 @@ async function save(): Promise<void> {
           Save availability
         </Button>
         <span v-if="rules.length === 0" class="text-muted-foreground text-xs">
-          Saving an empty week means this category is never scheduled here.
+          Saving an empty week means this activity type is never scheduled here.
         </span>
       </div>
     </template>

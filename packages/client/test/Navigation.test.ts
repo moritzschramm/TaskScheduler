@@ -72,8 +72,8 @@ describe('the primary navigation', () => {
     expect(wrapper.findAll('nav a').map((link) => link.text())).toEqual([
       'Schedule',
       'Tasks',
-      'Categories',
-      'Appointments',
+      'Activity types',
+      'Commitments',
     ]);
     expect(wrapper.find('[data-testid="nav-categories"]').attributes('href')).toBe('/categories');
     wrapper.unmount();

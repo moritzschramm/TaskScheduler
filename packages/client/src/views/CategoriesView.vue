@@ -26,10 +26,10 @@ onMounted(ensureLoaded);
 <template>
   <div class="flex flex-col gap-8 p-6" data-testid="categories-view">
     <header class="max-w-prose space-y-1">
-      <h1 class="text-xl font-semibold tracking-tight">Categories</h1>
+      <h1 class="text-xl font-semibold tracking-tight">Activity types</h1>
       <p class="text-muted-foreground text-sm">
-        A category is a kind of activity — work, exercise, errands — and the hours you are willing
-        to do it in. Every task belongs to one, and those hours are the only times it can be
+        An activity type is a kind of thing you do — work, exercise, errands — and the hours you are
+        willing to do it in. Every task belongs to one, and those hours are the only times it can be
         scheduled.
       </p>
     </header>
@@ -41,7 +41,7 @@ onMounted(ensureLoaded);
 
       <section v-if="categories.length === 0" class="max-w-prose" data-testid="no-categories-hint">
         <p class="text-muted-foreground text-sm">
-          Add a category above, then give it the hours it may be scheduled in.
+          Add an activity type above, then give it the hours it may be scheduled in.
         </p>
       </section>
       <AvailabilitySection v-else :configuration="configuration" :submit="submit" />

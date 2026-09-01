@@ -420,7 +420,6 @@ async function complete(): Promise<void> {
           min="1"
           data-testid="task-estimate"
         />
-        <p class="text-muted-foreground text-xs">Not inherited — each task carries its own.</p>
       </div>
     </div>
 
@@ -432,7 +431,7 @@ async function complete(): Promise<void> {
         appears only when there is an ancestor to inherit from.
       -->
       <div class="space-y-1.5" data-testid="field-category">
-        <Label for="task-category">Category</Label>
+        <Label for="task-category">Activity type</Label>
         <Select
           id="task-category"
           v-model="draft.category"
@@ -457,9 +456,22 @@ async function complete(): Promise<void> {
           <RouterLink class="underline underline-offset-4" to="/categories">
             Add one and give it some hours
           </RouterLink>
-          — a task cannot be scheduled without it.
+          — a task cannot be scheduled without one.
         </p>
       </div>
+
+      <InheritedField
+        v-model:overridden="draft.focus.overridden"
+        label="Focus level"
+        :inherited="inherited?.focus == null ? null : focusLabel(inherited.focus)"
+        hint="Matched against the focus a window is meant for."
+      >
+        <Select v-model="draft.focus.value" aria-label="Focus level" data-testid="task-focus">
+          <option v-for="level in FOCUS_LEVELS" :key="level.value" :value="String(level.value)">
+            {{ level.label }}
+          </option>
+        </Select>
+      </InheritedField>
 
       <InheritedField
         v-model:overridden="draft.priority.overridden"
@@ -474,6 +486,20 @@ async function complete(): Promise<void> {
         />
       </InheritedField>
 
+      <InheritedField
+        v-model:overridden="draft.cooldown.overridden"
+        label="Cooldown (minutes)"
+        :inherited="inherited?.cooldown == null ? null : String(inherited.cooldown)"
+        hint="Overrides the activity type's default."
+      >
+        <Input
+          v-model="draft.cooldown.value"
+          type="number"
+          min="0"
+          aria-label="Cooldown in minutes"
+          data-testid="task-cooldown"
+        />
+      </InheritedField>
       <InheritedField
         v-model:overridden="draft.due.overridden"
         label="Due"
@@ -528,34 +554,6 @@ async function complete(): Promise<void> {
             data-testid="task-preferred-end"
           />
         </div>
-      </InheritedField>
-
-      <InheritedField
-        v-model:overridden="draft.focus.overridden"
-        label="Focus level"
-        :inherited="inherited?.focus == null ? null : focusLabel(inherited.focus)"
-        hint="Matched against the focus a window is meant for."
-      >
-        <Select v-model="draft.focus.value" aria-label="Focus level" data-testid="task-focus">
-          <option v-for="level in FOCUS_LEVELS" :key="level.value" :value="String(level.value)">
-            {{ level.label }}
-          </option>
-        </Select>
-      </InheritedField>
-
-      <InheritedField
-        v-model:overridden="draft.cooldown.overridden"
-        label="Cooldown (minutes)"
-        :inherited="inherited?.cooldown == null ? null : String(inherited.cooldown)"
-        hint="Overrides the category default. Non-compressible."
-      >
-        <Input
-          v-model="draft.cooldown.value"
-          type="number"
-          min="0"
-          aria-label="Cooldown in minutes"
-          data-testid="task-cooldown"
-        />
       </InheritedField>
     </div>
 

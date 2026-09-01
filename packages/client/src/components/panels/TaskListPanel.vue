@@ -182,8 +182,8 @@ function canHaveChildren(task: TaskNode): boolean {
     </table>
 
     <p class="text-muted-foreground text-xs">
-      Values shown in <span class="italic">italics</span> are inherited from an ancestor (§4.4).
-      Tasks nest five deep at most.
+      Values shown in <span class="italic">italics</span> are inherited from an ancestor. Tasks nest
+      five deep at most.
     </p>
   </section>
 </template>

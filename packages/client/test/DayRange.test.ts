@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, beforeEach } from 'vitest';
 import DayRangeSlider from '@/components/calendar/DayRangeSlider.vue';
-import { resetWorkspace, useWorkspace } from '@/lib/workspace';
+import { readStoredRange, resetWorkspace, useWorkspace } from '@/lib/workspace';
 
 /**
  * How much of a day the grid draws (spec §13).
@@ -62,5 +62,57 @@ describe('the visible day range', () => {
       'Last hour shown',
     );
     wrapper.unmount();
+  });
+});
+
+/**
+ * The range outlives the session (§13's boundary, deliberately not crossed).
+ *
+ * Stored in this browser rather than on the account: the settings that travel
+ * with a user are the ones that change what the schedule *means* — zone,
+ * locale, first day — because a wrong one gives a wrong answer everywhere. How
+ * much of the day fits on a screen is a fact about the screen, so a laptop and
+ * a phone are entitled to disagree.
+ */
+describe('remembering the range', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetWorkspace();
+  });
+
+  it('writes what was set', () => {
+    const { setDayRange } = useWorkspace();
+
+    setDayRange(8 * 60, 18 * 60);
+
+    expect(JSON.parse(localStorage.getItem('ambitime.dayRange')!)).toEqual({
+      startMin: 480,
+      endMin: 1080,
+    });
+  });
+
+  it('survives signing out, because it belongs to the browser', () => {
+    const { setDayRange, dayStartMin, dayEndMin } = useWorkspace();
+
+    setDayRange(8 * 60, 18 * 60);
+    resetWorkspace();
+
+    // `resetWorkspace` drops the schedule; re-cropping the grid as well would
+    // be a small mystery with no visible cause.
+    expect([dayStartMin.value, dayEndMin.value]).toEqual([480, 1080]);
+  });
+
+  it('ignores a stored value that would break the grid', () => {
+    // Data from outside the application: hand-edited, or written by a version
+    // that meant something else. An inverted range gives a column a negative
+    // height, which is worse than an unexpected view.
+    for (const bad of [
+      'not json',
+      '{"startMin":600,"endMin":300}',
+      '{"startMin":-60,"endMin":99999}',
+    ]) {
+      localStorage.setItem('ambitime.dayRange', bad);
+      expect(readStoredRange()).toEqual({ startMin: 6 * 60, endMin: 22 * 60 });
+    }
   });
 });

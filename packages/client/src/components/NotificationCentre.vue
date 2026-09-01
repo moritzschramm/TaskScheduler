@@ -68,7 +68,7 @@ async function dismiss(ids: string[]): Promise<void> {
   >
     <header class="flex items-baseline justify-between gap-3">
       <h2 id="notifications-title" class="text-sm font-semibold">
-        Signals
+        Needs attention
         <span v-if="alertCount > 0" class="text-destructive ml-1 text-xs" data-testid="alert-count"
           >{{ alertCount }} needing attention</span
         >

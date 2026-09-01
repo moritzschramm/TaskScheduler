@@ -52,12 +52,12 @@ function editBlock(block: GridBlock): void {
 
 <template>
   <div class="flex flex-col gap-6 p-6" data-testid="appointments-view">
-    <WeekToolbar title="Appointments" />
+    <WeekToolbar title="Commitments" />
     <WorkspaceStatus />
 
     <template v-if="view && calendar">
       <p class="text-muted-foreground max-w-prose text-sm">
-        Fixed time: meetings, and blocks you are simply not available for. Use
+        Time that is already spoken for: meetings, and hours you are simply not available. Use
         <strong>+</strong> on a day to add one. Tasks are scheduled around these, and are drawn on
         the Schedule.
       </p>

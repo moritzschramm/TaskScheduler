@@ -105,12 +105,46 @@ const anchor = ref<CivilDate | null>(null);
  * A preference about looking, not about scheduling — nothing outside it is
  * hidden from the engine, and a block that falls outside is still placed. Held
  * here rather than in a component so it survives moving between Schedule and
- * Appointments, and deliberately **not** a command: §13's settings are the ones
- * that change what the schedule *means*, and this changes only how much of it
- * fits on a screen.
+ * Commitments.
+ *
+ * **Stored in this browser, not on the server.** §13's user settings are the
+ * ones that change what the schedule *means* — zone, locale, first day — and
+ * they travel with the account because a wrong one gives a wrong answer
+ * everywhere. This changes how much of the answer fits on a screen, which is a
+ * fact about the screen: the laptop and the phone should not have to agree, and
+ * neither should be a command in the log for the other to undo.
  */
-const dayStartMin = ref(6 * 60);
-const dayEndMin = ref(22 * 60);
+const DAY_RANGE_KEY = 'ambitime.dayRange';
+
+const DEFAULT_DAY_RANGE = { startMin: 6 * 60, endMin: 22 * 60 } as const;
+
+/** Reads the stored range, ignoring anything that is not one. */
+export function readStoredRange(): { startMin: number; endMin: number } {
+  try {
+    const raw = globalThis.localStorage?.getItem(DAY_RANGE_KEY);
+    if (raw === null || raw === undefined) return DEFAULT_DAY_RANGE;
+
+    const parsed = JSON.parse(raw) as { startMin?: unknown; endMin?: unknown };
+    const startMin = Number(parsed.startMin);
+    const endMin = Number(parsed.endMin);
+
+    // A stored value is data from outside, and one that had drifted or been
+    // hand-edited would give the grid a negative height rather than an odd
+    // view. The same bounds the setter enforces, applied on the way in.
+    if (!Number.isFinite(startMin) || !Number.isFinite(endMin)) return DEFAULT_DAY_RANGE;
+    if (startMin < 0 || endMin > 24 * 60 || endMin - startMin < 60) return DEFAULT_DAY_RANGE;
+
+    return { startMin, endMin };
+  } catch {
+    // Private browsing, a disabled store, or malformed JSON. The default view
+    // is a fine answer to all three and none of them is worth a message.
+    return DEFAULT_DAY_RANGE;
+  }
+}
+
+const initialRange = readStoredRange();
+const dayStartMin = ref(initialRange.startMin);
+const dayEndMin = ref(initialRange.endMin);
 
 /** Keeps the pair ordered and at least an hour apart, whichever end moved. */
 function setDayRange(startMin: number, endMin: number): void {
@@ -118,6 +152,16 @@ function setDayRange(startMin: number, endMin: number): void {
   const end = Math.min(Math.max(endMin, start + 60), 24 * 60);
   dayStartMin.value = Math.min(start, end - 60);
   dayEndMin.value = end;
+
+  try {
+    globalThis.localStorage?.setItem(
+      DAY_RANGE_KEY,
+      JSON.stringify({ startMin: dayStartMin.value, endMin: dayEndMin.value }),
+    );
+  } catch {
+    // Nothing to do and nothing to say: the range still applies to this
+    // session, it simply will not outlive it.
+  }
 }
 
 let started = false;
@@ -157,7 +201,7 @@ const openWindows = computed<ResolvedWindow[]>(() =>
  * category or estimate is a fact about one task and is fixed in its editor.
  */
 const REASONS: Record<string, string> = {
-  no_category: 'needs a category before a window can apply to it',
+  no_category: 'needs an activity type before a window can apply to it',
   no_duration: 'needs an estimate before there is anything to fit',
 };
 
@@ -523,4 +567,7 @@ export function resetWorkspace(): void {
   loading.value = true;
   editing.value = { kind: 'none' };
   anchor.value = null;
+  // The day range is deliberately left alone. It belongs to this browser and
+  // this screen, not to whoever is signed in — and re-cropping the grid on
+  // every sign-out would be a small mystery with no visible cause.
 }

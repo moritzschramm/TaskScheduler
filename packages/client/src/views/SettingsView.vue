@@ -210,7 +210,7 @@ watch(selectedId, load);
             to="/categories"
             data-testid="to-categories"
           >
-            Categories and their hours
+            Activity types and their hours
           </RouterLink>
           — what kinds of thing you do, and when. Every task needs one.
         </p>

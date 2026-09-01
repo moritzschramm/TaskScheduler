@@ -39,3 +39,41 @@ class NoopResizeObserver {
 }
 
 globalThis.ResizeObserver ??= NoopResizeObserver as unknown as typeof ResizeObserver;
+
+/**
+ * jsdom 30 exposes no `localStorage`, even on a real origin.
+ *
+ * The application already treats it as absent-or-throwing — private browsing
+ * and disabled storage are ordinary — so production is fine without one. What
+ * a stub buys is the ability to *test* that a preference survives, which is the
+ * whole point of storing it.
+ */
+class MemoryStorage implements Storage {
+  private readonly entries = new Map<string, string>();
+
+  get length(): number {
+    return this.entries.size;
+  }
+
+  key(index: number): string | null {
+    return [...this.entries.keys()][index] ?? null;
+  }
+
+  getItem(key: string): string | null {
+    return this.entries.get(key) ?? null;
+  }
+
+  setItem(key: string, value: string): void {
+    this.entries.set(key, String(value));
+  }
+
+  removeItem(key: string): void {
+    this.entries.delete(key);
+  }
+
+  clear(): void {
+    this.entries.clear();
+  }
+}
+
+globalThis.localStorage ??= new MemoryStorage();

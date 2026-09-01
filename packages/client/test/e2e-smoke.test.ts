@@ -1385,7 +1385,7 @@ describe('seed via the API, render the client', () => {
       const notice = wrapper.find('[data-testid="unschedulable-notice"]');
       expect(notice.exists()).toBe(true);
       expect(notice.text()).toContain('Uncategorised');
-      expect(notice.text()).toContain('category');
+      expect(notice.text()).toContain('activity type');
 
       // And the calendar-level cause is stated once, where it can be fixed.
       expect(wrapper.find('[data-testid="no-windows-yet"]').exists()).toBe(true);
