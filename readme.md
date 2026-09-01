@@ -3,6 +3,7 @@
 A mix between a todo and calendar app. Creates tasks from todos by inserting them into the calendar
 while avoiding conflicts with existing entries. A task is scheduled in a predefined timespan.
 
+- **DISCLAIMER** this project was fully implemented using Claude Code
 - [`specification.md`](./specification.md): the source of truth for what is being built.
 
 ## Quick start
