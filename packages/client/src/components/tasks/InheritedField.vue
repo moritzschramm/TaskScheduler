@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 
 /**
  * One inheritable property of spec §4.4, in all three of its states.
@@ -16,11 +15,16 @@ import { Switch } from '@/components/ui/switch';
  *   editable here, because editing it here is what "set here" means.
  * - **unset** — no own value, and no ancestor has one either.
  *
- * The switch is the override itself. Turning it off is the "clearing reverts to
+ * The toggle is the override itself. Turning it off is the "clearing reverts to
  * inherited" half of §4.4, and it is the half a plain form cannot do at all:
  * with only a value box, a property that has been overridden once can never be
  * un-overridden, because there is no way to say "nothing" that is
  * distinguishable from "empty".
+ *
+ * It was a switch labelled "Set here", which named the *state* it would put the
+ * field in and left the reader to work out which way it was pointing. A button
+ * labelled with what pressing it does needs no such inference — and it can say
+ * "Use inherited" or "Clear" as appropriate, which one switch label could not.
  */
 const props = defineProps<{
   label: string;
@@ -33,21 +37,28 @@ const props = defineProps<{
 const overridden = defineModel<boolean>('overridden', { required: true });
 
 const slug = computed(() => props.label.toLowerCase().replace(/\s+/g, '-'));
+
+const action = computed(() => {
+  if (!overridden.value) return 'Set a value';
+  return props.inherited === null || props.inherited === undefined ? 'Clear' : 'Use inherited';
+});
 </script>
 
 <template>
   <div class="space-y-1.5" :data-testid="`field-${slug}`">
     <div class="flex items-center justify-between gap-3">
       <Label>{{ label }}</Label>
-      <label class="text-muted-foreground flex items-center gap-2 text-xs">
-        <span>Set here</span>
-        <Switch
-          v-model="overridden"
-          :disabled="disabled"
-          :aria-label="`Set ${label} on this task`"
-          data-testid="override-toggle"
-        />
-      </label>
+      <button
+        type="button"
+        class="text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded text-xs underline underline-offset-4 focus-visible:ring-2 focus-visible:outline-none"
+        :disabled="disabled"
+        :aria-pressed="overridden"
+        :aria-label="`${action} for ${label}`"
+        data-testid="override-toggle"
+        @click="overridden = !overridden"
+      >
+        {{ action }}
+      </button>
     </div>
 
     <slot v-if="overridden" />

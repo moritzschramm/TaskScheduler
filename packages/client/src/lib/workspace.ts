@@ -219,6 +219,13 @@ const taskDialogOpen = computed({
   },
 });
 
+const blockDialogOpen = computed({
+  get: () => editing.value.kind === 'block',
+  set: (open: boolean) => {
+    if (!open) editing.value = { kind: 'none' };
+  },
+});
+
 /** The local date a block outside this week was placed on. */
 export function dayOf(block: ScheduledBlock): CivilDate {
   return localDate(block.start, zone.value);
@@ -410,6 +417,7 @@ export interface Workspace {
   loading: Ref<boolean>;
   editing: Ref<Editing>;
   taskDialogOpen: WritableComputedRef<boolean>;
+  blockDialogOpen: WritableComputedRef<boolean>;
   anchor: Ref<CivilDate | null>;
   dayStartMin: Ref<number>;
   dayEndMin: Ref<number>;
@@ -461,6 +469,7 @@ export function useWorkspace(): Workspace {
     loading,
     editing,
     taskDialogOpen,
+    blockDialogOpen,
     anchor,
     dayStartMin,
     dayEndMin,

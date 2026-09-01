@@ -5,6 +5,7 @@ import WeekGrid from '@/components/calendar/WeekGrid.vue';
 import WeekToolbar from '@/components/calendar/WeekToolbar.vue';
 import OverridesSection from '@/components/settings/OverridesSection.vue';
 import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
+import { Dialog } from '@/components/ui/dialog';
 import { useWorkspace } from '@/lib/workspace';
 import type { GridBlock } from '@/lib/grid';
 
@@ -30,6 +31,7 @@ const {
   locale,
   configuration,
   editing,
+  blockDialogOpen,
   openWindows,
   dayStartMin,
   dayEndMin,
@@ -75,9 +77,10 @@ function editBlock(block: GridBlock): void {
         @add-block="(day) => newBlockAt(day)"
       />
 
-      <div
+      <Dialog
         v-if="editing.kind === 'block'"
-        class="bg-card rounded-lg border p-5"
+        v-model:open="blockDialogOpen"
+        :title="editing.block === null ? 'New fixed block' : 'Edit fixed block'"
         data-testid="editor-panel"
       >
         <AppointmentEditor
@@ -88,8 +91,9 @@ function editBlock(block: GridBlock): void {
           :default-start="editing.defaultStart"
           :submit="submit"
           @cancel="editing = { kind: 'none' }"
+          @saved="editing = { kind: 'none' }"
         />
-      </div>
+      </Dialog>
 
       <div v-if="configuration" class="border-t pt-6">
         <OverridesSection :configuration="configuration" :submit="submit" />

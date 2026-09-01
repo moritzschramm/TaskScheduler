@@ -38,6 +38,7 @@ const {
   locale,
   editing,
   taskDialogOpen,
+  blockDialogOpen,
   openWindows,
   dayStartMin,
   dayEndMin,
@@ -254,9 +255,10 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         </div>
       </Dialog>
 
-      <div
+      <Dialog
         v-else-if="editing.kind === 'block'"
-        class="bg-card rounded-lg border p-5"
+        v-model:open="blockDialogOpen"
+        :title="editing.block === null ? 'New fixed block' : 'Edit fixed block'"
         data-testid="editor-panel"
       >
         <AppointmentEditor
@@ -267,8 +269,9 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           :default-start="editing.defaultStart"
           :submit="submit"
           @cancel="editing = { kind: 'none' }"
+          @saved="editing = { kind: 'none' }"
         />
-      </div>
+      </Dialog>
     </template>
   </div>
 </template>

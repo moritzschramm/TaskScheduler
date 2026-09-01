@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
+import { FOCUS_LEVELS } from '@/lib/focus';
 import { formatMinuteOfDay, parseMinuteOfDay, weekdayNames } from '@/lib/time';
 
 /**
@@ -141,8 +142,8 @@ function isBackwards(rule: WindowRule): boolean {
             @update:model-value="setFocus(entry.index, $event ?? '')"
           >
             <option value="">Any focus</option>
-            <option v-for="level in 5" :key="level" :value="String(level)">
-              Focus {{ level }}
+            <option v-for="level in FOCUS_LEVELS" :key="level.value" :value="String(level.value)">
+              {{ level.label }}
             </option>
           </Select>
 

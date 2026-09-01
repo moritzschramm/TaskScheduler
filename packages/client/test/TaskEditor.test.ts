@@ -110,10 +110,14 @@ describe('the task editor', () => {
     expect(priority.find('[data-testid="task-priority"]').exists()).toBe(false);
     expect(priority.find('[data-testid="inherited-value"]').text()).toContain('7');
 
-    // The category resolves to a name rather than showing a raw id.
-    expect(
-      wrapper.find('[data-testid="field-category"] [data-testid="inherited-value"]').text(),
-    ).toContain('Work');
+    // Category has no override toggle — it is required, so "unset" is not a
+    // state a task may be in — and inheriting is the first option instead,
+    // named after the parent rather than showing a raw id.
+    const inheritedOption = wrapper.find('[data-testid="task-category"] option[value=""]');
+    expect(inheritedOption.text()).toContain('Work');
+    expect((wrapper.find('[data-testid="task-category"]').element as HTMLSelectElement).value).toBe(
+      '',
+    );
   });
 
   it('says so when nothing supplies a value', () => {
@@ -332,26 +336,35 @@ describe('the task editor', () => {
  * useful: a subtask under a categorised parent is already covered.
  */
 describe('a task cannot be saved without a category', () => {
-  it('refuses a root task that has none', async () => {
+  it('starts a root task on the first category rather than on nothing', async () => {
+    // An empty box that refuses to save is a worse first impression than a
+    // sensible default the user can change, and there is no meaningful
+    // alternative to pick from when only one answer is valid.
     const { wrapper, submit } = editor({ task: null });
 
-    await wrapper.find('[data-testid="task-title"]').setValue('Write the report');
-    expect(wrapper.find('[data-testid="save-task"]').attributes('disabled')).toBeDefined();
-
-    await wrapper.find('[data-testid="save-task"]').trigger('click');
-    expect(submit).not.toHaveBeenCalled();
-  });
-
-  it('accepts it once one is chosen', async () => {
-    const { wrapper, submit } = editor({ task: null });
+    expect((wrapper.find('[data-testid="task-category"]').element as HTMLSelectElement).value).toBe(
+      CATEGORIES[0]!.id,
+    );
 
     await wrapper.find('[data-testid="task-title"]').setValue('Write the report');
-    await wrapper.find('[data-testid="task-category"]').setValue(CATEGORIES[0]!.id);
     await wrapper.find('[data-testid="save-task"]').trigger('click');
 
     expect(submit.mock.calls.at(-1)?.[0]).toMatchObject({
       type: 'CreateTask',
       params: { categoryId: CATEGORIES[0]!.id },
+    });
+  });
+
+  it('sends the one that was chosen instead', async () => {
+    const { wrapper, submit } = editor({ task: null });
+
+    await wrapper.find('[data-testid="task-title"]').setValue('Go for a run');
+    await wrapper.find('[data-testid="task-category"]').setValue(CATEGORIES[1]!.id);
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+
+    expect(submit.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: 'CreateTask',
+      params: { categoryId: CATEGORIES[1]!.id },
     });
   });
 
@@ -420,5 +433,94 @@ describe('the editor is readable without seeing it', () => {
     expect(results.violations).toEqual([]);
     wrapper.unmount();
     document.body.innerHTML = '';
+  });
+});
+
+/**
+ * Focus levels, in words rather than in numbers (spec §6.5).
+ *
+ * "Focus 1" through "Focus 5" said nothing about which end was which, and the
+ * direction is not guessable: a lower number reads as *less* demanding to some
+ * people and as *more* important to others. The scale runs 1 = shallow to
+ * 5 = deep, and the labels now say so.
+ */
+describe('focus level', () => {
+  it('offers the scale in words, deep at the top', () => {
+    const { wrapper } = editor({ task: task({ ownFocusLevel: 3, effectiveFocusLevel: 3 }) });
+
+    const options = wrapper.findAll('[data-testid="task-focus"] option');
+    expect(options.map((option) => option.text())).toEqual([
+      'Very low focus',
+      'Low focus',
+      'Medium focus',
+      'High focus',
+      'Very high focus',
+    ]);
+    // The value the engine compares is still the integer (§6.5).
+    expect(options.map((option) => option.attributes('value'))).toEqual(['1', '2', '3', '4', '5']);
+  });
+});
+
+/**
+ * The override control names the action, not the state it lands in.
+ *
+ * It was a switch labelled "Set here", which left the reader to work out which
+ * way it was pointing. A button says what pressing it will do — and can say
+ * "Clear" where there is nothing to fall back to and "Use inherited" where
+ * there is, which one switch label could not.
+ */
+describe('the override control', () => {
+  it('says what pressing it does', async () => {
+    const child = task({
+      parentId: 'p',
+      ownPriority: null,
+      effectivePriority: 7,
+    });
+    const { wrapper } = editor({ task: child });
+    const toggle = wrapper.find('[data-testid="field-priority"] [data-testid="override-toggle"]');
+
+    expect(toggle.text()).toBe('Set a value');
+    expect(toggle.attributes('aria-pressed')).toBe('false');
+
+    await toggle.trigger('click');
+    expect(toggle.text()).toBe('Use inherited');
+    expect(toggle.attributes('aria-pressed')).toBe('true');
+  });
+
+  it('offers to clear, not to inherit, when nothing supplies a value', async () => {
+    const { wrapper } = editor({ task: task() });
+    const toggle = wrapper.find('[data-testid="field-priority"] [data-testid="override-toggle"]');
+
+    await toggle.trigger('click');
+    expect(toggle.text()).toBe('Clear');
+  });
+
+  it('is gone from the category, which is not optional', () => {
+    const { wrapper } = editor({ task: null });
+
+    expect(
+      wrapper.find('[data-testid="field-category"] [data-testid="override-toggle"]').exists(),
+    ).toBe(false);
+  });
+});
+
+/**
+ * A new root task inherits from nothing, and has to say so in words.
+ *
+ * `inherited` is `null` for a task with no ancestor, and the bindings compared
+ * it with `=== null` — which misses `undefined`, so `String(undefined)` reached
+ * the screen and three fields read "Inherited: undefined". Caught by looking at
+ * the form, not by any assertion: every test here reads the command that comes
+ * out, and this never reached one.
+ */
+describe('with nothing to inherit from', () => {
+  it('says "Not set" rather than printing undefined', () => {
+    const { wrapper } = editor({ task: null });
+
+    const lines = wrapper.findAll('[data-testid="inherited-value"]').map((line) => line.text());
+
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.every((line) => line === 'Not set')).toBe(true);
+    expect(wrapper.text()).not.toContain('undefined');
   });
 });

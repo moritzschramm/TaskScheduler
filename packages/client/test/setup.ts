@@ -24,3 +24,18 @@
 const nodeRealmTypedArray = new TextEncoder().encode('').constructor as Uint8ArrayConstructor;
 
 globalThis.Uint8Array = nodeRealmTypedArray;
+
+/**
+ * jsdom has no `ResizeObserver`, and Reka's slider measures its own track.
+ *
+ * A no-op is the honest stub: jsdom does no layout, so every box it could
+ * report would be zero anyway. What the tests assert about the slider is its
+ * value and its labels, neither of which depends on a measurement.
+ */
+class NoopResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+globalThis.ResizeObserver ??= NoopResizeObserver as unknown as typeof ResizeObserver;

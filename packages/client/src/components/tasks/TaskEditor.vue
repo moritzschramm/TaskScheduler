@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import InheritedField from './InheritedField.vue';
+import { FOCUS_LEVELS, focusLabel } from '@/lib/focus';
 import { formatMinuteOfDay, fromLocalInput, parseMinuteOfDay, toLocalInput } from '@/lib/time';
 import type { Category, CommandRequest, TaskNode } from '@ambitime/shared';
 
@@ -48,7 +49,16 @@ interface Draft {
   title: string;
   notes: string;
   estimate: string;
-  category: { overridden: boolean; value: string };
+  /**
+   * The chosen category id, or `''` meaning "whatever an ancestor supplies".
+   *
+   * Not an `{ overridden, value }` pair like its neighbours, because a category
+   * is not optional: §6.2 rule 1 makes it the thing that decides whether a task
+   * can be placed at all, so there is no third "unset" state to express and no
+   * switch is needed to reach it. Inheriting is still expressible — it is the
+   * empty option, offered only when there is in fact something to inherit.
+   */
+  category: string;
   priority: { overridden: boolean; value: string };
   due: { overridden: boolean; value: string; kind: 'soft' | 'hard' };
   preferred: { overridden: boolean; start: string; end: string };
@@ -72,11 +82,10 @@ function emptyDraft(): Draft {
     title: '',
     notes: '',
     estimate: '',
-    // "Set here" only when there is nothing to inherit. A root task has no
-    // ancestor to take a category from, so the switch has one valid position;
-    // a subtask under a categorised parent is already covered, and defaulting
-    // it to an override would ask for an answer §4.4 has already given.
-    category: { overridden: props.parent?.effectiveCategoryId == null, value: '' },
+    // Inherit where there is something to inherit; otherwise the first
+    // category, because a new task must have one and picking the only sensible
+    // default is better than presenting an empty box that refuses to save.
+    category: props.parent?.effectiveCategoryId == null ? (props.categories[0]?.id ?? '') : '',
     priority: { overridden: false, value: '' },
     due: { overridden: false, value: '', kind: 'soft' },
     preferred: { overridden: false, start: '09:00', end: '17:00' },
@@ -106,10 +115,9 @@ watch(
       title: task.title,
       notes: task.notes ?? '',
       estimate: task.estimatedDurationMin === null ? '' : String(task.estimatedDurationMin),
-      category: {
-        overridden: task.ownCategoryId !== null || task.effectiveCategoryId === null,
-        value: task.ownCategoryId ?? task.effectiveCategoryId ?? '',
-      },
+      // Its own, or empty for "inherited" — the same two states the select
+      // offers, so what is on screen is what will be sent.
+      category: task.ownCategoryId ?? '',
       priority: {
         overridden: task.ownPriority !== null,
         value: String(task.ownPriority ?? task.effectivePriority ?? 0),
@@ -201,7 +209,16 @@ const dueConflict = computed(() => {
  * The parent's *effective* value, so a grandparent's category binds through a
  * parent that has none — which is what nearest-ancestor-wins means.
  */
-const inheritedCategoryId = computed(() => props.parent?.effectiveCategoryId ?? null);
+const inheritedCategoryId = computed(() => {
+  // Creating: the container decides what a new child would fall back to.
+  if (props.parent !== null) return props.parent.effectiveCategoryId;
+
+  // Editing: what this task falls back to is its effective value, but only
+  // where that is not its own — the same distinction `inherited` draws for
+  // every other property.
+  const task = props.task;
+  return task !== null && task.ownCategoryId === null ? task.effectiveCategoryId : null;
+});
 
 /**
  * Every task needs a category, but not every task needs its *own* (§4.4, §6.2).
@@ -213,9 +230,10 @@ const inheritedCategoryId = computed(() => props.parent?.effectiveCategoryId ?? 
  * categorised parent is already covered, and demanding its own would make
  * §4.4's whole mechanism unusable in the one place it is most useful.
  */
-const effectiveCategoryId = computed(() =>
-  draft.value.category.overridden ? draft.value.category.value || null : inheritedCategoryId.value,
-);
+const effectiveCategoryId = computed(() => draft.value.category || inheritedCategoryId.value);
+
+/** The parent's category, named, for the "same as" option. */
+const inheritedCategoryName = computed(() => categoryName(inheritedCategoryId.value));
 
 const canSave = computed(
   () =>
@@ -224,11 +242,6 @@ const canSave = computed(
     dueConflict.value === null &&
     !busy.value,
 );
-
-/** `null` clears the override; a value sets one (§4.4). */
-function overrideOf<T>(field: { overridden: boolean }, value: T): T | null {
-  return field.overridden ? value : null;
-}
 
 function dueValue(): { date: string; kind: 'soft' | 'hard' } | null {
   if (!draft.value.due.overridden) return null;
@@ -285,7 +298,6 @@ async function save(): Promise<void> {
 }
 
 function createRequest(): CommandRequest {
-  const category = overrideOf(draft.value.category, draft.value.category.value);
   const estimate = draft.value.estimate === '' ? null : Number(draft.value.estimate);
   const due = dueValue();
   const preferred = preferredValue();
@@ -299,7 +311,7 @@ function createRequest(): CommandRequest {
       title: draft.value.title,
       ...(draft.value.notes === '' ? {} : { notes: draft.value.notes }),
       ...(props.parent === null ? {} : { parentId: props.parent.id }),
-      ...(category === null || category === '' ? {} : { categoryId: category }),
+      ...(draft.value.category === '' ? {} : { categoryId: draft.value.category }),
       ...(estimate === null ? {} : { estimatedDurationMin: estimate }),
       ...(numberOrNull(draft.value.priority) === null
         ? {}
@@ -318,8 +330,6 @@ function createRequest(): CommandRequest {
 }
 
 function editRequest(): CommandRequest {
-  const category = overrideOf(draft.value.category, draft.value.category.value);
-
   return {
     type: 'EditTask',
     expectedVersion: props.task!.version,
@@ -328,7 +338,8 @@ function editRequest(): CommandRequest {
       patch: {
         title: draft.value.title,
         notes: draft.value.notes === '' ? null : draft.value.notes,
-        categoryId: category === '' ? null : category,
+        // `null` clears the override and reverts to the inherited value (§4.4).
+        categoryId: draft.value.category === '' ? null : draft.value.category,
         estimatedDurationMin: draft.value.estimate === '' ? null : Number(draft.value.estimate),
         priority: numberOrNull(draft.value.priority),
         dueDate: dueValue(),
@@ -414,26 +425,25 @@ async function complete(): Promise<void> {
     </div>
 
     <div class="grid gap-5 sm:grid-cols-2">
-      <InheritedField
-        v-model:overridden="draft.category.overridden"
-        label="Category"
-        :inherited="inherited?.category ?? null"
-        :disabled="inheritedCategoryId === null"
-      >
+      <!--
+        No override toggle: a category is not one of §4.4's three-state
+        properties in practice, because "unset" is not a state a task may be
+        saved in. Inheriting is still reachable — it is the first option, and it
+        appears only when there is an ancestor to inherit from.
+      -->
+      <div class="space-y-1.5" data-testid="field-category">
+        <Label for="task-category">Category</Label>
         <Select
-          v-model="draft.category.value"
-          aria-label="Category"
-          :aria-invalid="draft.category.value === '' ? 'true' : undefined"
+          id="task-category"
+          v-model="draft.category"
+          :aria-invalid="effectiveCategoryId === null ? 'true' : undefined"
           data-testid="task-category"
         >
-          <!--
-            No "None". A task without an effective category matches no
-            availability window, so it is never offered to the solver — it does
-            not schedule badly, it vanishes. The placeholder is unselectable
-            rather than absent so an existing task with no category still shows
-            what is missing instead of silently adopting the first one.
-          -->
-          <option value="" disabled>Choose a category…</option>
+          <option v-if="inheritedCategoryId !== null" value="">
+            <template v-if="parent">Same as {{ parent.title }}</template>
+            <template v-else>Inherited</template>
+            ({{ inheritedCategoryName }})
+          </option>
           <option v-for="category in categories" :key="category.id" :value="category.id">
             {{ category.name }}
           </option>
@@ -449,12 +459,12 @@ async function complete(): Promise<void> {
           </RouterLink>
           — a task cannot be scheduled without it.
         </p>
-      </InheritedField>
+      </div>
 
       <InheritedField
         v-model:overridden="draft.priority.overridden"
         label="Priority"
-        :inherited="inherited?.priority === null ? null : String(inherited?.priority)"
+        :inherited="inherited?.priority == null ? null : String(inherited.priority)"
       >
         <Input
           v-model="draft.priority.value"
@@ -523,18 +533,20 @@ async function complete(): Promise<void> {
       <InheritedField
         v-model:overridden="draft.focus.overridden"
         label="Focus level"
-        :inherited="inherited?.focus === null ? null : String(inherited?.focus)"
-        hint="Matched against a window's focus profile."
+        :inherited="inherited?.focus == null ? null : focusLabel(inherited.focus)"
+        hint="Matched against the focus a window is meant for."
       >
         <Select v-model="draft.focus.value" aria-label="Focus level" data-testid="task-focus">
-          <option v-for="level in 5" :key="level" :value="String(level)">{{ level }}</option>
+          <option v-for="level in FOCUS_LEVELS" :key="level.value" :value="String(level.value)">
+            {{ level.label }}
+          </option>
         </Select>
       </InheritedField>
 
       <InheritedField
         v-model:overridden="draft.cooldown.overridden"
         label="Cooldown (minutes)"
-        :inherited="inherited?.cooldown === null ? null : String(inherited?.cooldown)"
+        :inherited="inherited?.cooldown == null ? null : String(inherited.cooldown)"
         hint="Overrides the category default. Non-compressible."
       >
         <Input

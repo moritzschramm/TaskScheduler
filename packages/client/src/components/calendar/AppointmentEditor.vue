@@ -29,7 +29,7 @@ const props = defineProps<{
   submit: (request: CommandRequest) => Promise<boolean>;
 }>();
 
-const emit = defineEmits<{ cancel: [] }>();
+const emit = defineEmits<{ cancel: []; saved: [] }>();
 
 const busy = ref(false);
 const kind = ref<'appointment' | 'unavailability'>('appointment');
@@ -98,10 +98,15 @@ async function save(): Promise<void> {
     // because a read-then-write check cannot hold against a concurrent insert
     // and would only be a second, weaker opinion.
     const applied = await props.submit(isCreate.value ? createRequest(times) : editRequest(times));
-    if (applied && isCreate.value) {
+    if (!applied) return;
+
+    if (isCreate.value) {
       title.value = '';
       notes.value = '';
     }
+    // Closes the dialog. A modal left standing after a successful save keeps
+    // its overlay across the page with nothing left to do behind it.
+    emit('saved');
   } finally {
     busy.value = false;
   }
