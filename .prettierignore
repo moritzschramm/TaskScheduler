@@ -7,3 +7,4 @@ packages/server/drizzle/**
 # Source-of-truth design documents — owned by the human, never reformatted.
 specification.md
 implementation-plan.md
+readme.md
