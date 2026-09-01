@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory, type Router, type RouterHistory } from 'vue-router';
-import CalendarView from '@/views/CalendarView.vue';
+import ScheduleView from '@/views/ScheduleView.vue';
+import TasksView from '@/views/TasksView.vue';
+import AppointmentsView from '@/views/AppointmentsView.vue';
 import AuditView from '@/views/AuditView.vue';
 import SettingsView from '@/views/SettingsView.vue';
 import SignInView from '@/views/SignInView.vue';
@@ -24,7 +26,23 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
   const router = createRouter({
     history,
     routes: [
-      { path: '/', name: 'calendar', component: CalendarView, meta: { requiresAuth: true } },
+      /**
+       * Three views of one week, not three applications (§6.1).
+       *
+       * Schedule answers "when", Tasks answers "what", and Appointments is the
+       * fixed time the first two are arranged around. They were one screen and
+       * it had become a list of everything the system knows; splitting them is
+       * what lets each be short enough to read. All three share the workspace,
+       * so the week you paged to is the week you find on the next tab.
+       */
+      { path: '/', name: 'schedule', component: ScheduleView, meta: { requiresAuth: true } },
+      { path: '/tasks', name: 'tasks', component: TasksView, meta: { requiresAuth: true } },
+      {
+        path: '/appointments',
+        name: 'appointments',
+        component: AppointmentsView,
+        meta: { requiresAuth: true },
+      },
       {
         path: '/settings',
         name: 'settings',

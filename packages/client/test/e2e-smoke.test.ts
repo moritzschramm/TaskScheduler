@@ -11,6 +11,7 @@ import App from '@/App.vue';
 import { resetClock, setClock } from '@/lib/clock';
 import { createAppRouter } from '@/router';
 import { loadSession, signIn } from '@/lib/session';
+import { resetWorkspace } from '@/lib/workspace';
 import type { TaskNode } from '@ambitime/shared';
 
 /**
@@ -140,6 +141,10 @@ describe('seed via the API, render the client', () => {
     const { users } = await import('@ambitime/server/schema');
     await handle.db.delete(users);
     jar.clear();
+    // The schedule is held at module scope so three views share one read; a
+    // test inheriting the previous test's copy would assert against a tenant
+    // that no longer exists.
+    resetWorkspace();
     outbox.sent.length = 0;
     clientCount += 1;
     clientAddress = `198.51.100.${clientCount}`;
@@ -185,11 +190,21 @@ describe('seed via the API, render the client', () => {
     // 09:00 Berlin — the wall clock a person reads, not the UTC instant.
     expect(task?.attributes('data-start-min')).toBe('540');
 
-    // The panels the plan names.
+    // The panels the plan names, on the screen they moved to. The same
+    // workspace answers both, so this asserts one read reaching two views.
+    await router.push('/tasks');
+    await waitFor(() => wrapper.find('[data-testid="task-panel"]').exists());
+
     expect(wrapper.find('[data-testid="task-panel"]').text()).toContain('Tuesday work');
     const backlogged = wrapper.find('[data-testid="backlog-entry"]');
     expect(backlogged.text()).toContain('Much later');
     expect(backlogged.find('[data-testid="estimated-week"]').text()).toMatch(/week of \d{4}-/);
+
+    // And the grid is not carrying them any more.
+    await router.push('/');
+    await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+    expect(wrapper.find('[data-testid="task-panel"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="backlog-panel"]').exists()).toBe(false);
   });
 
   /**
@@ -282,7 +297,7 @@ describe('seed via the API, render the client', () => {
     await loadSession();
 
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/');
+    await router.push('/tasks');
     await router.isReady();
 
     const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
@@ -361,7 +376,7 @@ describe('seed via the API, render the client', () => {
     await loadSession();
 
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/');
+    await router.push('/tasks');
     await router.isReady();
 
     const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
@@ -1110,7 +1125,9 @@ describe('seed via the API, render the client', () => {
       // All the way back to a rendered week, which is the only proof that the
       // account the new password opens is the same one that was locked.
       await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
-      expect(wrapper.find('[data-testid="task-panel"]').text()).toContain('Tuesday work');
+      expect(wrapper.find('[data-testid="block-task"]').attributes('data-title')).toBe(
+        'Tuesday work',
+      );
     });
 
     it('refuses a link that has already been spent', async () => {

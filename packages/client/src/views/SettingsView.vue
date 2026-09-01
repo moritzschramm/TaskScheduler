@@ -13,6 +13,7 @@ import { ApiError } from '@/lib/api';
 import { createdId, fetchConfiguration, runCommand } from '@/lib/commands';
 import { fetchCalendars } from '@/lib/schedule';
 import { loadSession } from '@/lib/session';
+import { invalidateWorkspace } from '@/lib/workspace';
 import type { CalendarConfiguration, CalendarSummary, CommandRequest } from '@ambitime/shared';
 
 /**
@@ -73,6 +74,10 @@ async function submit(request: CommandRequest): Promise<boolean> {
     // every other screen would not.
     await loadSession();
     await load();
+    // Availability, categories and week types are all read by the three
+    // schedule views. Leaving their copy alone would mean a window edited here
+    // and a grid still drawn from the one before it.
+    invalidateWorkspace();
     return true;
   } catch (cause) {
     error.value = message(cause, 'That change could not be applied');

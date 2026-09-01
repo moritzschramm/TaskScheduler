@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { resendVerification, session, signOut, startHeartbeat, stopHeartbeat } from '@/lib/session';
+import { resetWorkspace } from '@/lib/workspace';
 
 /**
  * The frame around every signed-in page.
@@ -17,6 +18,12 @@ import { resendVerification, session, signOut, startHeartbeat, stopHeartbeat } f
 
 const router = useRouter();
 
+const primary = [
+  { to: '/', label: 'Schedule', testId: 'nav-schedule' },
+  { to: '/tasks', label: 'Tasks', testId: 'nav-tasks' },
+  { to: '/appointments', label: 'Appointments', testId: 'nav-appointments' },
+] as const;
+
 // Presence is a fact about a signed-in page being open (§11), so the beat
 // starts with the shell and stops with it.
 onMounted(startHeartbeat);
@@ -29,6 +36,10 @@ const active = computed(() =>
 async function leave() {
   stopHeartbeat();
   await signOut();
+  // The schedule is held at module scope, so it outlives the session unless
+  // something drops it. Signing in as somebody else must not show the last
+  // person's week for the moment before the first read lands.
+  resetWorkspace();
   await router.replace({ name: 'sign-in' });
 }
 
@@ -111,6 +122,36 @@ async function confirmAgain() {
           {{ session.contexts.length }} contexts
         </span>
       </div>
+
+      <!--
+        The three screens the week is worked on, promoted out of one crowded
+        page. `aria-current` rather than colour alone says which you are on
+        (WCAG 1.4.1), and the exact match on Schedule keeps it from staying lit
+        on every route beneath `/`.
+      -->
+      <nav class="flex flex-1 items-center gap-1" aria-label="Main">
+        <RouterLink
+          v-for="link in primary"
+          :key="link.to"
+          v-slot="{ isActive, isExactActive }"
+          :to="link.to"
+          custom
+        >
+          <RouterLink
+            class="rounded-md px-3 py-1.5 text-sm"
+            :class="
+              (link.to === '/' ? isExactActive : isActive)
+                ? 'bg-secondary text-secondary-foreground font-medium'
+                : 'text-muted-foreground hover:text-foreground'
+            "
+            :to="link.to"
+            :aria-current="(link.to === '/' ? isExactActive : isActive) ? 'page' : undefined"
+            :data-testid="link.testId"
+          >
+            {{ link.label }}
+          </RouterLink>
+        </RouterLink>
+      </nav>
 
       <div class="flex items-center gap-3">
         <RouterLink
