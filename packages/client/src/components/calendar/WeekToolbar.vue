@@ -47,6 +47,8 @@ const { calendars, selectedId, calendar, zone, history, submit, shiftWeek } = us
     </div>
 
     <div class="flex items-center gap-2">
+      <!-- Whatever this screen makes: a task, or a block of fixed time. -->
+      <slot name="actions" />
       <UndoRedo :history="history" :submit="submit" />
       <Button variant="outline" size="sm" data-testid="week-back" @click="shiftWeek(-1)">
         Previous

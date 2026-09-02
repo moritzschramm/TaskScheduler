@@ -48,7 +48,6 @@ const {
   ensureLoaded,
   submit,
   openTask,
-  newBlockAt,
   showWeekOf,
   selectedId,
 } = useWorkspace();
@@ -102,6 +101,11 @@ async function moveBlock(payload: {
  * what the afternoon was spent on even though the solver has given the slot
  * back to everything that comes after it.
  */
+/** Opens the task modal on a new root task (§4.4). */
+function newTask(): void {
+  editing.value = { kind: 'task', task: null, parent: null };
+}
+
 async function completeBlock(block: GridBlock): Promise<void> {
   if (block.taskId === undefined) return;
   await submit({ type: 'CompleteTask', params: { taskId: block.taskId } });
@@ -127,7 +131,11 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
 
 <template>
   <div class="flex flex-col gap-6 p-6" data-testid="calendar-view">
-    <WeekToolbar title="Schedule" />
+    <WeekToolbar title="Schedule">
+      <template #actions>
+        <Button size="sm" data-testid="new-task" @click="newTask">New task</Button>
+      </template>
+    </WeekToolbar>
     <WorkspaceStatus />
 
     <template v-if="view && calendar">
@@ -224,8 +232,8 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         :today="today"
         :locale="locale"
         editable
+        postponable
         @select-block="editBlock"
-        @add-block="(day) => newBlockAt(day)"
         @move-block="moveBlock"
         @complete-block="completeBlock"
         @postpone-day="postponeDay"

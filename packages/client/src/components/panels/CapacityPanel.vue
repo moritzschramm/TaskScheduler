@@ -20,12 +20,31 @@ import type { CapacityCell, Category } from '@ambitime/shared';
  */
 const props = defineProps<{ cells: CapacityCell[]; categories: Category[] }>();
 
+/**
+ * The weeks in view, earliest first.
+ *
+ * §6.1 puts the hard horizon at the current week plus the next, so there are
+ * two of them and their order is their meaning. "Week of 2026-08-31" made the
+ * reader work out which one that was — from a date they would have to compare
+ * against today, on a panel whose whole job is to be glanced at.
+ */
+const weeks = computed(() => [...new Set(props.cells.map((cell) => cell.weekStart))].sort());
+
+const ORDINALS = ['This week', 'Next week'] as const;
+
+/** Falls back to the date, so a third week would still say something true. */
+function weekLabel(weekStart: string): string {
+  const index = weeks.value.indexOf(weekStart);
+  return ORDINALS[index] ?? `Week of ${weekStart}`;
+}
+
 const named = computed(() =>
   props.cells.map((cell) => ({
     ...cell,
     categoryName:
       props.categories.find((category) => category.id === cell.categoryId)?.name ?? 'Unknown',
     percent: cell.utilization === null ? null : Math.round(cell.utilization * 100),
+    weekLabel: weekLabel(cell.weekStart),
   })),
 );
 
@@ -66,7 +85,7 @@ function barClass(status: string): string {
         <div class="flex items-baseline justify-between gap-2">
           <span>{{ cell.categoryName }}</span>
           <span class="text-muted-foreground text-xs tabular-nums">
-            week of {{ cell.weekStart }}
+            {{ cell.weekLabel }}
           </span>
         </div>
 

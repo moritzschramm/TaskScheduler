@@ -46,6 +46,14 @@ const props = withDefaults(
     locale?: string;
     /** M11: the grid becomes a way in to the editors, not only a picture. */
     editable?: boolean;
+    /**
+     * Whether a day offers "postpone the rest of it" (§7.2).
+     *
+     * A bulk action on *tasks*, so it belongs on the screen that draws tasks.
+     * On Commitments it was an arrow that appeared to do nothing, because
+     * nothing it could move was on screen.
+     */
+    postponable?: boolean;
   }>(),
   {
     windows: () => [],
@@ -55,12 +63,12 @@ const props = withDefaults(
     dayEndMin: 22 * 60,
     locale: 'en-GB',
     editable: false,
+    postponable: false,
   },
 );
 
 const emit = defineEmits<{
   selectBlock: [block: GridBlock];
-  addBlock: [day: CivilDate];
   /** Marks a scheduled task done without leaving the week (§7.3). */
   completeBlock: [block: GridBlock];
   /** A task dropped, or nudged, onto a new local start (spec §7.3, §13). */
@@ -372,27 +380,23 @@ function classesFor(block: GridBlock): string {
           :class="column.isToday ? 'text-primary' : 'text-muted-foreground'"
         >
           <span>{{ column.label }}</span>
-          <span v-if="editable" class="flex items-center gap-1">
-            <button
-              type="button"
-              class="hover:text-foreground px-1 leading-none"
-              :aria-label="`Postpone the rest of ${column.label}`"
-              title="Move the rest of this day's tasks into later days"
-              data-testid="postpone-day"
-              @click="emit('postponeDay', column.day)"
-            >
-              ⤓
-            </button>
-            <button
-              type="button"
-              class="hover:text-foreground px-1 leading-none"
-              :aria-label="`Add a fixed block on ${column.label}`"
-              data-testid="add-block"
-              @click="emit('addBlock', column.day)"
-            >
-              +
-            </button>
-          </span>
+          <!--
+            One affordance per day heading, not two. The `+` that used to sit
+            here is a header button now: a day column is four pixels of chrome,
+            and hiding "make something new" inside it made the commonest act on
+            the page the hardest one to find.
+          -->
+          <button
+            v-if="editable && postponable"
+            type="button"
+            class="hover:text-foreground px-1 leading-none"
+            :aria-label="`Postpone the rest of ${column.label}`"
+            title="Move the rest of this day's tasks into later days"
+            data-testid="postpone-day"
+            @click="emit('postponeDay', column.day)"
+          >
+            ⤓
+          </button>
         </div>
 
         <div class="bg-muted relative border-l" :style="{ height: `${gridHeight}px` }">

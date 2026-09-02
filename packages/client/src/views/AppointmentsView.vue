@@ -5,6 +5,7 @@ import WeekGrid from '@/components/calendar/WeekGrid.vue';
 import WeekToolbar from '@/components/calendar/WeekToolbar.vue';
 import OverridesSection from '@/components/settings/OverridesSection.vue';
 import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
+import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { useWorkspace } from '@/lib/workspace';
 import type { GridBlock } from '@/lib/grid';
@@ -42,6 +43,18 @@ const {
 
 onMounted(ensureLoaded);
 
+/**
+ * A new block, starting on the first day of the week in view.
+ *
+ * The day used to come from which `+` was clicked. A date is a field on the
+ * form either way, so the button opens it on a sensible day rather than making
+ * the choice before there is anything to choose it for.
+ */
+function newBlock(): void {
+  const day = today.value ?? days.value[0];
+  if (day !== undefined) newBlockAt(day);
+}
+
 function editBlock(block: GridBlock): void {
   const found = view.value?.fixedBlocks.find(
     (candidate) => candidate.appointmentId === block.appointmentId,
@@ -52,14 +65,17 @@ function editBlock(block: GridBlock): void {
 
 <template>
   <div class="flex flex-col gap-6 p-6" data-testid="appointments-view">
-    <WeekToolbar title="Commitments" />
+    <WeekToolbar title="Commitments">
+      <template #actions>
+        <Button size="sm" data-testid="add-block" @click="newBlock">New fixed block</Button>
+      </template>
+    </WeekToolbar>
     <WorkspaceStatus />
 
     <template v-if="view && calendar">
       <p class="text-muted-foreground max-w-prose text-sm">
-        Time that is already spoken for: meetings, and hours you are simply not available. Use
-        <strong>+</strong> on a day to add one. Tasks are scheduled around these, and are drawn on
-        the Schedule.
+        Time that is already spoken for: meetings, and hours you are simply not available. Tasks are
+        scheduled around these, and are drawn on the Schedule.
       </p>
 
       <WeekGrid
@@ -74,7 +90,6 @@ function editBlock(block: GridBlock): void {
         :locale="locale"
         editable
         @select-block="editBlock"
-        @add-block="(day) => newBlockAt(day)"
       />
 
       <Dialog

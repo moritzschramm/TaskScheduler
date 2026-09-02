@@ -437,8 +437,8 @@ describe('seed via the API, render the client', () => {
     expect(wrapper.find('[data-testid="save-task"]').attributes('disabled')).toBeDefined();
   });
 
-  /** Plan M11b: fixed blocks, made from the grid. */
-  it('adds an appointment from the week grid', async () => {
+  /** Plan M11b: fixed blocks, made from Commitments. */
+  it('adds an appointment, and draws it on the day it was given', async () => {
     const email = `appt-${Date.now()}@example.test`;
     await seed(email);
 
@@ -446,19 +446,18 @@ describe('seed via the API, render the client', () => {
     await loadSession();
 
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/');
+    await router.push('/appointments');
     await router.isReady();
 
     const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
     await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
 
-    // Wednesday's "+" seeds the editor with Wednesday, not with today.
-    await wrapper.findAll('[data-testid="add-block"]')[2]!.trigger('click');
+    // One button rather than a `+` per column: the day is a field on the form,
+    // so it is chosen where it can also be corrected.
+    await wrapper.find('[data-testid="add-block"]').trigger('click');
     await flushPromises();
-    expect(
-      (wrapper.find('[data-testid="appointment-start"]').element as HTMLInputElement).value,
-    ).toBe('2026-03-25T09:00');
-
+    await wrapper.find('[data-testid="appointment-start"]').setValue('2026-03-25T09:00');
+    await wrapper.find('[data-testid="appointment-end"]').setValue('2026-03-25T10:00');
     await wrapper.find('[data-testid="appointment-title"]').setValue('Design review');
     await wrapper.find('[data-testid="save-appointment"]').trigger('click');
     await settle();
@@ -477,15 +476,17 @@ describe('seed via the API, render the client', () => {
     await loadSession();
 
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/');
+    await router.push('/appointments');
     await router.isReady();
 
     const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
     await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
 
     // The seed put "Standup" on Monday 09:00–09:30 Berlin.
-    await wrapper.findAll('[data-testid="add-block"]')[0]!.trigger('click');
+    await wrapper.find('[data-testid="add-block"]').trigger('click');
     await flushPromises();
+    await wrapper.find('[data-testid="appointment-start"]').setValue('2026-03-23T09:00');
+    await wrapper.find('[data-testid="appointment-end"]').setValue('2026-03-23T09:30');
     await wrapper.find('[data-testid="appointment-title"]').setValue('Clash');
     await wrapper.find('[data-testid="save-appointment"]').trigger('click');
     await settle();
@@ -944,15 +945,17 @@ describe('seed via the API, render the client', () => {
       await loadSession();
 
       const router = createAppRouter(createMemoryHistory());
-      await router.push('/');
+      await router.push('/appointments');
       await router.isReady();
 
       const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
       await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
 
-      await wrapper.findAll('[data-testid="add-block"]')[2]!.trigger('click');
+      await wrapper.find('[data-testid="add-block"]').trigger('click');
       await flushPromises();
 
+      await wrapper.find('[data-testid="appointment-start"]').setValue('2026-03-25T09:00');
+      await wrapper.find('[data-testid="appointment-end"]').setValue('2026-03-25T10:00');
       await wrapper.find('[data-testid="appointment-title"]').setValue('Retro');
       await wrapper.find('[data-testid="appointment-repeats"]').setValue(true);
       await flushPromises();
