@@ -116,7 +116,12 @@ function createRequest(times: { start: string; end: string }): CommandRequest {
   if (isUnavailability.value) {
     return {
       type: 'AddUnavailability',
-      params: { calendarId: props.calendarId, start: times.start, end: times.end },
+      params: {
+        calendarId: props.calendarId,
+        start: times.start,
+        end: times.end,
+        ...(repeats.value ? { recurrence: { rule: ruleText(), timeZone: props.timeZone } } : {}),
+      },
     };
   }
 
@@ -290,10 +295,6 @@ async function cancelBlock(): Promise<void> {
         <option value="WEEKLY">every week, on this weekday</option>
         <option value="MONTHLY">every month</option>
       </Select>
-      <p v-if="repeats" class="text-muted-foreground text-xs">
-        A repeating appointment happens at a fixed time. A repeating <em>task</em> is a different
-        thing: it says how often, and the schedule chooses when.
-      </p>
     </fieldset>
 
     <fieldset

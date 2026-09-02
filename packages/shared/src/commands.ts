@@ -42,6 +42,19 @@ const minuteOfDay = z.int().min(0).max(1440);
  */
 const dueDate = z.object({ date: instant, kind: z.enum(['soft', 'hard']) });
 
+/**
+ * An RRULE and the zone it is read in — the shape both fixed-block commands
+ * take (§8.1).
+ *
+ * Defined once because it *is* one thing. `AddUnavailability` was written
+ * without it, so the editor's repeat control was accepted and dropped; sharing
+ * the definition is what keeps the two from drifting again.
+ */
+const appointmentRecurrence = z.object({
+  rule: z.string().min(1),
+  timeZone: z.string().min(1),
+});
+
 const preferredRange = z
   .object({ startMin: minuteOfDay, endMin: minuteOfDay })
   .refine((range) => range.startMin < range.endMin, {
@@ -155,7 +168,7 @@ export const addAppointmentParams = z
      * per-period demand (§8.2), is a different mechanism entirely and lives on
      * `CreateTask`.
      */
-    recurrence: z.object({ rule: z.string().min(1), timeZone: z.string().min(1) }).optional(),
+    recurrence: appointmentRecurrence.optional(),
   })
   .refine((params) => params.start < params.end, {
     message: 'An appointment must end after it starts',
@@ -275,7 +288,20 @@ export const moveToBacklogParams = z.object({ taskId: uuid });
  * itself rather than render an invented title back at the user.
  */
 export const addUnavailabilityParams = z
-  .object({ calendarId: uuid, start: instant, end: instant })
+  .object({
+    calendarId: uuid,
+    start: instant,
+    end: instant,
+    /**
+     * The same rule an appointment takes (§8.1).
+     *
+     * It was missing, and the editor offered the control anyway — so "every
+     * weekday, unavailable" was accepted, logged, and expanded into exactly one
+     * block. The engine treats the two the same (§6.2 rule 2); the only
+     * difference is that one has words in it, and repeating is not about words.
+     */
+    recurrence: appointmentRecurrence.optional(),
+  })
   .refine((params) => params.start < params.end, {
     message: 'An unavailability must end after it starts',
   });

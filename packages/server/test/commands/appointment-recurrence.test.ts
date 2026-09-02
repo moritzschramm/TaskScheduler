@@ -79,6 +79,40 @@ describe('editing a recurring appointment', () => {
     expect(blocks.every((block) => block.isRecurring)).toBe(true);
   });
 
+  /**
+   * §7.4's other fixed block repeats too.
+   *
+   * `AddUnavailability` had no `recurrence` parameter at all while the editor
+   * offered the control — so "every day, unavailable" was accepted, written to
+   * the log, and expanded into exactly one afternoon. Nothing failed; the rule
+   * was simply dropped on the way past a schema that had no room for it.
+   *
+   * The engine has never distinguished the two (§6.2 rule 2): the only
+   * difference is that one has words in it, and repeating is not about words.
+   */
+  it('repeats an unavailability, which had been dropping the rule', async () => {
+    await world.run({
+      type: 'AddUnavailability',
+      params: {
+        calendarId: world.calendarId,
+        start: '2026-03-23T13:00:00Z',
+        end: '2026-03-23T14:00:00Z',
+        recurrence: { rule: 'FREQ=DAILY;COUNT=3', timeZone: 'Europe/Berlin' },
+      },
+    } as never);
+
+    const blocks = await instances();
+
+    expect(blocks.map((block) => block.start)).toEqual([
+      '2026-03-23T13:00:00.000Z',
+      '2026-03-24T13:00:00.000Z',
+      '2026-03-25T13:00:00.000Z',
+    ]);
+    expect(blocks.every((block) => block.isRecurring)).toBe(true);
+    // Content-free, still: §7.4 stores no title and expansion invents none.
+    expect(blocks.every((block) => block.title === '')).toBe(true);
+  });
+
   it('moves one occurrence and leaves the rest alone', async () => {
     const appointmentId = await weeklyStandup();
 

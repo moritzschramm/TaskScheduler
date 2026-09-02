@@ -72,6 +72,11 @@ export async function addUnavailability(
     title: '',
     during: interval(params.start, params.end),
     isUnavailability: true,
+    // Expanded by the same code that expands an appointment's (§8.1). "Every
+    // weekday, unavailable" is an ordinary thing to say and was being stored as
+    // a single afternoon.
+    recurrenceRule: params.recurrence?.rule,
+    recurrenceTimezone: params.recurrence?.timeZone,
   };
 
   await insertingBlock(() => insertRow(ctx, 'appointments', values), params.calendarId);
