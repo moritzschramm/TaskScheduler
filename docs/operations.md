@@ -94,6 +94,52 @@ exception is notification delivery: a restore to a point before an email was
 sent will send it again, since `delivered_at` is what prevents that and it will
 have gone back too.
 
+## Changing the Postgres image
+
+**Do not swap the base image under an existing volume without reindexing.**
+`postgres:18-alpine` collates text with musl and `postgres:18` with glibc, and
+they disagree about ordering. Every text index built under the old one is then
+silently wrong: unique constraints stop catching duplicates, and lookups miss
+rows that are really there.
+
+There is usually no warning. Postgres compares `pg_database.datcollversion`
+against the library and complains when they differ — but a database created by
+the alpine build records no version at all, so there is nothing to compare and
+the mismatch passes unnoticed.
+
+This is not hypothetical. It happened to this project's development volume: the
+switch left `pgboss.queue` with four rows sharing one primary key, so
+`boss.send` could not resolve a queue and returned null. The application code
+was never involved.
+
+To check:
+
+```sql
+select datname, datcollversion, pg_database_collation_actual_version(oid)
+from pg_database where datname = current_database();
+```
+
+An empty or differing `datcollversion` means the indexes are suspect. To repair:
+
+```sql
+-- Unique indexes will refuse to build while the duplicates they let in remain,
+-- so clear those first; what needs deleting depends on what got through.
+REINDEX DATABASE ambitime;
+ALTER DATABASE ambitime REFRESH COLLATION VERSION;
+```
+
+For a development volume, recreating it is faster and surer:
+`docker compose down -v && docker compose up -d`.
+
+## Tests never touch the running database
+
+`pnpm test` truncates `users` between cases, and `users` cascades to every
+tenant, planner, category and task below it. It therefore runs against
+`ambitime_test`, which it creates on demand, and **never** falls back to
+`DATABASE_URL` — that variable names the database the application is running
+on, and the fallback deleted real data twice before it was removed. Setting
+`TEST_DATABASE_URL` to the same value as `DATABASE_URL` is refused outright.
+
 ## Retention
 
 `AUDIT_RETENTION_DAYS` bounds the command log (§12). It is unset by default,

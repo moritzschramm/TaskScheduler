@@ -9,7 +9,8 @@
     "./db": "./src/db/client.ts",
     "./email": "./src/notifications/email.ts",
     "./migrate": "./src/db/migrate.ts",
-    "./schema": "./src/db/schema/index.ts"
+    "./schema": "./src/db/schema/index.ts",
+    "./testing": "./test/support/database.ts"
   },
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",

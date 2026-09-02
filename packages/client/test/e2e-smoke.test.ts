@@ -4,9 +4,9 @@ import axe from 'axe-core';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp as createServer } from '@ambitime/server';
 import { createAuth } from '@ambitime/server/auth';
-import { createDatabase, type DatabaseHandle } from '@ambitime/server/db';
+import type { DatabaseHandle } from '@ambitime/server/db';
 import { recordingEmailSender } from '@ambitime/server/email';
-import { runMigrations } from '@ambitime/server/migrate';
+import { setupTestDatabase } from '@ambitime/server/testing';
 import App from '@/App.vue';
 import { resetClock, setClock } from '@/lib/clock';
 import { createAppRouter } from '@/router';
@@ -28,11 +28,6 @@ import type { TaskNode } from '@ambitime/shared';
  * a route mounted at a path the client does not call, a date format that
  * survives every layer and then renders an hour wrong.
  */
-
-const TEST_DATABASE_URL =
-  process.env['TEST_DATABASE_URL'] ??
-  process.env['DATABASE_URL'] ??
-  'postgres://ambitime:ambitime@localhost:5432/ambitime';
 
 /** Monday 2026-03-23, 09:00 Berlin — the instant the rest of the suite uses. */
 const MONDAY_0900 = '2026-03-23T08:00:00Z';
@@ -70,8 +65,10 @@ let held: Promise<void> | null = null;
 
 describe('seed via the API, render the client', () => {
   beforeAll(async () => {
-    await runMigrations(TEST_DATABASE_URL);
-    handle = createDatabase(TEST_DATABASE_URL, { max: 4 });
+    // The server package owns where this points, so the two suites cannot
+    // drift onto different databases — and neither can land on the running
+    // application's, which this file truncates between every test.
+    handle = await setupTestDatabase();
 
     outbox = recordingEmailSender();
 
