@@ -113,6 +113,66 @@ describe('editing a recurring appointment', () => {
     expect(blocks.every((block) => block.title === '')).toBe(true);
   });
 
+  /**
+   * `UNTIL` is read in the same wall clock the rule is expanded in (§8.1).
+   *
+   * The expansion runs in floating mode — `DTSTART` is a UTC-labelled `Date`
+   * spelling the local time, so DST comes from the scheduler's own arithmetic
+   * rather than the library's. A bound written as a real UTC instant would sit
+   * in a different frame from the values it bounds: an hour out, invisibly in
+   * winter and by one dropped instance in summer.
+   *
+   * Berlin is CET on the 23rd and CEST from the 29th, so a series that crosses
+   * the change and stops on the 31st is the case that tells the two apart.
+   */
+  it('stops a series on the day UNTIL names, across a DST change', async () => {
+    await world.run({
+      type: 'AddAppointment',
+      params: {
+        calendarId: world.calendarId,
+        title: 'Daily sync',
+        start: '2026-03-27T08:00:00Z',
+        end: '2026-03-27T08:15:00Z',
+        recurrence: {
+          rule: 'FREQ=DAILY;UNTIL=20260331T235900Z',
+          timeZone: 'Europe/Berlin',
+        },
+      },
+    } as never);
+
+    const blocks = await instances();
+
+    // The 27th and 28th are CET; the 29th onwards CEST — and the 31st is
+    // included, because people name the last day they mean.
+    expect(blocks.map((block) => block.start)).toEqual([
+      '2026-03-27T08:00:00.000Z',
+      '2026-03-28T08:00:00.000Z',
+      '2026-03-29T07:00:00.000Z',
+      '2026-03-30T07:00:00.000Z',
+      '2026-03-31T07:00:00.000Z',
+    ]);
+  });
+
+  it('stops a series after the number of times COUNT names', async () => {
+    await world.run({
+      type: 'AddUnavailability',
+      params: {
+        calendarId: world.calendarId,
+        start: '2026-03-23T13:00:00Z',
+        end: '2026-03-23T14:00:00Z',
+        recurrence: { rule: 'FREQ=WEEKLY;BYDAY=MO;COUNT=2', timeZone: 'Europe/Berlin' },
+      },
+    } as never);
+
+    const blocks = await instances();
+
+    // Two Mondays out of the four the horizon would otherwise offer.
+    expect(blocks.map((block) => block.start)).toEqual([
+      '2026-03-23T13:00:00.000Z',
+      '2026-03-30T12:00:00.000Z',
+    ]);
+  });
+
   it('moves one occurrence and leaves the rest alone', async () => {
     const appointmentId = await weeklyStandup();
 

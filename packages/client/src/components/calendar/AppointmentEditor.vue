@@ -39,6 +39,21 @@ const start = ref('');
 const end = ref('');
 const repeats = ref(false);
 const frequency = ref<'DAILY' | 'WEEKLY' | 'MONTHLY'>('WEEKLY');
+
+/**
+ * When the series stops (RFC 5545 `COUNT` / `UNTIL`).
+ *
+ * Both, not one, because they answer different questions and neither converts
+ * into the other without knowing the calendar: "the next six" is a number the
+ * user has, "until the end of term" is a date they have, and turning either
+ * into the other is arithmetic they came here to avoid.
+ *
+ * `never` is the default and stays the common case — a standing meeting has no
+ * end, and inventing one would quietly stop it.
+ */
+const ends = ref<'never' | 'after' | 'on'>('never');
+const count = ref('10');
+const untilDate = ref('');
 /** Which occurrences an edit applies to (spec §8.1). */
 const scope = ref<'series' | 'occurrence' | 'this_and_future'>('occurrence');
 
@@ -143,9 +158,36 @@ function createRequest(times: { start: string; end: string }): CommandRequest {
 
 /** The subset of RFC 5545 the form offers, anchored on the chosen start. */
 function ruleText(): string {
-  return frequency.value === 'WEEKLY'
-    ? `FREQ=WEEKLY;BYDAY=${weekdayCode()}`
-    : `FREQ=${frequency.value}`;
+  const base =
+    frequency.value === 'WEEKLY' ? `FREQ=WEEKLY;BYDAY=${weekdayCode()}` : `FREQ=${frequency.value}`;
+
+  return `${base}${endsClause()}`;
+}
+
+/**
+ * `;COUNT=n`, `;UNTIL=…`, or nothing.
+ *
+ * **`UNTIL` is written in the rule's own wall clock, not in UTC.** The server
+ * expands these in floating mode — `DTSTART` is a UTC-labelled `Date` spelling
+ * the local time, so DST comes from the scheduler's arithmetic rather than the
+ * library's — and a bound in a different frame from the values it bounds is off
+ * by the zone offset. Which is invisible in January and drops an instance in
+ * July, the worst way for a date to be wrong.
+ *
+ * The last moment of the chosen day, so "until the 30th" includes the 30th.
+ * People name the last day they mean, not the first they do not.
+ */
+function endsClause(): string {
+  if (ends.value === 'after') {
+    const times = Number(count.value);
+    return Number.isInteger(times) && times > 0 ? `;COUNT=${times}` : '';
+  }
+
+  if (ends.value === 'on' && untilDate.value !== '') {
+    return `;UNTIL=${untilDate.value.replaceAll('-', '')}T235900Z`;
+  }
+
+  return '';
 }
 
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
@@ -284,17 +326,51 @@ async function cancelBlock(): Promise<void> {
         <input v-model="repeats" type="checkbox" data-testid="appointment-repeats" />
         Repeats
       </label>
-      <Select
-        v-if="repeats"
-        v-model="frequency"
-        class="w-48"
-        aria-label="How often"
-        data-testid="appointment-frequency"
-      >
-        <option value="DAILY">every day</option>
-        <option value="WEEKLY">every week, on this weekday</option>
-        <option value="MONTHLY">every month</option>
-      </Select>
+      <div v-if="repeats" class="flex flex-wrap items-center gap-2">
+        <Select
+          v-model="frequency"
+          class="w-48"
+          aria-label="How often"
+          data-testid="appointment-frequency"
+        >
+          <option value="DAILY">every day</option>
+          <option value="WEEKLY">every week, on this weekday</option>
+          <option value="MONTHLY">every month</option>
+        </Select>
+
+        <Select
+          v-model="ends"
+          class="w-40"
+          aria-label="When it stops"
+          data-testid="appointment-ends"
+        >
+          <option value="never">with no end</option>
+          <option value="after">for a number of times</option>
+          <option value="on">until a date</option>
+        </Select>
+
+        <Input
+          v-if="ends === 'after'"
+          v-model="count"
+          type="number"
+          min="1"
+          class="w-24"
+          aria-label="How many times"
+          data-testid="appointment-count"
+        />
+        <input
+          v-if="ends === 'on'"
+          v-model="untilDate"
+          type="date"
+          class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+          aria-label="Last day it happens"
+          data-testid="appointment-until"
+        />
+      </div>
+
+      <p v-if="repeats && ends === 'on'" class="text-muted-foreground text-xs">
+        Includes the day you name.
+      </p>
     </fieldset>
 
     <fieldset
