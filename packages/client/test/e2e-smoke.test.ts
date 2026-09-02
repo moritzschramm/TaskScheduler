@@ -1304,6 +1304,52 @@ describe('seed via the API, render the client', () => {
   });
 
   /**
+   * Done, and still on the week it was done in (spec §3.4, §7.3).
+   *
+   * Completion frees the slot by re-derivation — the occurrence stops being
+   * demand, so the next solve places it nowhere. That is right for the
+   * schedule and was wrong for the person looking at it: the block simply
+   * disappeared, taking with it the only evidence the afternoon had been
+   * spent. `CompleteTask` now copies the placement onto the occurrence first.
+   */
+  it('keeps a completed task where it was, and frees the slot anyway', async () => {
+    const email = `done-${Date.now()}@example.test`;
+    const { calendarId } = await seed(email);
+
+    await signIn(email, PASSWORD);
+    await loadSession();
+
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+    await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+    const tuesday = () => wrapper.findAll('[data-testid="day-column"]')[1]!;
+    const scheduled = tuesday().find('[data-testid="block-task"]');
+    expect(scheduled.attributes('data-title')).toBe('Tuesday work');
+    expect(scheduled.attributes('data-start-min')).toBe('540');
+
+    // Done, from the grid — no editor, no navigation.
+    await tuesday().find('[data-testid="complete-block"]').trigger('click');
+    await settle();
+    await waitFor(() => tuesday().find('[data-testid="block-completed"]').exists());
+
+    // Still Tuesday, still 09:00: the record of the morning survives the solve
+    // that stopped scheduling it.
+    const finished = tuesday().find('[data-testid="block-completed"]');
+    expect(finished.attributes('data-title')).toBe('Tuesday work');
+    expect(finished.attributes('data-start-min')).toBe('540');
+
+    // And it is no longer a placement — the solver has given the slot back.
+    expect(tuesday().find('[data-testid="block-task"]').exists()).toBe(false);
+
+    const tasks = await readTasks(calendarId);
+    expect(tasks.find((task) => task.title === 'Tuesday work')?.status).toBe('completed');
+  });
+
+  /**
    * A calendar nobody has configured yet — which is every calendar, for a while.
    *
    * The report was "nothing is shown in the calendar", and it was accurate: a

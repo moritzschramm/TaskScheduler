@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { SliderRange, SliderRoot, SliderThumb, SliderTrack } from 'reka-ui';
 import { formatMinuteOfDay } from '@/lib/time';
 import { useWorkspace } from '@/lib/workspace';
@@ -23,10 +23,63 @@ import { useWorkspace } from '@/lib/workspace';
  */
 const { dayStartMin, dayEndMin, setDayRange } = useWorkspace();
 
+/**
+ * Which end the user took hold of, for as long as they are holding it.
+ *
+ * Reka reassigns the thumb it is dragging the moment the two cross — it sorts
+ * the pair and follows the value, not the handle — so after one swap the rest
+ * of the gesture moves the *other* end. Refusing the swapped pair is not
+ * enough, because by then the drag has changed its mind about what it is
+ * dragging. Remembering the answer from the start is.
+ */
+const grabbed = ref<'start' | 'end' | null>(null);
+
 const hours = computed<number[]>({
   get: () => [dayStartMin.value / 60, dayEndMin.value / 60],
-  set: ([start, end]) => setDayRange((start ?? 0) * 60, (end ?? 24) * 60),
+  set: (next) => apply(next),
 });
+
+function grab(end: 'start' | 'end'): void {
+  grabbed.value = end;
+  // Pointer capture lives on the thumb, so the release may land anywhere.
+  globalThis.addEventListener?.('pointerup', release, { once: true });
+  globalThis.addEventListener?.('keyup', release, { once: true });
+}
+
+function release(): void {
+  grabbed.value = null;
+}
+
+/**
+ * Takes a new pair, holding whichever end is not being dragged.
+ *
+ * `SliderRoot` sorts its values on every move, so dragging the right handle
+ * past the left does not stop it — it re-labels them, and "shrink the day from
+ * the evening" silently becomes "move the morning to midnight".
+ * `minStepsBetweenThumbs` keeps them from touching; it does not keep them in
+ * their lanes.
+ *
+ * So the stationary end is not taken from the pair at all: it is kept, and
+ * `setDayRange` clamps the moving one against it. A drag that runs past the
+ * other handle stops there instead of dragging it along.
+ */
+function apply(next: readonly number[]): void {
+  const [low = 0, high = 24] = next;
+  const start = dayStartMin.value / 60;
+  const end = dayEndMin.value / 60;
+
+  // Clamped against the held end before the setter sees it: `setDayRange`
+  // resolves a crowded pair by moving the *end*, which is right when the start
+  // is what changed and wrong when the start is what is being held.
+  if (grabbed.value === 'start') {
+    return setDayRange(Math.min(Math.min(low, high), end - 1) * 60, end * 60);
+  }
+  if (grabbed.value === 'end') {
+    return setDayRange(start * 60, Math.max(Math.max(low, high), start + 1) * 60);
+  }
+
+  setDayRange(low * 60, high * 60);
+}
 </script>
 
 <template>
@@ -37,7 +90,7 @@ const hours = computed<number[]>({
 
     <SliderRoot
       v-model="hours"
-      class="relative flex h-4 w-32 touch-none items-center select-none"
+      class="relative flex h-4 w-52 touch-none items-center select-none"
       :min="0"
       :max="24"
       :step="1"
@@ -52,12 +105,16 @@ const hours = computed<number[]>({
         aria-label="First hour shown"
         :aria-valuetext="formatMinuteOfDay(dayStartMin)"
         data-testid="day-range-start"
+        @pointerdown="grab('start')"
+        @keydown="grab('start')"
       />
       <SliderThumb
         class="border-primary bg-background focus-visible:ring-ring block size-3 rounded-full border-2 focus-visible:ring-2 focus-visible:outline-none"
         aria-label="Last hour shown"
         :aria-valuetext="formatMinuteOfDay(dayEndMin)"
         data-testid="day-range-end"
+        @pointerdown="grab('end')"
+        @keydown="grab('end')"
       />
     </SliderRoot>
   </div>

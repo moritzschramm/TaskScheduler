@@ -1,4 +1,9 @@
-import type { CalendarConfiguration, FixedBlock, ScheduledBlock } from '@ambitime/shared';
+import type {
+  CalendarConfiguration,
+  CompletedBlock,
+  FixedBlock,
+  ScheduledBlock,
+} from '@ambitime/shared';
 import {
   resolveWindows,
   wallClockToInstant,
@@ -41,7 +46,7 @@ export interface GridBlock {
   endMin: number;
   /** The cooldown that follows it (§6.2 rule 3); drawn, not scheduled. */
   cooldownMin: number;
-  kind: 'task' | 'appointment' | 'unavailability';
+  kind: 'task' | 'appointment' | 'unavailability' | 'completed';
   label: string;
   taskId?: string;
   appointmentId?: string;
@@ -261,6 +266,7 @@ export function blocksForDay(
   timeZone: string,
   scheduled: readonly ScheduledBlock[],
   fixed: readonly FixedBlock[],
+  completed: readonly CompletedBlock[] = [],
 ): GridBlock[] {
   const blocks: GridBlock[] = [];
 
@@ -293,6 +299,21 @@ export function blocksForDay(
       kind: block.isUnavailability ? 'unavailability' : 'appointment',
       label: `${formatMinuteOfDay(positioned.startMin)}–${formatMinuteOfDay(positioned.endMin)}`,
       appointmentId: block.appointmentId,
+    });
+  }
+
+  for (const block of completed) {
+    const positioned = position(day, timeZone, block.start, block.end);
+    if (!positioned) continue;
+
+    blocks.push({
+      key: `completed-${block.occurrenceId}`,
+      title: block.title,
+      ...positioned,
+      cooldownMin: 0,
+      kind: 'completed',
+      label: `${formatMinuteOfDay(positioned.startMin)}–${formatMinuteOfDay(positioned.endMin)}`,
+      taskId: block.taskId,
     });
   }
 

@@ -401,3 +401,51 @@ describe('the windows behind the week on screen', () => {
     expect(windowsForWeek([], BERLIN, 'cal-1', configuration())).toEqual([]);
   });
 });
+
+/**
+ * What was done stays where it was done (spec §3.4, §7.3).
+ *
+ * A completed occurrence is not demand, so the solver never places it and the
+ * derived schedule cannot contain it — correct for scheduling, and the reason
+ * the block used to vanish from the week it was spent in. These arrive beside
+ * the placements rather than among them, because an optimistic client-side
+ * solve would otherwise disagree with the server on every read.
+ */
+describe('blocks that are already finished', () => {
+  const MONDAY = parseCivilDate('2026-03-23');
+
+  const done = {
+    occurrenceId: 'occ-9',
+    taskId: 'task-9',
+    title: 'Wrote the report',
+    categoryId: 'cat-1',
+    start: '2026-03-23T08:00:00.000Z',
+    end: '2026-03-23T09:30:00.000Z',
+    completedAt: '2026-03-23T09:30:00.000Z',
+  };
+
+  it('is positioned by the same local clock as everything else', () => {
+    const [block] = blocksForDay(MONDAY, BERLIN, [], [], [done]);
+
+    expect(block).toMatchObject({ kind: 'completed', startMin: 540, endMin: 630 });
+    expect(block?.taskId).toBe('task-9');
+  });
+
+  it('reserves no cooldown, because the time is already given back', () => {
+    const [block] = blocksForDay(MONDAY, BERLIN, [], [], [done]);
+    expect(block?.cooldownMin).toBe(0);
+  });
+
+  it('sorts among the day rather than after it', () => {
+    // Drawn in clock order with everything else: a finished morning and a
+    // scheduled afternoon read as one day, which is the point of keeping it.
+    const later = task({ start: '2026-03-23T13:00:00.000Z', end: '2026-03-23T14:00:00.000Z' });
+    const blocks = blocksForDay(MONDAY, BERLIN, [later], [], [done]);
+
+    expect(blocks.map((block) => block.kind)).toEqual(['completed', 'task']);
+  });
+
+  it('is absent from a day it does not touch', () => {
+    expect(blocksForDay(parseCivilDate('2026-03-24'), BERLIN, [], [], [done])).toEqual([]);
+  });
+});

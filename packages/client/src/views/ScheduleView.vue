@@ -94,6 +94,19 @@ async function moveBlock(payload: {
   });
 }
 
+/**
+ * Done, from the grid (spec §7.3).
+ *
+ * The block stays where it was rather than disappearing: the placement is
+ * copied onto the occurrence at completion, so the week keeps its record of
+ * what the afternoon was spent on even though the solver has given the slot
+ * back to everything that comes after it.
+ */
+async function completeBlock(block: GridBlock): Promise<void> {
+  if (block.taskId === undefined) return;
+  await submit({ type: 'CompleteTask', params: { taskId: block.taskId } });
+}
+
 async function postponeDay(day: CivilDate): Promise<void> {
   await submit({
     type: 'PostponeRestOfDay',
@@ -204,6 +217,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         :time-zone="zone"
         :blocks="view.schedule.blocks"
         :fixed-blocks="view.fixedBlocks"
+        :completed-blocks="view.completedBlocks"
         :windows="openWindows"
         :day-start-min="dayStartMin"
         :day-end-min="dayEndMin"
@@ -213,6 +227,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         @select-block="editBlock"
         @add-block="(day) => newBlockAt(day)"
         @move-block="moveBlock"
+        @complete-block="completeBlock"
         @postpone-day="postponeDay"
       />
 

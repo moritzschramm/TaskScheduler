@@ -116,3 +116,54 @@ describe('remembering the range', () => {
     }
   });
 });
+
+/**
+ * A handle stays in its lane.
+ *
+ * Reka's `SliderRoot` sorts its pair on every move and follows the *value*
+ * rather than the handle, so dragging the end past the start silently re-labels
+ * them: the gesture continues as a drag of the other end, and "shrink the day
+ * from the evening" becomes "move the morning to midnight". Which end was
+ * grabbed is remembered for the length of the gesture, and the other is held.
+ */
+describe('the two ends do not trade places', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetWorkspace();
+  });
+
+  async function slider() {
+    const wrapper = mount(DayRangeSlider, { attachTo: document.body });
+    await wrapper.vm.$nextTick();
+    return wrapper;
+  }
+
+  it('stops the end beside the start instead of pushing it', async () => {
+    const { setDayRange, dayStartMin, dayEndMin } = useWorkspace();
+    setDayRange(6 * 60, 22 * 60);
+
+    const wrapper = await slider();
+    // Take hold of the last-hour handle, then ask for a value below the first.
+    await wrapper.find('[data-testid="day-range-end"]').trigger('pointerdown');
+    (wrapper.vm as unknown as { hours: number[] }).hours = [2, 6];
+    await wrapper.vm.$nextTick();
+
+    expect(dayStartMin.value).toBe(6 * 60);
+    expect(dayEndMin.value).toBe(7 * 60);
+    wrapper.unmount();
+  });
+
+  it('does the same in the other direction', async () => {
+    const { setDayRange, dayStartMin, dayEndMin } = useWorkspace();
+    setDayRange(6 * 60, 22 * 60);
+
+    const wrapper = await slider();
+    await wrapper.find('[data-testid="day-range-start"]').trigger('pointerdown');
+    (wrapper.vm as unknown as { hours: number[] }).hours = [22, 23];
+    await wrapper.vm.$nextTick();
+
+    expect(dayEndMin.value).toBe(22 * 60);
+    expect(dayStartMin.value).toBe(21 * 60);
+    wrapper.unmount();
+  });
+});

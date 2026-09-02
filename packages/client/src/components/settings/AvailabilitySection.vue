@@ -100,10 +100,16 @@ async function save(): Promise<void> {
 <template>
   <section class="space-y-4" data-testid="availability-section">
     <header>
-      <h2 class="text-lg font-semibold">Availability</h2>
+      <!--
+        "Availability" described the wrong side of the relationship: it reads as
+        the hours a *person* is free, when what these rows decide is the hours
+        the *scheduler* may use — the two differ every time somebody is free at
+        22:00 and has no intention of working then.
+      -->
+      <h2 class="text-lg font-semibold">Scheduling hours</h2>
       <p class="text-muted-foreground text-sm">
-        When each activity type may be scheduled. A week type replaces the default set for its dates
-        rather than adding to it.
+        The hours the scheduler may place this kind of thing in — not simply when you are free. A
+        week type replaces the default set for its dates rather than adding to it.
       </p>
     </header>
 

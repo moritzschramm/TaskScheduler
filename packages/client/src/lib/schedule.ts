@@ -8,6 +8,7 @@ import {
   type BacklogEntry,
   type CalendarSummary,
   type CapacityCell,
+  type CompletedBlock,
   type FixedBlock,
   type Notification,
   type Schedule,
@@ -28,6 +29,8 @@ import { api, expectOk } from './api';
 export interface ScheduleView {
   schedule: Schedule;
   fixedBlocks: FixedBlock[];
+  /** What was done, still drawn where it was done (§3.4, §7.3). */
+  completedBlocks: CompletedBlock[];
 }
 
 export async function fetchCalendars(): Promise<CalendarSummary[]> {

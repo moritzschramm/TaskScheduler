@@ -302,10 +302,34 @@ export type Category = z.infer<typeof categorySchema>;
 export type WeekTypeOverrideEntry = z.infer<typeof weekTypeOverrideSchema>;
 export type CalendarConfiguration = z.infer<typeof calendarConfigurationSchema>;
 
+/**
+ * A task that was completed where it stood (spec §3.4, §7.3).
+ *
+ * **Not part of `Schedule`.** The engine's answer is what it would place *now*,
+ * and a completed occurrence is not demand any more — putting these in
+ * `schedule.blocks` would make the client's optimistic solve disagree with the
+ * server on every read, because the engine cannot produce them and never will.
+ * They ride alongside, like the fixed blocks, and only the grid reads them.
+ */
+export const completedBlockSchema = z.object({
+  occurrenceId: uuid,
+  taskId: uuid,
+  title: z.string(),
+  categoryId: uuid.nullable(),
+  /** Where it sat when it was finished — half-open, like every interval. */
+  start: instant,
+  end: instant,
+  completedAt: instant,
+});
+
+export type CompletedBlock = z.infer<typeof completedBlockSchema>;
+
 export const scheduleResponseSchema = z.object({
   schedule: scheduleSchema,
   /** Appointments and unavailability in the same window, for the same grid. */
   fixedBlocks: z.array(fixedBlockSchema),
+  /** What was done, still drawn where it was done. */
+  completedBlocks: z.array(completedBlockSchema),
 });
 
 export const backlogResponseSchema = z.object({

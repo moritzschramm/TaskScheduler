@@ -247,6 +247,22 @@ export const taskOccurrences = pgTable(
     status: occurrenceStatus('status').notNull().default('pending'),
     completedAt: timestamp('completed_at', { withTimezone: true, mode: 'string' }),
 
+    /**
+     * Where this occurrence sat when it was completed (§3.4, §7.3).
+     *
+     * Copied off the placement cache at completion and kept here, because the
+     * cache is replaced wholesale by every solve: a completed occurrence is no
+     * longer demand, so the next re-derive would place it nowhere and the only
+     * record of an afternoon's work would disappear from the week it was spent
+     * in. "Done, then, there" is a fact about the past, so it lives in source
+     * state rather than in something derived from it.
+     *
+     * Null for a completion that had no placement to record — a task finished
+     * straight out of the backlog, or one completed before this column existed.
+     */
+    completedStart: timestamp('completed_start', { withTimezone: true, mode: 'string' }),
+    completedEnd: timestamp('completed_end', { withTimezone: true, mode: 'string' }),
+
     /** Set when this occurrence carries an earlier period's unmet demand (§8.2). */
     rolledOverFromId: uuid('rolled_over_from_id'),
 
@@ -292,6 +308,16 @@ export const taskOccurrences = pgTable(
       'task_occurrences_completed_at_matches_status',
       sql`(${table.status} = 'completed') = (${table.completedAt} is not null)`,
     ),
+    check(
+      'task_occurrences_completed_interval',
+      sql`(${table.completedStart} is null) = (${table.completedEnd} is null)
+          and (${table.completedStart} is null or ${table.completedStart} < ${table.completedEnd})`,
+    ),
+    check(
+      'task_occurrences_completed_interval_needs_completion',
+      sql`${table.completedStart} is null or ${table.status} = 'completed'`,
+    ),
+    index('task_occurrences_completed_start_idx').on(table.completedStart),
   ],
 );
 

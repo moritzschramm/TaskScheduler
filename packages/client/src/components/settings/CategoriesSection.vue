@@ -98,7 +98,7 @@ async function remove(id: string, version: number): Promise<void> {
 <template>
   <section class="space-y-4" data-testid="categories-section">
     <header>
-      <h2 class="text-lg font-semibold">Activity types</h2>
+      <h2 class="sr-only">Activity types</h2>
       <p class="text-muted-foreground text-sm">
         Shared across every planner you own. The cooldown is protected time after each task of the
         kind, and cannot be compressed.

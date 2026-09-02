@@ -505,7 +505,6 @@ async function complete(): Promise<void> {
         label="Due"
         :inherited="displayDue(inherited?.due ?? null)"
         :hint="`Local to ${timeZone}. A hard due date is enforced; a soft one warns.`"
-        class="sm:col-span-2"
       >
         <div class="flex flex-wrap items-center gap-2">
           <input

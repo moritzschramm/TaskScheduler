@@ -1,10 +1,10 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
 import { deferFloor } from '@ambitime/scheduler';
-import { taskOccurrences } from '../../db/schema/index.js';
+import { placements, taskOccurrences } from '../../db/schema/index.js';
 import { lockTask, type CommandContext, type HandlerOutcome } from '../context.js';
 import { calendarTimeZone, requireActive, requireLeaf } from '../entities.js';
 import { updateRow, updateWhere } from '../journal.js';
-import { toIso } from '../../schedule/instants.js';
+import { isoText, toIso } from '../../schedule/instants.js';
 import type {
   ClearFloorParams,
   CompleteTaskParams,
@@ -114,6 +114,33 @@ export async function deferTask(
 }
 
 /**
+ * The interval the cache currently has for the occurrence about to complete.
+ *
+ * Absent rather than null when there is none: a task finished straight out of
+ * the backlog was never placed, and there is nothing to record about where it
+ * was. Reading the cache is safe here in a way that reading it for an *answer*
+ * would not be (§3.4) — the question is not "where is this scheduled" but
+ * "where was the last solve showing it when the user pressed done", and the
+ * cache is the only thing that knows.
+ */
+async function placementOf(
+  ctx: CommandContext,
+  target: SQL,
+): Promise<{ completedStart?: string; completedEnd?: string }> {
+  const [row] = await ctx.tx
+    .select({
+      start: isoText(sql`lower(${placements.during})`),
+      end: isoText(sql`upper(${placements.during})`),
+    })
+    .from(placements)
+    .innerJoin(taskOccurrences, eq(taskOccurrences.id, placements.occurrenceId))
+    .where(target)
+    .limit(1);
+
+  return row === undefined ? {} : { completedStart: row.start, completedEnd: row.end };
+}
+
+/**
  * `CompleteTask(task, actual_end?)` — done (spec §7.3).
  *
  * The slot and its cooldown are freed by re-derivation rather than by deleting
@@ -124,6 +151,12 @@ export async function deferTask(
  *
  * The floor is cleared here because §7.3 says completion is one of the three
  * things that clears one.
+ *
+ * **Where it was is copied onto the occurrence before it stops being demand.**
+ * Freeing the slot by re-derivation is right for the schedule and wrong for the
+ * week: the block would simply vanish, taking with it the only evidence the
+ * afternoon had been spent. The interval comes off the placement cache, which
+ * still holds the last solve's answer at this point in the transaction.
  */
 export async function completeTask(
   params: CompleteTaskParams,
@@ -160,14 +193,15 @@ export async function completeTask(
     .orderBy(asc(taskOccurrences.periodEnd), asc(taskOccurrences.id))
     .limit(1);
 
-  await updateWhere(
-    ctx,
-    'task_occurrences',
-    recurring
-      ? eq(taskOccurrences.id, earliest?.id ?? task.id)
-      : and(eq(taskOccurrences.taskId, task.id), eq(taskOccurrences.status, 'pending'))!,
-    { status: 'completed', completedAt },
-  );
+  const target = recurring
+    ? eq(taskOccurrences.id, earliest?.id ?? task.id)
+    : and(eq(taskOccurrences.taskId, task.id), eq(taskOccurrences.status, 'pending'))!;
+
+  await updateWhere(ctx, 'task_occurrences', target, {
+    status: 'completed',
+    completedAt,
+    ...(await placementOf(ctx, target)),
+  });
 
   return { calendarIds: [task.calendarId] };
 }

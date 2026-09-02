@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { FixedBlock, ScheduledBlock } from '@ambitime/shared';
+import type { CompletedBlock, FixedBlock, ScheduledBlock } from '@ambitime/shared';
 import type { CivilDate, ResolvedWindow } from '@ambitime/scheduler';
 import {
   blocksForDay,
@@ -22,6 +22,15 @@ const props = withDefaults(
     blocks: ScheduledBlock[];
     fixedBlocks: FixedBlock[];
     /**
+     * What was finished, drawn where it was finished (§3.4, §7.3).
+     *
+     * Separate from `blocks` because the engine cannot produce them: a
+     * completed occurrence is not demand, so a solve that included them would
+     * be answering a different question — and the optimistic client-side solve
+     * would disagree with the server on every single read.
+     */
+    completedBlocks?: CompletedBlock[];
+    /**
      * The hours something may be scheduled in, resolved by the engine (§4.3).
      *
      * Drawn as the lit part of each column. Empty is meaningful and is left to
@@ -40,6 +49,7 @@ const props = withDefaults(
   }>(),
   {
     windows: () => [],
+    completedBlocks: () => [],
     today: null,
     dayStartMin: 6 * 60,
     dayEndMin: 22 * 60,
@@ -51,6 +61,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   selectBlock: [block: GridBlock];
   addBlock: [day: CivilDate];
+  /** Marks a scheduled task done without leaving the week (§7.3). */
+  completeBlock: [block: GridBlock];
   /** A task dropped, or nudged, onto a new local start (spec §7.3, §13). */
   moveBlock: [payload: { block: GridBlock; day: CivilDate; startMin: number }];
   postponeDay: [day: CivilDate];
@@ -84,7 +96,8 @@ function startMinOf(block: GridBlock): number {
 
 function beginDrag(block: GridBlock, day: CivilDate, event: PointerEvent): void {
   // Only task blocks move. An appointment is a fixed block by definition
-  // (§6.2 rule 2); dragging one would be editing it, which the editor does.
+  // (§6.2 rule 2); dragging one would be editing it, which the editor does, and
+  // a completed one is a record of the past, which nothing should move.
   if (!props.editable || block.kind !== 'task') return;
 
   dragOriginY = event.clientY;
@@ -241,7 +254,13 @@ const columns = computed(() =>
     day,
     label: formatDayLabel(day, props.locale),
     isToday: props.today !== null && sameCivilDate(day, props.today),
-    blocks: blocksForDay(day, props.timeZone, props.blocks, props.fixedBlocks),
+    blocks: blocksForDay(
+      day,
+      props.timeZone,
+      props.blocks,
+      props.fixedBlocks,
+      props.completedBlocks,
+    ),
     open: openBandsForDay(day, props.timeZone, props.windows)
       .map((band) => clipBand(band, props.dayStartMin, props.dayEndMin))
       .filter((band): band is DayBand => band !== null),
@@ -278,6 +297,10 @@ function labelFor(block: GridBlock, dayLabel: string): string {
   const when = `${dayLabel}, ${formatMinuteOfDay(block.startMin)} to ${formatMinuteOfDay(block.endMin)}`;
   const kind = block.kind === 'unavailability' ? 'Unavailable' : block.title;
 
+  // Said, not only shown: the strike-through and the fade are invisible to a
+  // screen reader, and "done" is the whole of what distinguishes this block.
+  if (block.kind === 'completed') return `${kind}. Completed. ${when}.`;
+
   if (!props.editable) return `${kind}. ${when}.`;
   if (block.kind !== 'task') return `${kind}. ${when}. Press Enter to open.`;
 
@@ -288,6 +311,11 @@ function labelFor(block: GridBlock, dayLabel: string): string {
 
 function classesFor(block: GridBlock): string {
   if (block.kind === 'task') return 'bg-primary/15 border-primary/40 text-foreground';
+  // Done: drawn faintly, dashed, and struck through in the title. Three signals
+  // rather than one, because colour alone would carry it (WCAG 1.4.1) and
+  // because a faded block on a faded background is easy to miss entirely.
+  if (block.kind === 'completed')
+    return 'border-dashed border-primary/30 bg-primary/[0.06] text-muted-foreground';
   if (block.kind === 'unavailability')
     return 'bg-muted border-muted-foreground/30 text-muted-foreground';
   return 'bg-secondary border-secondary-foreground/30 text-secondary-foreground';
@@ -424,12 +452,39 @@ function classesFor(block: GridBlock): string {
             @keydown.esc.prevent="abandonNudge"
             @click="!isMoving(block) && editable && emit('selectBlock', block)"
           >
-            <p class="truncate font-medium">
+            <p
+              class="truncate font-medium"
+              :class="block.kind === 'completed' ? 'line-through' : ''"
+            >
               <span v-if="block.continuesBefore" aria-hidden="true">↑ </span>{{ block.title
               }}<span v-if="block.continuesAfter" aria-hidden="true"> ↓</span>
             </p>
             <p class="tabular-nums opacity-70">{{ block.label }}</p>
           </component>
+
+          <!--
+            Done, without leaving the week (§7.3).
+
+            A separate button rather than a gesture on the block, because the
+            block already means three things — open it, pick it up, drop it —
+            and completing is the one of the four you cannot take back by
+            putting it down again. Sibling rather than child: a button inside a
+            button is invalid, and the block is a button when editable.
+          -->
+          <button
+            v-for="block in column.blocks.filter((entry) => editable && entry.kind === 'task')"
+            :key="`done-${block.key}`"
+            type="button"
+            class="hover:bg-primary/20 focus-visible:ring-ring absolute z-10 rounded-sm px-1 text-[11px] leading-none focus-visible:ring-2 focus-visible:outline-none"
+            :style="{ top: `${offsetOf(startMinOf(block)) + 2}px`, right: '6px' }"
+            :aria-label="`Complete ${block.title}`"
+            :title="`Complete ${block.title}`"
+            data-testid="complete-block"
+            :data-task-id="block.taskId"
+            @click.stop="emit('completeBlock', block)"
+          >
+            ✓
+          </button>
         </div>
       </div>
     </div>

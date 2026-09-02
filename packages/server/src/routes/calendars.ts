@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { and, eq, isNotNull, or, sql } from 'drizzle-orm';
+import { and, eq, gt, isNotNull, lt, or, sql } from 'drizzle-orm';
 import { computeCapacity, DEFAULT_TUNING } from '@ambitime/scheduler';
-import { appointments, calendars } from '../db/schema/index.js';
+import { appointments, calendars, taskOccurrences, tasks } from '../db/schema/index.js';
 import { requireContext } from '../auth/middleware.js';
 import { withRequestContext } from '../auth/context.js';
 import { toApiFailure, toValidationFailure } from '../api/errors.js';
@@ -90,6 +90,7 @@ export function calendarRoutes(auth: Auth, clock: Clock, retentionDays?: number)
                   window,
                   derived.context.calendars[0]?.timeZone ?? 'UTC',
                 ),
+                completedBlocks: await readCompletedBlocks(tx, calendarId, window),
               };
             });
 
@@ -312,6 +313,60 @@ export function calendarRoutes(auth: Auth, clock: Clock, retentionDays?: number)
  */
 function nowOf(clock: Clock): number {
   return toInstant(clock().toISOString());
+}
+
+/**
+ * What was finished, still drawn where it was finished (spec §3.4, §7.3).
+ *
+ * A completed occurrence is no longer demand, so the solver never sees it and
+ * the derived schedule cannot contain it — which is correct, and is why these
+ * are read separately from source state rather than expected to fall out of a
+ * solve. The interval was copied onto the occurrence by `CompleteTask`; here it
+ * is simply read back for the days on screen.
+ *
+ * Occurrences completed before the column existed, or finished straight out of
+ * the backlog, have no interval and are skipped: there is nowhere to draw them.
+ */
+async function readCompletedBlocks(
+  tx: Transaction,
+  calendarId: string,
+  window: { start: number; end: number },
+) {
+  const rows = await tx
+    .select({
+      occurrenceId: taskOccurrences.id,
+      taskId: tasks.id,
+      title: tasks.title,
+      categoryId: tasks.categoryId,
+      start: isoText(sql`${taskOccurrences.completedStart}`),
+      end: isoText(sql`${taskOccurrences.completedEnd}`),
+      completedAt: isoText(sql`${taskOccurrences.completedAt}`),
+    })
+    .from(taskOccurrences)
+    .innerJoin(tasks, eq(tasks.id, taskOccurrences.taskId))
+    .where(
+      and(
+        eq(tasks.calendarId, calendarId),
+        eq(taskOccurrences.status, 'completed'),
+        isNotNull(taskOccurrences.completedStart),
+        // Overlaps the window, rather than starting in it: a block that began
+        // before the first day on screen and ran into it is still part of that
+        // day and has to be drawn.
+        lt(taskOccurrences.completedStart, sql`to_timestamp(${window.end * 60})`),
+        gt(taskOccurrences.completedEnd, sql`to_timestamp(${window.start * 60})`),
+      ),
+    )
+    .orderBy(taskOccurrences.completedStart);
+
+  return rows.map((row) => ({
+    occurrenceId: row.occurrenceId,
+    taskId: row.taskId,
+    title: row.title,
+    categoryId: row.categoryId,
+    start: row.start!,
+    end: row.end!,
+    completedAt: row.completedAt!,
+  }));
 }
 
 async function readFixedBlocks(
