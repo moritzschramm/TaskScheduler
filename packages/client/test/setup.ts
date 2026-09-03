@@ -41,6 +41,25 @@ class NoopResizeObserver {
 globalThis.ResizeObserver ??= NoopResizeObserver as unknown as typeof ResizeObserver;
 
 /**
+ * jsdom implements pointer *events* but not pointer *capture*.
+ *
+ * Reka's slider claims the pointer on the way down, so every `pointerdown` a
+ * slider test fires threw asynchronously, inside the event dispatch where no
+ * `expect` could see it. The tests passed and the run exited non-zero — the
+ * worst arrangement of the two, because the failure had nothing to do with the
+ * assertions that were being read.
+ *
+ * No-ops rather than a fake: capture routes later events to the captured
+ * element, and the tests dispatch on the element directly, so there is nothing
+ * for a real implementation to change.
+ */
+Element.prototype.setPointerCapture ??= function setPointerCapture(): void {};
+Element.prototype.releasePointerCapture ??= function releasePointerCapture(): void {};
+Element.prototype.hasPointerCapture ??= function hasPointerCapture(): boolean {
+  return false;
+};
+
+/**
  * jsdom 30 exposes no `localStorage`, even on a real origin.
  *
  * The application already treats it as absent-or-throwing — private browsing
