@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useI18n } from '@/i18n';
 import { uuidv7 } from '@ambitime/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,8 @@ import { ApiError } from '@/lib/api';
 import { browserZone } from '@/lib/zones';
 import { createdId, runCommand } from '@/lib/commands';
 import { useWorkspace } from '@/lib/workspace';
+
+const { t } = useI18n();
 
 /**
  * The first thing a new account is asked for (spec §4.3, §6.2 rule 1).
@@ -113,7 +116,7 @@ async function begin(): Promise<void> {
         ? cause.message
         : cause instanceof Error
           ? cause.message
-          : 'That could not be set up';
+          : t('errors.setup');
   } finally {
     busy.value = false;
   }
@@ -123,25 +126,24 @@ async function begin(): Promise<void> {
 <template>
   <section class="max-w-prose space-y-5" data-testid="getting-started">
     <header class="space-y-2">
-      <h2 class="text-lg font-semibold">Let's find some time.</h2>
+      <h2 class="text-lg font-semibold">{{ t('gettingStarted.title') }}</h2>
       <p class="text-muted-foreground text-sm">
-        Tasks are scheduled into the hours you set aside for a <em>kind</em> of activity. Name your
-        first one and say when you are free for it — you can add more, and change these, later.
+        {{ t('gettingStarted.lead', { kind: t('gettingStarted.kindWord') }) }}
       </p>
     </header>
 
     <div class="space-y-1">
-      <Label for="first-category">What kind of activity?</Label>
+      <Label for="first-category">{{ t('gettingStarted.nameLabel') }}</Label>
       <Input
         id="first-category"
         v-model="name"
-        placeholder="Work"
+        :placeholder="t('gettingStarted.namePlaceholder')"
         data-testid="first-category-name"
       />
     </div>
 
     <fieldset class="space-y-2">
-      <legend class="text-sm font-medium">On which days?</legend>
+      <legend class="text-sm font-medium">{{ t('gettingStarted.daysLabel') }}</legend>
       <div class="flex flex-wrap gap-2">
         <label
           v-for="day in WEEKDAYS"
@@ -163,11 +165,11 @@ async function begin(): Promise<void> {
 
     <div class="flex flex-wrap items-end gap-3">
       <div class="space-y-1">
-        <Label for="first-start">From</Label>
+        <Label for="first-start">{{ t('common.from') }}</Label>
         <Input id="first-start" v-model="startTime" type="time" data-testid="first-start" />
       </div>
       <div class="space-y-1">
-        <Label for="first-end">Until</Label>
+        <Label for="first-end">{{ t('common.until') }}</Label>
         <Input id="first-end" v-model="endTime" type="time" data-testid="first-end" />
       </div>
     </div>
@@ -182,7 +184,7 @@ async function begin(): Promise<void> {
     </p>
 
     <Button :disabled="!canSubmit" data-testid="begin" @click="begin">
-      {{ busy ? 'Setting up…' : 'Start scheduling' }}
+      {{ busy ? `${t('gettingStarted.begin')}…` : t('gettingStarted.begin') }}
     </Button>
   </section>
 </template>

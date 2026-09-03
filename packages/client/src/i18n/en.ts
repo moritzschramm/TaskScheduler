@@ -1,0 +1,450 @@
+/**
+ * The interface in English, and the shape every other language must match.
+ *
+ * Keys are named for *where the words appear*, not for the words themselves:
+ * `tasks.empty` rather than `noTasksYet`. A key named after its English text
+ * has to be renamed the day the English changes, and renaming it in one
+ * catalogue and not the other is the failure this file's type exists to catch.
+ *
+ * Nested by area, because that is how they are read and edited — everything a
+ * screen says sits together, so translating one screen means translating one
+ * block rather than hunting through an alphabetical list.
+ *
+ * `{named}` placeholders are substituted by `translate`. Anything with a count
+ * has `one` and `other` beneath it and is reached through `plural`.
+ */
+export const en = {
+  app: {
+    name: 'Ambitime',
+    skipToContent: 'Skip to the main content',
+    mainLandmark: 'Main',
+    history: 'History',
+    settings: 'Settings',
+    signOut: 'Sign out',
+    loading: 'Loading the schedule…',
+    diverged:
+      'The server placed things a little differently from the preview, and its answer is what you are looking at now.',
+  },
+
+  nav: {
+    schedule: 'Schedule',
+    tasks: 'Tasks',
+    categories: 'Activity types',
+    appointments: 'Appointments',
+  },
+
+  verify: {
+    prompt: 'Confirm your email address so Ambitime can reach you when a due date is at risk.',
+    resend: 'Send the link again',
+    sent: 'Sent. Check {email} for the link.',
+    dismiss: 'Not now',
+  },
+
+  auth: {
+    tagline: 'Ambitime schedules your work into the time you have.',
+    email: 'Email',
+    password: 'Password',
+    signIn: 'Sign in',
+    signInTitle: 'Sign in',
+    forgot: 'Forgot it?',
+    noAccount: 'No account yet?',
+    createOne: 'Create one',
+    signUpTitle: 'Create an account',
+    name: 'Name',
+    nameHint: 'Optional. It is what colleagues will see.',
+    passwordHint: 'At least {count} characters.',
+    haveOne: 'Already have one?',
+    createAccount: 'Create account',
+    forgotTitle: 'Reset your password',
+    forgotLead: 'We will email you a link that lets you choose a new one.',
+    forgotSent:
+      'If {email} has an Ambitime account, a link is on its way. It works once, and for an hour.',
+    forgotNothing: 'Nothing arrived? Check the spam folder, then',
+    tryAnother: 'try a different address',
+    backToSignIn: 'Back to sign in',
+    remembered: 'Remembered it?',
+    emailMeALink: 'Email me a link',
+    resetTitle: 'Choose a new password',
+    resetLead: 'Signing in on your other devices will need the new one.',
+    resetExpired:
+      'That link has expired or has already been used. Reset links work once, and for an hour.',
+    sendNewLink: 'Send me a new link',
+    newPassword: 'New password',
+    setNewPassword: 'Set new password',
+    verifiedTitle: 'Your email is confirmed',
+    verifiedLead:
+      'Ambitime can reach you now — a due date at risk, or an appointment somebody moved.',
+    openSchedule: 'Open my schedule',
+    verifyFailed: 'That link did not work',
+    verifySent: 'Sent. Check {email} for a new link.',
+  },
+  common: {
+    close: 'Close',
+    cancel: 'Cancel',
+    save: 'Save',
+    add: 'Add',
+    remove: 'Remove',
+    delete: 'Delete',
+    clear: 'Clear',
+    name: 'Name',
+    title: 'Title',
+    notes: 'Notes',
+    from: 'From',
+    until: 'Until',
+    none: 'None',
+    notSet: 'Not set',
+    undo: 'Undo',
+    redo: 'Redo',
+    previous: 'Previous',
+    next: 'Next',
+    unavailable: 'Unavailable',
+  },
+
+  gettingStarted: {
+    title: "Let's find some time.",
+    lead: 'Tasks are scheduled into the hours you set aside for a {kind} of activity. Name your first one and say when you are free for it — you can add more, and change these, later.',
+    kindWord: 'kind',
+    nameLabel: 'What kind of activity?',
+    namePlaceholder: 'Work',
+    daysLabel: 'On which days?',
+    begin: 'Get started',
+  },
+
+  schedule: {
+    title: 'Schedule',
+    newTask: 'New task',
+    noWindowsTitle: 'Nothing can be scheduled in this week.',
+    noWindowsBody:
+      'No availability window falls in it, so the engine has nowhere to put anything — the whole week below is closed. Scheduling hours are set per activity type.',
+    noWindowsAction: 'Set up scheduling hours',
+    elsewhere: {
+      one: '{count} task is scheduled outside this week',
+      other: '{count} tasks are scheduled outside this week',
+    },
+    unschedulable: {
+      one: '{count} task is not being scheduled',
+      other: '{count} tasks are not being scheduled',
+    },
+    reason: {
+      noCategory: 'needs an activity type before a window can apply to it',
+      noDuration: 'needs an estimate before there is anything to fit',
+    },
+  },
+
+  tasks: {
+    title: 'Tasks',
+    newTask: 'New task',
+    empty: 'No tasks yet.',
+    subtask: 'Subtask',
+    addSubtask: 'Add a subtask',
+    addSubtaskTo: 'Add a subtask to {title}',
+    depthCapped: 'Tasks can nest five deep at most',
+    ungrouped: 'No activity type',
+    unknownGroup: 'Unknown activity type',
+    footnote:
+      'Grouped by activity type. Values shown in italics are inherited from an ancestor. Tasks nest five deep at most.',
+    column: {
+      task: 'Task',
+      status: 'Status',
+      estimate: 'Estimate',
+      priority: 'Priority',
+      due: 'Due',
+      actions: 'Actions',
+    },
+    leaf: 'leaf',
+    parent: 'parent',
+  },
+
+  backlog: {
+    title: 'Backlog',
+    empty: 'Everything fits inside the horizon.',
+    weekOf: 'week of {week}',
+    noWeek: 'no week',
+    reason: {
+      capacity: 'No room left in the horizon',
+      noWindow: 'No availability window for its category',
+      deadline: 'Its deadline falls before any free slot',
+      deferred: 'Deferred past the horizon',
+      noSpan: 'No single stretch long enough',
+      sequence: 'Its sequence cannot share one window',
+    },
+  },
+
+  capacity: {
+    title: 'Capacity',
+    empty: 'No categories have scheduling hours in this horizon.',
+    thisWeek: 'This week',
+    nextWeek: 'Next week',
+    weekOf: 'Week of {week}',
+    unknown: 'Unknown',
+    noContiguous: 'Enough total time, but no unbroken run long enough for a sequence here.',
+  },
+
+  notifications: {
+    title: 'Needs attention',
+    empty: 'Nothing needs your attention.',
+    dismiss: 'Dismiss',
+    dismissAll: 'Dismiss all',
+  },
+
+  calendar: {
+    view: 'Calendar view',
+    week: 'week',
+    month: 'month',
+    plannerZone: '(planner is {zone})',
+    firstHour: 'First hour shown',
+    lastHour: 'Last hour shown',
+    blockDay: 'Block out {day}',
+    blockDayHint: 'Mark the whole day unavailable — anything scheduled moves',
+    completeBlock: 'Mark {title} done',
+    showWeekOf: 'Show the week of {day}',
+    more: '+{count} more',
+    pastHorizon: 'Beyond the scheduling horizon; work for this day is still in the backlog.',
+    movedTo: '{title} moved to {time}.',
+    pickedUp:
+      '{title} picked up. Use the arrow keys to move it, Enter to drop it, Escape to cancel.',
+    putBack: '{title} put back.',
+    moveCancelled: 'Move cancelled.',
+    completed: 'Completed',
+  },
+
+  appointments: {
+    addBlock: 'Add block',
+    saveBlock: 'Save block',
+    title: 'Appointments',
+    newBlock: 'New appointment',
+    lead: 'Time that is already spoken for: meetings, and hours you are simply not available. Tasks are scheduled around these, and are drawn on the Schedule.',
+    editorNew: 'New appointment',
+    editorEdit: 'Edit appointment',
+    editorEditUnavailability: 'Edit unavailability',
+    lead2: 'Tasks are scheduled around fixed blocks, never through them.',
+    kindLegend: 'Kind of block',
+    kindAppointment: 'Appointment',
+    kindUnavailability: 'Unavailable',
+    untitledNote: 'An unavailable block carries no title — it only says the time is taken.',
+    starts: 'Starts',
+    ends: 'Ends',
+    repeats: 'Repeats',
+    howOften: 'How often',
+    daily: 'every day',
+    weekly: 'every week, on this weekday',
+    monthly: 'every month',
+    whenItStops: 'When it stops',
+    endsNever: 'with no end',
+    endsAfter: 'for a number of times',
+    endsOn: 'until a date',
+    howManyTimes: 'How many times',
+    lastDay: 'Last day it happens',
+    inclusive: 'Includes the day you name.',
+    scopeLegend: 'This change applies to',
+    scopeOccurrence: 'only this occurrence',
+    scopeFuture: 'this and all future occurrences',
+    scopeSeries: 'every occurrence, past ones included',
+    localTo: 'Local to {zone}.',
+    backwards: 'A block must end after it starts.',
+    removeBlock: 'Remove block',
+  },
+
+  categories: {
+    title: 'Activity types',
+    lead: 'An activity type is a kind of thing you do — work, exercise, errands — and the hours you are willing to do it in. Every task belongs to one, and those hours are the only times it can be scheduled.',
+    emptyHint: 'Add an activity type above, then give it the hours it may be scheduled in.',
+    shared:
+      'Shared across every planner you own. The cooldown is protected time after each task of the kind, and cannot be compressed. Changes save themselves.',
+    cooldown: 'Cooldown (min)',
+    namePlaceholder: 'Exercise',
+    newName: 'New activity type name',
+    newCooldown: 'New activity type cooldown',
+    nameOf: 'Name of {name}',
+    cooldownOf: 'Cooldown for {name}',
+    deleteNamed: 'Delete {name}',
+  },
+
+  hours: {
+    title: 'Scheduling hours',
+    lead: 'The hours the scheduler may place this kind of thing in — not simply when you are free. A special week replaces the default set for its dates rather than adding to it. Changes save themselves.',
+    needCategory: 'Add an activity type first — scheduling hours belong to one.',
+    activityType: 'Activity type',
+    specialWeek: 'Special week',
+    ordinaryWeeks: 'Ordinary weeks',
+    emptyMeansNever: 'An empty week means this activity type is never scheduled here.',
+    localTo: 'Times are local to {zone}.',
+    addRange: 'Add range',
+    unavailable: 'Unavailable',
+    backwards: 'Ends before it starts',
+    anyFocus: 'Any focus',
+    startOf: '{day} start time',
+    endOf: '{day} end time',
+    focusOf: '{day} focus level',
+    removeRange: 'Remove {day} {time} range',
+  },
+
+  specialWeeks: {
+    title: 'Special weeks',
+    lead: 'A stretch of dates whose hours replace your usual ones — a holiday, a conference, a week working elsewhere. A new one has no hours yet, so its dates are unavailable until you give it some on Activity types. The end date is the first day back, and changes save themselves.',
+    namePlaceholder: 'Conference',
+    newName: 'New special week name',
+    newStart: 'New special week start',
+    newEnd: 'New special week end',
+    startOf: 'Start of {name}',
+    endOf: 'End of {name}',
+  },
+
+  settings: {
+    title: 'Settings',
+    back: 'Back to the schedule',
+    loading: 'Loading the settings…',
+    plannerLabel: 'Planner',
+    createTitle: 'Create a planner',
+    createLead:
+      'A planner is one self-contained world to schedule in: its own time zone, its own hours, its own tasks. Most people need only one. Tasks, hours and special weeks are separate per planner, activity types are shared.',
+    create: 'Create planner',
+    addAnother: 'Add another planner',
+    addAnotherLead:
+      'Tasks, hours and special weeks are separate per planner, activity types are shared.',
+    plannerHeading: 'Planner',
+    plannerLead:
+      'One self-contained world to schedule in — its own time zone, its own hours, its own categories and tasks. Most people need only one.',
+    readOnly: 'This planner belongs to someone else, so its settings are read-only.',
+    timeZone: 'Time zone',
+    visibility: 'Visible to',
+    visibilityPrivate: 'Only me',
+    visibilityTeam: 'My team',
+    visibilityGroup: 'My group',
+    workingWindow: 'Working window (optional)',
+    workingWindowLead:
+      'A ceiling over every activity type in this planner — set it only if there are hours you never want used whatever the type says. Leave it empty and nothing is restricted.',
+    shareableWindow: 'Shareable window (optional)',
+    shareableWindowLead:
+      'What other people would see as busy once this planner is shared. It has no effect on your own scheduling, and none at all while you are the only person here.',
+    display: {
+      title: 'Dates, times and language',
+      lead: 'How things are shown to you, saved as you change them. Scheduling itself follows each planner’s own zone, so changing these moves nothing.',
+      locale: 'Language and formats',
+      useBrowser: "Use my browser's",
+      timeZone: 'Time zone',
+      followPlanner: 'Follow each planner ({zone})',
+      firstDay: 'Weeks start on',
+      preview: 'Preview',
+      weekStartsOn: 'Weeks start on {day}.',
+      languageNote:
+        'The interface is available in English and German. Any other choice changes dates and numbers only.',
+    },
+  },
+
+  history: {
+    title: 'History',
+    back: 'Back to the schedule',
+    keptForever: 'Everything that has ever been done here is kept.',
+    keptFor: 'Kept for {days} days. Anything older has been removed, and cannot be undone.',
+    empty: 'Nothing has been done here yet.',
+    loadError: 'Could not load the history',
+    showOlder: 'Show older',
+    grouped: 'grouped',
+    notCounted: 'Recorded before this was counted',
+    column: {
+      what: 'What',
+      who: 'Who',
+      when: 'When',
+      affected: 'Tasks affected',
+    },
+  },
+
+  editor: {
+    newSubtask: 'New subtask',
+    createTask: 'Create task',
+    saveTask: 'Save task',
+    newTask: 'New task',
+    editTask: 'Edit task',
+    inside: 'Inside {title}',
+    hasChildren:
+      'This task has subtasks, so it is not scheduled itself — its duration and completion roll up from them.',
+    estimate: 'Estimate (minutes)',
+    activityType: 'Activity type',
+    sameAsParent: 'Same as {title}',
+    inherited: 'Inherited',
+    noneYet: 'There are none yet.',
+    addOne: 'Add one and give it some hours',
+    cannotSchedule: '— a task cannot be scheduled without one.',
+    focus: 'Focus level',
+    priority: 'Priority',
+    cooldown: 'Cooldown in minutes',
+    due: 'Due date and time',
+    dueKind: 'How the due date is enforced',
+    soft: 'Soft',
+    hard: 'Hard',
+    preferredStart: 'Preferred start',
+    preferredEnd: 'Preferred end',
+    repeats: 'Repeats',
+    recurring: 'Recurring',
+    thisRecurs: 'This task recurs',
+    timesPer: 'times per',
+    timesPerPeriod: 'Times per period',
+    period: 'Period',
+    day: 'day',
+    week: 'week',
+    month: 'month',
+    ifMissed: 'If a period is missed:',
+    missedPolicy: 'Missed period policy',
+    rollover: 'carry it over',
+    expire: 'let it go',
+    demandNote:
+      'This is a demand rule, not a time: each period gets that many occurrences, scheduled wherever they fit. An appointment is a different thing and repeats at a fixed time.',
+    complete: 'Complete',
+    cancelTask: 'Cancel task',
+    setValue: 'Set a value',
+    useInherited: 'Use inherited',
+    inheritedValue: 'Inherited: {value}',
+  },
+
+  actions: {
+    title: 'Scheduling',
+    notBefore: 'Not before {time}',
+    clearFloor: 'Forget the not-before this task picked up when it was moved',
+    notPlaced: 'This task is not on the calendar in this horizon, so there is nothing to move yet.',
+    exactStart: 'Exact start',
+    move: 'Move',
+    nudge: 'Nudge:',
+    earlier: 'Move 15 minutes earlier',
+    later: 'Move 15 minutes later',
+    dragNote:
+      'Dragging snaps to 15 minutes; these do the same without dragging, and the field above takes any minute. Either way a task is delayed, not pinned — it will not go earlier than this, but it may still go later.',
+    notNow: 'Not now:',
+    tomorrow: 'Tomorrow',
+    nextWeek: 'Next week',
+    backlog: 'Backlog',
+    somethingElse: 'Something else first',
+    somethingElseHint: 'Push this task to its next feasible slot and pull the next task forward',
+    newEstimate: 'New estimate (minutes)',
+    takingLonger: 'It is taking longer',
+    swapWith: 'Swap with',
+    chooseTask: 'Choose a task…',
+    swap: 'Swap',
+    swapHint: "Exchange times if each fits the other's constraints; otherwise this task moves on",
+  },
+
+  focus: {
+    veryLow: 'Very low focus',
+    low: 'Low focus',
+    medium: 'Medium focus',
+    high: 'High focus',
+    veryHigh: 'Very high focus',
+  },
+
+  errors: {
+    schedule: 'Could not load the schedule',
+    settings: 'Could not load the settings',
+    command: 'That change could not be applied',
+    calendar: 'That planner could not be created',
+    setup: 'That could not be set up',
+  },
+};
+
+/**
+ * Deliberately not `as const`.
+ *
+ * With it, every value's type is its own English text, and a German catalogue
+ * typed as `Messages` fails to assign — the check would enforce that the
+ * translations *are the English strings*, which is the opposite of the point.
+ * Widened, the type carries the shape and the keys, which is what has to match.
+ */

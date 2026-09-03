@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
+import { useI18n } from '@/i18n';
 import { useAutosave } from '@/lib/autosave';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
+
+const { t } = useI18n();
 
 /**
  * Special weeks — a holiday, a conference week, parental leave (spec §4.3).
@@ -129,21 +132,21 @@ async function remove(id: string, version: number): Promise<void> {
 <template>
   <section class="space-y-4" data-testid="overrides-section">
     <header>
-      <h2 class="text-lg font-semibold">Special weeks</h2>
+      <h2 class="text-lg font-semibold">{{ t('specialWeeks.title') }}</h2>
       <p class="text-muted-foreground text-sm">
-        A stretch of dates whose hours replace your usual ones — a holiday, a conference, a week
-        working elsewhere. A new one has no hours yet, so its dates are unavailable until you give
-        it some on Activity types. The end date is the first day back, and changes save themselves.
+        {{ t('specialWeeks.lead') }}
       </p>
     </header>
 
     <table class="w-full text-sm">
       <thead class="text-muted-foreground text-left text-xs">
         <tr>
-          <th class="pb-2 font-medium">Name</th>
-          <th class="pb-2 font-medium">From</th>
-          <th class="pb-2 font-medium">Until</th>
-          <th class="pb-2"><span class="sr-only">Actions</span></th>
+          <th class="pb-2 font-medium">{{ t('common.name') }}</th>
+          <th class="pb-2 font-medium">{{ t('common.from') }}</th>
+          <th class="pb-2 font-medium">{{ t('common.until') }}</th>
+          <th class="pb-2">
+            <span class="sr-only">{{ t('tasks.column.actions') }}</span>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -158,7 +161,7 @@ async function remove(id: string, version: number): Promise<void> {
               v-if="drafts.get(override.id)"
               v-model="drafts.get(override.id)!.name"
               :disabled="readOnly"
-              :aria-label="`Name of ${override.name}`"
+              :aria-label="t('categories.nameOf', { name: override.name })"
               data-testid="override-name"
               @input="edited(override.id)"
             />
@@ -169,7 +172,7 @@ async function remove(id: string, version: number): Promise<void> {
               v-model="drafts.get(override.id)!.startDate"
               type="date"
               :disabled="readOnly"
-              :aria-label="`Start of ${override.name}`"
+              :aria-label="t('specialWeeks.startOf', { name: override.name })"
               @input="edited(override.id)"
             />
           </td>
@@ -179,7 +182,7 @@ async function remove(id: string, version: number): Promise<void> {
               v-model="drafts.get(override.id)!.endDate"
               type="date"
               :disabled="readOnly"
-              :aria-label="`End of ${override.name}`"
+              :aria-label="t('specialWeeks.endOf', { name: override.name })"
               @input="edited(override.id)"
             />
           </td>
@@ -189,11 +192,11 @@ async function remove(id: string, version: number): Promise<void> {
                 variant="ghost"
                 size="sm"
                 :disabled="readOnly || busy || autosave.busy.value"
-                :aria-label="`Delete ${override.name}`"
+                :aria-label="t('categories.deleteNamed', { name: override.name })"
                 data-testid="delete-override"
                 @click="remove(override.id, override.version)"
               >
-                Delete
+                {{ t('common.delete') }}
               </Button>
             </div>
           </td>
@@ -201,17 +204,17 @@ async function remove(id: string, version: number): Promise<void> {
 
         <tr class="border-t">
           <td class="py-2 pr-3">
-            <Label for="new-override-name" class="sr-only">New special week name</Label>
+            <Label for="new-override-name" class="sr-only">{{ t('specialWeeks.newName') }}</Label>
             <Input
               id="new-override-name"
               v-model="fresh.name"
-              placeholder="Conference"
+              :placeholder="t('specialWeeks.namePlaceholder')"
               :disabled="readOnly"
               data-testid="new-override-name"
             />
           </td>
           <td class="py-2 pr-3">
-            <Label for="new-override-start" class="sr-only">New special week start</Label>
+            <Label for="new-override-start" class="sr-only">{{ t('specialWeeks.newStart') }}</Label>
             <Input
               id="new-override-start"
               v-model="fresh.startDate"
@@ -221,7 +224,7 @@ async function remove(id: string, version: number): Promise<void> {
             />
           </td>
           <td class="py-2 pr-3">
-            <Label for="new-override-end" class="sr-only">New special week end</Label>
+            <Label for="new-override-end" class="sr-only">{{ t('specialWeeks.newEnd') }}</Label>
             <Input
               id="new-override-end"
               v-model="fresh.endDate"
@@ -237,7 +240,7 @@ async function remove(id: string, version: number): Promise<void> {
               data-testid="add-override"
               @click="create"
             >
-              Add
+              {{ t('common.add') }}
             </Button>
           </td>
         </tr>

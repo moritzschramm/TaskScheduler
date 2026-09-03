@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useI18n } from '@/i18n';
 import { SliderRange, SliderRoot, SliderThumb, SliderTrack } from 'reka-ui';
 import { formatMinuteOfDay } from '@/lib/time';
 import { useWorkspace } from '@/lib/workspace';
@@ -80,6 +81,8 @@ function apply(next: readonly number[]): void {
 
   setDayRange(low * 60, high * 60);
 }
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -102,7 +105,7 @@ function apply(next: readonly number[]): void {
       </SliderTrack>
       <SliderThumb
         class="border-primary bg-background focus-visible:ring-ring block size-3 rounded-full border-2 focus-visible:ring-2 focus-visible:outline-none"
-        aria-label="First hour shown"
+        :aria-label="t('calendar.firstHour')"
         :aria-valuetext="formatMinuteOfDay(dayStartMin)"
         data-testid="day-range-start"
         @pointerdown="grab('start')"
@@ -110,7 +113,7 @@ function apply(next: readonly number[]): void {
       />
       <SliderThumb
         class="border-primary bg-background focus-visible:ring-ring block size-3 rounded-full border-2 focus-visible:ring-2 focus-visible:outline-none"
-        aria-label="Last hour shown"
+        :aria-label="t('calendar.lastHour')"
         :aria-valuetext="formatMinuteOfDay(dayEndMin)"
         data-testid="day-range-end"
         @pointerdown="grab('end')"

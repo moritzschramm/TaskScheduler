@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useI18n } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +10,8 @@ import InheritedField from './InheritedField.vue';
 import { FOCUS_LEVELS, focusLabel } from '@/lib/focus';
 import { formatMinuteOfDay, fromLocalInput, parseMinuteOfDay, toLocalInput } from '@/lib/time';
 import type { Category, CommandRequest, TaskNode } from '@ambitime/shared';
+
+const { t } = useI18n();
 
 /**
  * Every property spec §4.4 gives a task, editable.
@@ -389,30 +392,31 @@ async function complete(): Promise<void> {
   <section class="space-y-5" data-testid="task-editor">
     <header class="space-y-1">
       <h2 class="text-lg font-semibold">
-        {{ isCreate ? (parent ? 'New subtask' : 'New task') : 'Edit task' }}
+        {{
+          isCreate ? (parent ? t('editor.newSubtask') : t('editor.newTask')) : t('editor.editTask')
+        }}
       </h2>
       <p v-if="parent" class="text-muted-foreground text-sm" data-testid="editor-parent">
-        Inside <span class="font-medium">{{ parent.title }}</span>
+        {{ t('editor.inside', { title: parent.title }) }}
       </p>
       <p v-if="task && !task.isLeaf" class="text-muted-foreground text-sm">
-        This task has subtasks, so it is not scheduled itself — its duration and completion roll up
-        from them.
+        {{ t('editor.hasChildren') }}
       </p>
     </header>
 
     <div class="grid gap-4 sm:grid-cols-2">
       <div class="space-y-1 sm:col-span-2">
-        <Label for="task-title">Title</Label>
+        <Label for="task-title">{{ t('common.title') }}</Label>
         <Input id="task-title" v-model="draft.title" data-testid="task-title" />
       </div>
 
       <div class="space-y-1 sm:col-span-2">
-        <Label for="task-notes">Notes</Label>
+        <Label for="task-notes">{{ t('common.notes') }}</Label>
         <Input id="task-notes" v-model="draft.notes" data-testid="task-notes" />
       </div>
 
       <div class="space-y-1">
-        <Label for="task-estimate">Estimate (minutes)</Label>
+        <Label for="task-estimate">{{ t('editor.estimate') }}</Label>
         <Input
           id="task-estimate"
           v-model="draft.estimate"
@@ -431,7 +435,7 @@ async function complete(): Promise<void> {
         appears only when there is an ancestor to inherit from.
       -->
       <div class="space-y-1.5" data-testid="field-category">
-        <Label for="task-category">Activity type</Label>
+        <Label for="task-category">{{ t('editor.activityType') }}</Label>
         <Select
           id="task-category"
           v-model="draft.category"
@@ -439,8 +443,10 @@ async function complete(): Promise<void> {
           data-testid="task-category"
         >
           <option v-if="inheritedCategoryId !== null" value="">
-            <template v-if="parent">Same as {{ parent.title }}</template>
-            <template v-else>Inherited</template>
+            <template v-if="parent">{{
+              t('editor.sameAsParent', { title: parent.title })
+            }}</template>
+            <template v-else>{{ t('editor.inherited') }}</template>
             ({{ inheritedCategoryName }})
           </option>
           <option v-for="category in categories" :key="category.id" :value="category.id">
@@ -452,11 +458,11 @@ async function complete(): Promise<void> {
           class="text-muted-foreground text-xs"
           data-testid="no-categories-yet"
         >
-          There are none yet.
+          {{ t('editor.noneYet') }}
           <RouterLink class="underline underline-offset-4" to="/categories">
-            Add one and give it some hours
+            {{ t('editor.addOne') }}
           </RouterLink>
-          — a task cannot be scheduled without one.
+          {{ t('editor.cannotSchedule') }}
         </p>
       </div>
 
@@ -466,9 +472,13 @@ async function complete(): Promise<void> {
         :inherited="inherited?.focus == null ? null : focusLabel(inherited.focus)"
         hint="Matched against the focus a window is meant for."
       >
-        <Select v-model="draft.focus.value" aria-label="Focus level" data-testid="task-focus">
+        <Select
+          v-model="draft.focus.value"
+          :aria-label="t('editor.focus')"
+          data-testid="task-focus"
+        >
           <option v-for="level in FOCUS_LEVELS" :key="level.value" :value="String(level.value)">
-            {{ level.label }}
+            {{ t(level.label) }}
           </option>
         </Select>
       </InheritedField>
@@ -481,7 +491,7 @@ async function complete(): Promise<void> {
         <Input
           v-model="draft.priority.value"
           type="number"
-          aria-label="Priority"
+          :aria-label="t('editor.priority')"
           data-testid="task-priority"
         />
       </InheritedField>
@@ -496,7 +506,7 @@ async function complete(): Promise<void> {
           v-model="draft.cooldown.value"
           type="number"
           min="0"
-          aria-label="Cooldown in minutes"
+          :aria-label="t('editor.cooldown')"
           data-testid="task-cooldown"
         />
       </InheritedField>
@@ -511,17 +521,17 @@ async function complete(): Promise<void> {
             v-model="draft.due.value"
             type="datetime-local"
             class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-            aria-label="Due date and time"
+            :aria-label="t('editor.due')"
             data-testid="task-due"
           />
           <Select
             v-model="draft.due.kind"
             class="h-9 w-32"
-            aria-label="How the due date is enforced"
+            :aria-label="t('editor.dueKind')"
             data-testid="task-due-kind"
           >
-            <option value="soft">Soft</option>
-            <option value="hard">Hard</option>
+            <option value="soft">{{ t('editor.soft') }}</option>
+            <option value="hard">{{ t('editor.hard') }}</option>
           </Select>
         </div>
         <p v-if="dueConflict" class="text-destructive text-sm" data-testid="due-conflict">
@@ -541,7 +551,7 @@ async function complete(): Promise<void> {
             v-model="draft.preferred.start"
             type="time"
             class="border-input bg-background h-9 rounded-md border px-2 text-sm"
-            aria-label="Preferred start"
+            :aria-label="t('editor.preferredStart')"
             data-testid="task-preferred-start"
           />
           <span class="text-muted-foreground text-sm">to</span>
@@ -549,7 +559,7 @@ async function complete(): Promise<void> {
             v-model="draft.preferred.end"
             type="time"
             class="border-input bg-background h-9 rounded-md border px-2 text-sm"
-            aria-label="Preferred end"
+            :aria-label="t('editor.preferredEnd')"
             data-testid="task-preferred-end"
           />
         </div>
@@ -558,12 +568,12 @@ async function complete(): Promise<void> {
 
     <section class="space-y-2 border-t pt-4" data-testid="recurrence-field">
       <div class="flex items-center justify-between gap-3">
-        <Label>Repeats</Label>
+        <Label>{{ t('editor.repeats') }}</Label>
         <label class="text-muted-foreground flex items-center gap-2 text-xs">
-          <span>Recurring</span>
+          <span>{{ t('editor.recurring') }}</span>
           <Switch
             v-model="draft.recurrence.on"
-            aria-label="This task recurs"
+            :aria-label="t('editor.thisRecurs')"
             data-testid="recurrence-toggle"
           />
         </label>
@@ -576,58 +586,56 @@ async function complete(): Promise<void> {
             type="number"
             min="1"
             class="w-20"
-            aria-label="Times per period"
+            :aria-label="t('editor.timesPerPeriod')"
             data-testid="recurrence-count"
           />
-          <span class="text-muted-foreground text-sm">times per</span>
+          <span class="text-muted-foreground text-sm">{{ t('editor.timesPer') }}</span>
           <Select
             v-model="draft.recurrence.period"
             class="w-32"
-            aria-label="Period"
+            :aria-label="t('editor.period')"
             data-testid="recurrence-period"
           >
-            <option value="day">day</option>
-            <option value="week">week</option>
-            <option value="month">month</option>
+            <option value="day">{{ t('editor.day') }}</option>
+            <option value="week">{{ t('editor.week') }}</option>
+            <option value="month">{{ t('editor.month') }}</option>
           </Select>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <span class="text-muted-foreground text-sm">If a period is missed:</span>
+          <span class="text-muted-foreground text-sm">{{ t('editor.ifMissed') }}</span>
           <Select
             v-model="draft.recurrence.missedPolicy"
             class="w-44"
-            aria-label="Missed period policy"
+            :aria-label="t('editor.missedPolicy')"
             data-testid="recurrence-missed"
           >
-            <option value="rollover">carry it over</option>
-            <option value="expire">let it go</option>
+            <option value="rollover">{{ t('editor.rollover') }}</option>
+            <option value="expire">{{ t('editor.expire') }}</option>
           </Select>
         </div>
 
         <p class="text-muted-foreground text-xs">
-          This is a demand rule, not a time: each period gets that many occurrences, scheduled
-          wherever they fit inside it. A recurring <em>appointment</em> is a different thing and
-          repeats at a fixed time.
+          {{ t('editor.demandNote') }}
         </p>
       </template>
     </section>
 
     <div class="flex flex-wrap items-center gap-2">
       <Button :disabled="!canSave" data-testid="save-task" @click="save">
-        {{ isCreate ? 'Create task' : 'Save task' }}
+        {{ isCreate ? t('editor.createTask') : t('editor.saveTask') }}
       </Button>
       <Button variant="ghost" :disabled="busy" data-testid="cancel-edit" @click="emit('cancel')">
-        Cancel
+        {{ t('common.cancel') }}
       </Button>
 
       <template v-if="task && task.status === 'active'">
         <span class="grow" />
         <Button variant="outline" :disabled="busy" data-testid="complete-task" @click="complete">
-          Complete
+          {{ t('editor.complete') }}
         </Button>
         <Button variant="ghost" :disabled="busy" data-testid="delete-task" @click="cancelTask">
-          Cancel task
+          {{ t('editor.cancelTask') }}
         </Button>
       </template>
     </div>

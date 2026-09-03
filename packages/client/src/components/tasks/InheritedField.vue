@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from '@/i18n';
 import { Label } from '@/components/ui/label';
+
+const { t } = useI18n();
 
 /**
  * One inheritable property of spec §4.4, in all three of its states.
@@ -39,8 +42,10 @@ const overridden = defineModel<boolean>('overridden', { required: true });
 const slug = computed(() => props.label.toLowerCase().replace(/\s+/g, '-'));
 
 const action = computed(() => {
-  if (!overridden.value) return 'Set a value';
-  return props.inherited === null || props.inherited === undefined ? 'Clear' : 'Use inherited';
+  if (!overridden.value) return t('editor.setValue');
+  return props.inherited === null || props.inherited === undefined
+    ? t('common.clear')
+    : t('editor.useInherited');
 });
 </script>
 
@@ -65,9 +70,9 @@ const action = computed(() => {
 
     <p v-else class="text-muted-foreground text-sm" data-testid="inherited-value">
       <template v-if="inherited !== null && inherited !== undefined">
-        Inherited: <span class="italic">{{ inherited }}</span>
+        <span class="italic">{{ t('editor.inheritedValue', { value: String(inherited) }) }}</span>
       </template>
-      <template v-else>Not set</template>
+      <template v-else>{{ t('common.notSet') }}</template>
     </p>
 
     <p v-if="hint" class="text-muted-foreground text-xs">{{ hint }}</p>

@@ -8,6 +8,7 @@ import {
   DialogRoot,
   DialogTitle,
 } from 'reka-ui';
+import { useI18n } from '@/i18n';
 
 /**
  * A modal, from Reka UI rather than from first principles.
@@ -29,6 +30,8 @@ defineProps<{
   title: string;
   description?: string;
 }>();
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -53,7 +56,7 @@ defineProps<{
         <!-- Escape closes it too, but only for people who know that. -->
         <DialogClose
           class="text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute top-3 right-3 rounded-md px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
-          aria-label="Close"
+          :aria-label="t('common.close')"
           data-testid="dialog-close"
         >
           ✕

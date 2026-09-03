@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import type { CommandRequest, HistoryView } from '@ambitime/shared';
 
@@ -30,6 +31,8 @@ function readable(types: string[] | null | undefined): string | null {
 
 const undoLabel = computed(() => readable(props.history?.undoable));
 const redoLabel = computed(() => readable(props.history?.redoable));
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -38,21 +41,21 @@ const redoLabel = computed(() => readable(props.history?.redoable));
       variant="ghost"
       size="sm"
       :disabled="undoLabel === null"
-      :title="undoLabel === null ? 'Nothing to undo' : `Undo: ${undoLabel}`"
+      :title="undoLabel === null ? t('common.undo') : `${t('common.undo')}: ${undoLabel}`"
       data-testid="undo"
       @click="submit({ type: 'Undo', params: {} })"
     >
-      Undo
+      {{ t('common.undo') }}
     </Button>
     <Button
       variant="ghost"
       size="sm"
       :disabled="redoLabel === null"
-      :title="redoLabel === null ? 'Nothing to redo' : `Redo: ${redoLabel}`"
+      :title="redoLabel === null ? t('common.redo') : `${t('common.redo')}: ${redoLabel}`"
       data-testid="redo"
       @click="submit({ type: 'Redo', params: {} })"
     >
-      Redo
+      {{ t('common.redo') }}
     </Button>
   </div>
 </template>

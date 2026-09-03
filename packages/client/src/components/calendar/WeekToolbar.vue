@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/i18n';
 import DayRangeSlider from '@/components/calendar/DayRangeSlider.vue';
 import { formatMonth } from '@/lib/month';
 import UndoRedo from '@/components/UndoRedo.vue';
 import { useWorkspace } from '@/lib/workspace';
+
+const { t } = useI18n();
 
 /**
  * The controls that belong to the week rather than to what is drawn on it.
@@ -64,7 +67,9 @@ function shift(steps: number): void {
             own (§5.1), so "09:00 Monday" means something different to the
             scheduler than the row you are looking at.
           -->
-          <span data-testid="zone-divergence">(planner is {{ calendar.timezone }})</span>
+          <span data-testid="zone-divergence">{{
+            t('calendar.plannerZone', { zone: calendar.timezone })
+          }}</span>
         </template>
       </span>
       <!--
@@ -91,7 +96,7 @@ function shift(steps: number): void {
         one word, and a select would hide the option you are not in behind a
         click for no saving of space.
       -->
-      <div class="bg-muted flex rounded-md p-0.5" role="group" aria-label="Calendar view">
+      <div class="bg-muted flex rounded-md p-0.5" role="group" :aria-label="t('calendar.view')">
         <button
           v-for="option in ['week', 'month'] as const"
           :key="option"
@@ -102,16 +107,16 @@ function shift(steps: number): void {
           :data-testid="`view-${option}`"
           @click="setMode(option)"
         >
-          {{ option }}
+          {{ t(`calendar.${option}`) }}
         </button>
       </div>
 
       <UndoRedo :history="history" :submit="submit" />
       <Button variant="outline" size="sm" data-testid="week-back" @click="shift(-1)">
-        Previous
+        {{ t('common.previous') }}
       </Button>
       <Button variant="outline" size="sm" data-testid="week-forward" @click="shift(1)">
-        Next
+        {{ t('common.next') }}
       </Button>
     </div>
   </header>

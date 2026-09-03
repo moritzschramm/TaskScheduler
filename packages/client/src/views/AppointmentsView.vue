@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
+import { useI18n } from '@/i18n';
 import AppointmentEditor from '@/components/calendar/AppointmentEditor.vue';
 import MonthGrid from '@/components/calendar/MonthGrid.vue';
 import WeekGrid from '@/components/calendar/WeekGrid.vue';
@@ -12,6 +13,8 @@ import { formatCivilDate } from '@/lib/time';
 import { useWorkspace } from '@/lib/workspace';
 import type { CivilDate } from '@ambitime/scheduler';
 import type { GridBlock } from '@/lib/grid';
+
+const { t } = useI18n();
 
 /**
  * The time that is already spoken for (spec §4.5, §7.4).
@@ -90,17 +93,18 @@ function openDay(day: CivilDate): void {
 
 <template>
   <div class="flex flex-col gap-6 p-6" data-testid="appointments-view">
-    <WeekToolbar title="Appointments">
+    <WeekToolbar :title="t('appointments.title')">
       <template #actions>
-        <Button size="sm" data-testid="add-block" @click="newBlock">New appointment</Button>
+        <Button size="sm" data-testid="add-block" @click="newBlock">{{
+          t('appointments.newBlock')
+        }}</Button>
       </template>
     </WeekToolbar>
     <WorkspaceStatus />
 
     <template v-if="view && calendar">
       <p class="text-muted-foreground max-w-prose text-sm">
-        Time that is already spoken for: meetings, and hours you are simply not available. Tasks are
-        scheduled around these, and are drawn on the Schedule.
+        {{ t('appointments.lead') }}
       </p>
 
       <WeekGrid
@@ -138,7 +142,7 @@ function openDay(day: CivilDate): void {
       <Dialog
         v-if="editing.kind === 'block'"
         v-model:open="blockDialogOpen"
-        :title="editing.block === null ? 'New appointment' : 'Edit appointment'"
+        :title="editing.block === null ? t('appointments.editorNew') : t('appointments.editorEdit')"
         data-testid="editor-panel"
       >
         <AppointmentEditor

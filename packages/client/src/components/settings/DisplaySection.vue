@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useI18n } from '@/i18n';
 import { useAutosave } from '@/lib/autosave';
 import { timeZones } from '@/lib/zones';
 import { Label } from '@/components/ui/label';
@@ -7,6 +8,8 @@ import { Select } from '@/components/ui/select';
 import { session } from '@/lib/session';
 import { weekdayNames } from '@/lib/time';
 import type { CommandRequest } from '@ambitime/shared';
+
+const { t } = useI18n();
 
 /**
  * Spec §13's user settings: locale, timezone and first-day-of-week.
@@ -125,34 +128,35 @@ function edited(): void {
 <template>
   <section class="space-y-4" data-testid="display-section">
     <header>
-      <h2 class="text-lg font-semibold">Dates and times</h2>
+      <h2 class="text-lg font-semibold">{{ t('settings.display.title') }}</h2>
       <p class="text-muted-foreground text-sm">
-        How things are shown to you, saved as you change them. Scheduling itself follows each
-        planner's own zone, so changing these moves nothing.
+        {{ t('settings.display.lead') }}
       </p>
     </header>
 
     <div class="grid gap-4 sm:grid-cols-3">
       <div class="space-y-1">
-        <Label for="settings-locale">Language and formats</Label>
+        <Label for="settings-locale">{{ t('settings.display.locale') }}</Label>
         <Select id="settings-locale" v-model="locale" data-testid="settings-locale">
-          <option value="">Use my browser's</option>
+          <option value="">{{ t('settings.display.useBrowser') }}</option>
           <option v-for="tag in LOCALES" :key="tag" :value="tag">{{ tag }}</option>
         </Select>
       </div>
 
       <div class="space-y-1">
-        <Label for="settings-timezone">Time zone</Label>
+        <Label for="settings-timezone">{{ t('settings.display.timeZone') }}</Label>
         <Select id="settings-timezone" v-model="timeZone" data-testid="settings-timezone">
-          <option value="">Follow each planner ({{ calendarTimeZone }})</option>
+          <option value="">
+            {{ t('settings.display.followPlanner', { zone: calendarTimeZone }) }}
+          </option>
           <option v-for="zone in timeZones()" :key="zone" :value="zone">{{ zone }}</option>
         </Select>
       </div>
 
       <div class="space-y-1">
-        <Label for="settings-first-day">Weeks start on</Label>
+        <Label for="settings-first-day">{{ t('settings.display.firstDay') }}</Label>
         <Select id="settings-first-day" v-model="firstDayOfWeek" data-testid="settings-first-day">
-          <option value="">Monday</option>
+          <option value="">{{ weekdayNames(previewLocale)[0] }}</option>
           <option
             v-for="(name, index) in weekdayNames(previewLocale)"
             :key="name"
@@ -165,9 +169,14 @@ function edited(): void {
     </div>
 
     <div class="bg-muted/40 rounded-md border p-3 text-sm" data-testid="settings-preview">
-      <p class="text-muted-foreground mb-1 text-xs">Preview</p>
+      <p class="text-muted-foreground mb-1 text-xs">{{ t('settings.display.preview') }}</p>
       <p>{{ preview.date }} at {{ preview.time }}</p>
-      <p class="text-muted-foreground text-xs">Weeks start on {{ preview.weekStartsOn }}.</p>
+      <p class="text-muted-foreground text-xs">
+        {{ t('settings.display.weekStartsOn', { day: preview.weekStartsOn }) }}
+      </p>
+      <p class="text-muted-foreground mt-1 text-xs" data-testid="language-note">
+        {{ t('settings.display.languageNote') }}
+      </p>
     </div>
   </section>
 </template>

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useI18n } from '@/i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MINIMUM_PASSWORD_LENGTH, signUp } from '@/lib/session';
+
+const { t } = useI18n();
 
 /**
  * Creating an account (spec §10.1).
@@ -57,14 +60,14 @@ async function submit() {
   <main class="flex min-h-full items-center justify-center p-8">
     <Card class="w-full max-w-sm" data-testid="sign-up">
       <CardHeader>
-        <CardTitle>Create an account</CardTitle>
-        <CardDescription>Ambitime schedules your work into the time you have.</CardDescription>
+        <CardTitle>{{ t('auth.signUpTitle') }}</CardTitle>
+        <CardDescription>{{ t('auth.tagline') }}</CardDescription>
       </CardHeader>
 
       <CardContent>
         <form class="flex flex-col gap-4" @submit.prevent="submit">
           <div class="flex flex-col gap-1.5">
-            <label class="text-sm font-medium" for="name">Name</label>
+            <label class="text-sm font-medium" for="name">{{ t('auth.name') }}</label>
             <input
               id="name"
               v-model="displayName"
@@ -73,11 +76,11 @@ async function submit() {
               class="border-input bg-background rounded-md border px-3 py-2 text-sm"
               data-testid="sign-up-name"
             />
-            <p class="text-muted-foreground text-xs">Optional. It is what colleagues will see.</p>
+            <p class="text-muted-foreground text-xs">{{ t('auth.nameHint') }}</p>
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-sm font-medium" for="email">Email</label>
+            <label class="text-sm font-medium" for="email">{{ t('auth.email') }}</label>
             <input
               id="email"
               v-model="email"
@@ -90,7 +93,7 @@ async function submit() {
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-sm font-medium" for="password">Password</label>
+            <label class="text-sm font-medium" for="password">{{ t('auth.password') }}</label>
             <input
               id="password"
               v-model="password"
@@ -123,13 +126,13 @@ async function submit() {
           </Button>
 
           <p class="text-muted-foreground text-center text-sm">
-            Already have one?
+            {{ t('auth.haveOne') }}
             <RouterLink
               class="underline underline-offset-4"
               :to="{ name: 'sign-in', query: route.query }"
               data-testid="to-sign-in"
             >
-              Sign in
+              {{ t('auth.signIn') }}
             </RouterLink>
           </p>
         </form>

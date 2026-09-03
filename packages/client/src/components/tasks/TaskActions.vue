@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useI18n } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { fromLocalInput, toLocalInput } from '@/lib/time';
 import type { CommandRequest, ScheduledBlock, TaskNode } from '@ambitime/shared';
+
+const { t } = useI18n();
 
 /**
  * The manual actions of spec §7.3, for one task.
@@ -116,30 +119,30 @@ async function swap(): Promise<void> {
 <template>
   <section class="space-y-4" data-testid="task-actions">
     <header class="flex flex-wrap items-center gap-2">
-      <h3 class="text-sm font-semibold">Scheduling</h3>
+      <h3 class="text-sm font-semibold">{{ t('actions.title') }}</h3>
       <Badge v-if="floorLabel" variant="outline" data-testid="floor-badge">
-        Not before {{ floorLabel }}
+        {{ t('actions.notBefore', { time: floorLabel ?? '' }) }}
       </Badge>
       <Button
         v-if="task.manualFloor"
         variant="ghost"
         size="sm"
         :disabled="busy"
-        title="Forget the not-before this task picked up when it was moved"
+        :title="t('actions.clearFloor')"
         data-testid="clear-floor"
         @click="run({ type: 'ClearFloor', params: { taskId: task.id } })"
       >
-        Clear
+        {{ t('common.clear') }}
       </Button>
     </header>
 
     <p v-if="!isPlaced" class="text-muted-foreground text-sm" data-testid="not-placed">
-      This task is not on the calendar in this horizon, so there is nothing to move yet.
+      {{ t('actions.notPlaced') }}
     </p>
 
     <template v-else>
       <div class="space-y-1">
-        <Label for="exact-start">Exact start</Label>
+        <Label for="exact-start">{{ t('actions.exactStart') }}</Label>
         <div class="flex flex-wrap items-center gap-2">
           <input
             id="exact-start"
@@ -155,16 +158,16 @@ async function swap(): Promise<void> {
             data-testid="move-exact"
             @click="moveToExact"
           >
-            Move
+            {{ t('actions.move') }}
           </Button>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <span class="text-muted-foreground text-xs">Nudge:</span>
+          <span class="text-muted-foreground text-xs">{{ t('actions.nudge') }}</span>
           <Button
             variant="outline"
             size="sm"
             :disabled="busy"
-            aria-label="Move 15 minutes earlier"
+            :aria-label="t('actions.earlier')"
             data-testid="nudge-earlier"
             @click="nudgeBy(-15)"
           >
@@ -174,7 +177,7 @@ async function swap(): Promise<void> {
             variant="outline"
             size="sm"
             :disabled="busy"
-            aria-label="Move 15 minutes later"
+            :aria-label="t('actions.later')"
             data-testid="nudge-later"
             @click="nudgeBy(15)"
           >
@@ -183,14 +186,12 @@ async function swap(): Promise<void> {
         </div>
 
         <p class="text-muted-foreground text-xs">
-          Dragging snaps to 15 minutes; these do the same without dragging, and the field above
-          takes any minute. Either way the task is <em>delayed, not pinned</em> — it will not go
-          earlier than this, but it may still go later.
+          {{ t('actions.dragNote') }}
         </p>
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        <span class="text-muted-foreground text-xs">Not now:</span>
+        <span class="text-muted-foreground text-xs">{{ t('actions.notNow') }}</span>
         <Button
           variant="outline"
           size="sm"
@@ -198,7 +199,7 @@ async function swap(): Promise<void> {
           data-testid="defer-tomorrow"
           @click="defer('tomorrow')"
         >
-          Tomorrow
+          {{ t('actions.tomorrow') }}
         </Button>
         <Button
           variant="outline"
@@ -207,7 +208,7 @@ async function swap(): Promise<void> {
           data-testid="defer-next-week"
           @click="defer('next_week')"
         >
-          Next week
+          {{ t('actions.nextWeek') }}
         </Button>
         <Button
           variant="outline"
@@ -216,23 +217,23 @@ async function swap(): Promise<void> {
           data-testid="defer-backlog"
           @click="defer('backlog')"
         >
-          Backlog
+          {{ t('actions.backlog') }}
         </Button>
         <Button
           variant="outline"
           size="sm"
           :disabled="busy"
-          title="Push this task to its next feasible slot and pull the next task forward"
+          :title="t('actions.somethingElseHint')"
           data-testid="swap-forward"
           @click="run({ type: 'SwapForward', params: { taskId: task.id } })"
         >
-          Something else first
+          {{ t('actions.somethingElse') }}
         </Button>
       </div>
 
       <div class="flex flex-wrap items-end gap-2">
         <div class="space-y-1">
-          <Label for="new-estimate">New estimate (minutes)</Label>
+          <Label for="new-estimate">{{ t('actions.newEstimate') }}</Label>
           <Input
             id="new-estimate"
             v-model="newEstimate"
@@ -249,15 +250,15 @@ async function swap(): Promise<void> {
           data-testid="extend-task"
           @click="extend"
         >
-          It is taking longer
+          {{ t('actions.takingLonger') }}
         </Button>
       </div>
 
       <div v-if="others.length > 0" class="flex flex-wrap items-end gap-2">
         <div class="space-y-1">
-          <Label for="swap-with">Swap with</Label>
+          <Label for="swap-with">{{ t('actions.swapWith') }}</Label>
           <Select id="swap-with" v-model="swapWith" class="w-56" data-testid="swap-with">
-            <option value="">Choose a task…</option>
+            <option value="">{{ t('actions.chooseTask') }}</option>
             <option v-for="other in others" :key="other.taskId" :value="other.taskId">
               {{ other.title }}
             </option>
@@ -267,11 +268,11 @@ async function swap(): Promise<void> {
           variant="outline"
           size="sm"
           :disabled="busy || swapWith === ''"
-          title="Exchange times if each fits the other's constraints; otherwise this task moves on"
+          :title="t('actions.swapHint')"
           data-testid="swap-tasks"
           @click="swap"
         >
-          Swap
+          {{ t('actions.swap') }}
         </Button>
       </div>
     </template>

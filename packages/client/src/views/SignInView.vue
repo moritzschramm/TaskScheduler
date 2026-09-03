@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useI18n } from '@/i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { signIn } from '@/lib/session';
+
+const { t } = useI18n();
 
 const router = useRouter();
 const route = useRoute();
@@ -33,14 +36,14 @@ async function submit() {
   <main class="flex min-h-full items-center justify-center p-8">
     <Card class="w-full max-w-sm" data-testid="sign-in">
       <CardHeader>
-        <CardTitle>Sign in</CardTitle>
-        <CardDescription>Ambitime schedules your work into the time you have.</CardDescription>
+        <CardTitle>{{ t('auth.signInTitle') }}</CardTitle>
+        <CardDescription>{{ t('auth.tagline') }}</CardDescription>
       </CardHeader>
 
       <CardContent>
         <form class="flex flex-col gap-4" @submit.prevent="submit">
           <div class="flex flex-col gap-1.5">
-            <label class="text-sm font-medium" for="email">Email</label>
+            <label class="text-sm font-medium" for="email">{{ t('auth.email') }}</label>
             <input
               id="email"
               v-model="email"
@@ -53,7 +56,7 @@ async function submit() {
 
           <div class="flex flex-col gap-1.5">
             <div class="flex items-baseline justify-between gap-2">
-              <label class="text-sm font-medium" for="password">Password</label>
+              <label class="text-sm font-medium" for="password">{{ t('auth.password') }}</label>
               <!--
                 Beside the field it is about, and visible before the attempt
                 fails. Somebody who has forgotten a password does not learn it
@@ -64,7 +67,7 @@ async function submit() {
                 to="/forgot-password"
                 data-testid="to-forgot-password"
               >
-                Forgot it?
+                {{ t('auth.forgot') }}
               </RouterLink>
             </div>
             <input
@@ -86,13 +89,13 @@ async function submit() {
           </Button>
 
           <p class="text-muted-foreground text-center text-sm">
-            No account yet?
+            {{ t('auth.noAccount') }}
             <RouterLink
               class="underline underline-offset-4"
               :to="{ name: 'sign-up', query: route.query }"
               data-testid="to-sign-up"
             >
-              Create one
+              {{ t('auth.createOne') }}
             </RouterLink>
           </p>
         </form>

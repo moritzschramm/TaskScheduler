@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { CommandRequest, Notification } from '@ambitime/shared';
@@ -58,6 +59,8 @@ async function dismiss(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   await props.submit({ type: 'MarkNotificationsRead', params: { notificationIds: ids } });
 }
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -68,7 +71,7 @@ async function dismiss(ids: string[]): Promise<void> {
   >
     <header class="flex items-baseline justify-between gap-3">
       <h2 id="notifications-title" class="text-sm font-semibold">
-        Needs attention
+        {{ t('notifications.title') }}
         <span v-if="alertCount > 0" class="text-destructive ml-1 text-xs" data-testid="alert-count"
           >{{ alertCount }} needing attention</span
         >
@@ -80,12 +83,12 @@ async function dismiss(ids: string[]): Promise<void> {
         data-testid="dismiss-all"
         @click="dismiss(ordered.map((entry) => entry.id))"
       >
-        Dismiss all
+        {{ t('notifications.dismissAll') }}
       </Button>
     </header>
 
     <p v-if="ordered.length === 0" class="text-muted-foreground text-sm" data-testid="no-signals">
-      Nothing needs your attention.
+      {{ t('notifications.empty') }}
     </p>
 
     <ul v-else class="space-y-2">
@@ -104,11 +107,11 @@ async function dismiss(ids: string[]): Promise<void> {
         <Button
           variant="ghost"
           size="sm"
-          :aria-label="`Dismiss: ${messageOf(entry)}`"
+          :aria-label="`${t('notifications.dismiss')}: ${messageOf(entry)}`"
           data-testid="dismiss-notification"
           @click="dismiss([entry.id])"
         >
-          Dismiss
+          {{ t('notifications.dismiss') }}
         </Button>
       </li>
     </ul>

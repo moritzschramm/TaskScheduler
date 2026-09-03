@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useI18n } from '@/i18n';
 import {
   createCoreRowModel,
   useTable,
@@ -7,6 +8,7 @@ import {
   type TableFeatures,
 } from '@tanstack/vue-table';
 import type { Category, TaskNode } from '@ambitime/shared';
+import type { MessageKey } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -63,12 +65,12 @@ const MAX_DEPTH = 5;
 const features = { coreRowModel: createCoreRowModel() } satisfies TableFeatures;
 
 const columns: ColumnDef<typeof features, TaskNode>[] = [
-  { id: 'title', header: 'Task', accessorKey: 'title' },
-  { id: 'status', header: 'Status', accessorKey: 'status' },
-  { id: 'duration', header: 'Estimate', accessorKey: 'estimatedDurationMin' },
-  { id: 'priority', header: 'Priority', accessorKey: 'effectivePriority' },
-  { id: 'due', header: 'Due', accessorKey: 'effectiveDueDate' },
-  { id: 'actions', header: 'Actions', accessorKey: 'id' },
+  { id: 'title', header: 'tasks.column.task', accessorKey: 'title' },
+  { id: 'status', header: 'tasks.column.status', accessorKey: 'status' },
+  { id: 'duration', header: 'tasks.column.estimate', accessorKey: 'estimatedDurationMin' },
+  { id: 'priority', header: 'tasks.column.priority', accessorKey: 'effectivePriority' },
+  { id: 'due', header: 'tasks.column.due', accessorKey: 'effectiveDueDate' },
+  { id: 'actions', header: 'tasks.column.actions', accessorKey: 'id' },
 ];
 
 const table = useTable({
@@ -136,8 +138,8 @@ const groups = computed<Group[]>(() => {
 });
 
 function nameOf(key: string): string {
-  if (key === NO_CATEGORY) return 'No activity type';
-  return props.categories.find((category) => category.id === key)?.name ?? 'Unknown activity type';
+  if (key === NO_CATEGORY) return t('tasks.ungrouped');
+  return props.categories.find((category) => category.id === key)?.name ?? t('tasks.unknownGroup');
 }
 
 function toggle(key: string): void {
@@ -161,21 +163,23 @@ function formatDue(value: string | null): string {
 function canHaveChildren(task: TaskNode): boolean {
   return task.depth < MAX_DEPTH && task.status === 'active';
 }
+
+const { t } = useI18n();
 </script>
 
 <template>
   <section class="flex flex-col gap-3" data-testid="task-panel" aria-labelledby="tasks-title">
     <header class="flex items-baseline justify-between gap-3">
-      <h2 id="tasks-title" class="text-sm font-semibold">Tasks</h2>
+      <h2 id="tasks-title" class="text-sm font-semibold">{{ t('tasks.title') }}</h2>
       <div class="flex items-center gap-3">
         <span class="text-muted-foreground text-xs">{{ tasks.length }}</span>
         <Button v-if="editable" size="sm" data-testid="add-root-task" @click="emit('addRoot')">
-          New task
+          {{ t('tasks.newTask') }}
         </Button>
       </div>
     </header>
 
-    <p v-if="tasks.length === 0" class="text-muted-foreground text-sm">No tasks yet.</p>
+    <p v-if="tasks.length === 0" class="text-muted-foreground text-sm">{{ t('tasks.empty') }}</p>
 
     <table v-else class="w-full text-sm" data-testid="task-table">
       <thead>
@@ -192,7 +196,7 @@ function canHaveChildren(task: TaskNode): boolean {
               `empty-table-header` is exactly this, and it was real.
             -->
             <span :class="header.id === 'actions' ? 'sr-only' : ''">
-              {{ header.column.columnDef.header }}
+              {{ t(header.column.columnDef.header as MessageKey) }}
             </span>
           </th>
         </tr>
@@ -251,7 +255,7 @@ function canHaveChildren(task: TaskNode): boolean {
               {{ entry.row.original.status }}
             </Badge>
             <span v-else class="text-muted-foreground text-xs">
-              {{ entry.row.original.isLeaf ? 'leaf' : 'parent' }}
+              {{ entry.row.original.isLeaf ? t('tasks.leaf') : t('tasks.parent') }}
             </span>
           </td>
           <td class="py-1.5 pr-3 tabular-nums">
@@ -277,14 +281,14 @@ function canHaveChildren(task: TaskNode): boolean {
               :disabled="!canHaveChildren(entry.row.original)"
               :title="
                 entry.row.original.depth >= MAX_DEPTH
-                  ? 'Tasks can nest five deep at most'
-                  : 'Add a subtask'
+                  ? t('tasks.depthCapped')
+                  : t('tasks.addSubtask')
               "
-              :aria-label="`Add a subtask to ${entry.row.original.title}`"
+              :aria-label="t('tasks.addSubtaskTo', { title: entry.row.original.title })"
               data-testid="add-subtask"
               @click="emit('addChild', entry.row.original)"
             >
-              Subtask
+              {{ t('tasks.subtask') }}
             </Button>
           </td>
         </tr>
@@ -292,8 +296,7 @@ function canHaveChildren(task: TaskNode): boolean {
     </table>
 
     <p class="text-muted-foreground text-xs">
-      Grouped by activity type. Values shown in <span class="italic">italics</span> are inherited
-      from an ancestor. Tasks nest five deep at most.
+      {{ t('tasks.footnote') }}
     </p>
   </section>
 </template>

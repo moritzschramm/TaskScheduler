@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { FOCUS_LEVELS } from '@/lib/focus';
 import { formatMinuteOfDay, parseMinuteOfDay, weekdayNames } from '@/lib/time';
+
+const { t } = useI18n();
 
 /**
  * A week of wall-clock ranges — the shape shared by §9.1's two calendar windows
@@ -98,7 +101,7 @@ function isBackwards(rule: WindowRule): boolean {
 
 <template>
   <div class="space-y-1" data-testid="weekday-window-editor">
-    <p class="text-muted-foreground text-xs">Times are local to {{ timeZone }}.</p>
+    <p class="text-muted-foreground text-xs">{{ t('hours.localTo', { zone: timeZone }) }}</p>
 
     <div
       v-for="(entries, offset) in byWeekday"
@@ -120,7 +123,7 @@ function isBackwards(rule: WindowRule): boolean {
             class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
             :value="formatMinuteOfDay(entry.rule.startMin)"
             :disabled="disabled"
-            :aria-label="`${names[offset]} start time`"
+            :aria-label="t('hours.startOf', { day: names[offset] ?? '' })"
             @input="setTime(entry.index, 'startMin', ($event.target as HTMLInputElement).value)"
           />
           <span class="text-muted-foreground text-sm">to</span>
@@ -129,7 +132,7 @@ function isBackwards(rule: WindowRule): boolean {
             class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
             :value="formatMinuteOfDay(entry.rule.endMin)"
             :disabled="disabled"
-            :aria-label="`${names[offset]} end time`"
+            :aria-label="t('hours.endOf', { day: names[offset] ?? '' })"
             @input="setTime(entry.index, 'endMin', ($event.target as HTMLInputElement).value)"
           />
 
@@ -138,12 +141,12 @@ function isBackwards(rule: WindowRule): boolean {
             class="h-9 w-32"
             :model-value="entry.rule.focusLevel === undefined ? '' : String(entry.rule.focusLevel)"
             :disabled="disabled"
-            :aria-label="`${names[offset]} focus level`"
+            :aria-label="t('hours.focusOf', { day: names[offset] ?? '' })"
             @update:model-value="setFocus(entry.index, $event ?? '')"
           >
-            <option value="">Any focus</option>
+            <option value="">{{ t('hours.anyFocus') }}</option>
             <option v-for="level in FOCUS_LEVELS" :key="level.value" :value="String(level.value)">
-              {{ level.label }}
+              {{ t(level.label) }}
             </option>
           </Select>
 
@@ -151,15 +154,20 @@ function isBackwards(rule: WindowRule): boolean {
             variant="ghost"
             size="sm"
             :disabled="disabled"
-            :aria-label="`Remove ${names[offset]} ${formatMinuteOfDay(entry.rule.startMin)} range`"
+            :aria-label="
+              t('hours.removeRange', {
+                day: names[offset] ?? '',
+                time: formatMinuteOfDay(entry.rule.startMin),
+              })
+            "
             data-testid="remove-range"
             @click="removeRange(entry.index)"
           >
-            Remove
+            {{ t('common.remove') }}
           </Button>
 
           <span v-if="isBackwards(entry.rule)" class="text-destructive text-xs">
-            Ends before it starts
+            {{ t('hours.backwards') }}
           </span>
         </div>
 
@@ -171,10 +179,10 @@ function isBackwards(rule: WindowRule): boolean {
             :data-testid="`add-range-${offset + 1}`"
             @click="addRange(offset + 1)"
           >
-            Add range
+            {{ t('hours.addRange') }}
           </Button>
           <span v-if="entries.length === 0" class="text-muted-foreground text-xs">
-            Unavailable
+            {{ t('hours.unavailable') }}
           </span>
         </div>
       </div>

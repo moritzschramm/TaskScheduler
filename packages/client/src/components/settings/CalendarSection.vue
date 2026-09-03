@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useI18n } from '@/i18n';
 import { useAutosave } from '@/lib/autosave';
 import { timeZonesIncluding } from '@/lib/zones';
 import { Input } from '@/components/ui/input';
@@ -7,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import WeekdayWindowEditor, { type WindowRule } from './WeekdayWindowEditor.vue';
 import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
+
+const { t } = useI18n();
 
 /**
  * The planner itself, and the two windows of spec §9.1.
@@ -136,24 +139,23 @@ function editedWindows(kind: 'working' | 'shareable'): void {
 <template>
   <section class="space-y-4" data-testid="calendar-section">
     <header>
-      <h2 class="text-lg font-semibold">Planner</h2>
+      <h2 class="text-lg font-semibold">{{ t('settings.plannerHeading') }}</h2>
       <p class="text-muted-foreground max-w-prose text-sm">
-        One self-contained world to schedule in — its own time zone, its own hours, its own
-        categories and tasks. Most people need exactly one.
+        {{ t('settings.plannerLead') }}
       </p>
       <p v-if="readOnly" class="text-muted-foreground text-sm" data-testid="calendar-read-only">
-        This planner belongs to someone else, so its settings are read-only.
+        {{ t('settings.readOnly') }}
       </p>
     </header>
 
     <div class="grid gap-4 sm:grid-cols-3">
       <div class="space-y-1">
-        <Label for="calendar-name">Name</Label>
+        <Label for="calendar-name">{{ t('common.name') }}</Label>
         <Input id="calendar-name" v-model="name" :disabled="readOnly" data-testid="calendar-name" />
       </div>
 
       <div class="space-y-1">
-        <Label for="calendar-timezone">Time zone</Label>
+        <Label for="calendar-timezone">{{ t('settings.timeZone') }}</Label>
         <Select
           id="calendar-timezone"
           v-model="timezone"
@@ -165,28 +167,28 @@ function editedWindows(kind: 'working' | 'shareable'): void {
       </div>
 
       <div class="space-y-1">
-        <Label for="calendar-visibility">Visible to</Label>
+        <Label for="calendar-visibility">{{ t('settings.visibility') }}</Label>
         <Select
           id="calendar-visibility"
           v-model="visibilityScope"
           :disabled="readOnly"
           data-testid="calendar-visibility"
         >
-          <option value="private">Only me</option>
-          <option value="team">My team</option>
-          <option value="group">My group</option>
+          <option value="private">{{ t('settings.visibilityPrivate') }}</option>
+          <option value="team">{{ t('settings.visibilityTeam') }}</option>
+          <option value="group">{{ t('settings.visibilityGroup') }}</option>
         </Select>
       </div>
     </div>
 
     <div class="grid gap-6 lg:grid-cols-2">
       <details class="rounded-lg border p-4" data-testid="working-window-details">
-        <summary class="cursor-pointer text-sm font-semibold">Working window (optional)</summary>
+        <summary class="cursor-pointer text-sm font-semibold">
+          {{ t('settings.workingWindow') }}
+        </summary>
         <div class="space-y-3 pt-3">
           <p class="text-muted-foreground text-xs">
-            A ceiling over <em>every</em> category in this planner — set it only if there are hours
-            you never want used whatever the category says. Leave it empty and nothing is
-            restricted; the category hours decide on their own.
+            {{ t('settings.workingWindowLead') }}
           </p>
           <WeekdayWindowEditor
             v-model="working"
@@ -198,11 +200,12 @@ function editedWindows(kind: 'working' | 'shareable'): void {
       </details>
 
       <details class="rounded-lg border p-4" data-testid="shareable-window-details">
-        <summary class="cursor-pointer text-sm font-semibold">Shareable window (optional)</summary>
+        <summary class="cursor-pointer text-sm font-semibold">
+          {{ t('settings.shareableWindow') }}
+        </summary>
         <div class="space-y-3 pt-3">
           <p class="text-muted-foreground text-xs">
-            What other people would see as busy once this planner is shared. It has no effect on
-            your own scheduling, and none at all while you are the only person here.
+            {{ t('settings.shareableWindowLead') }}
           </p>
           <WeekdayWindowEditor
             v-model="shareable"

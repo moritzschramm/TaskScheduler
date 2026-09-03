@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useI18n } from '@/i18n';
 import { useAutosave } from '@/lib/autosave';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import WeekdayWindowEditor, { type WindowRule } from './WeekdayWindowEditor.vue';
 import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
+
+const { t } = useI18n();
 
 /**
  * When each category may be scheduled in this planner (spec §4.3).
@@ -151,22 +154,20 @@ function edited(): void {
         the *scheduler* may use — the two differ every time somebody is free at
         22:00 and has no intention of working then.
       -->
-      <h2 class="text-lg font-semibold">Scheduling hours</h2>
+      <h2 class="text-lg font-semibold">{{ t('hours.title') }}</h2>
       <p class="text-muted-foreground text-sm">
-        The hours the scheduler may place this kind of thing in — not simply when you are free. A
-        special week replaces the default set for its dates rather than adding to it. Changes save
-        themselves.
+        {{ t('hours.lead') }}
       </p>
     </header>
 
     <p v-if="configuration.categories.length === 0" class="text-muted-foreground text-sm">
-      Add an activity type first — availability belongs to one.
+      {{ t('hours.needCategory') }}
     </p>
 
     <template v-else>
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1">
-          <Label for="availability-category">Activity type</Label>
+          <Label for="availability-category">{{ t('hours.activityType') }}</Label>
           <Select
             id="availability-category"
             v-model="categoryId"
@@ -184,14 +185,14 @@ function edited(): void {
         </div>
 
         <div class="space-y-1">
-          <Label for="availability-week-type">Special week</Label>
+          <Label for="availability-week-type">{{ t('hours.specialWeek') }}</Label>
           <Select
             id="availability-week-type"
             v-model="weekTypeId"
             :disabled="readOnly"
             data-testid="availability-week-type"
           >
-            <option value="">Ordinary weeks</option>
+            <option value="">{{ t('hours.ordinaryWeeks') }}</option>
             <option
               v-for="override in configuration.weekTypeOverrides"
               :key="override.id"
@@ -212,7 +213,7 @@ function edited(): void {
       />
 
       <p v-if="rules.length === 0" class="text-muted-foreground text-xs">
-        An empty week means this activity type is never scheduled here.
+        {{ t('hours.emptyMeansNever') }}
       </p>
     </template>
   </section>

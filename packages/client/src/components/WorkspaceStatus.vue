@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import GettingStarted from '@/components/GettingStarted.vue';
+import { useI18n } from '@/i18n';
 import { useWorkspace } from '@/lib/workspace';
 
 /**
@@ -10,6 +11,8 @@ import { useWorkspace } from '@/lib/workspace';
  * to drift.
  */
 const { calendars, categories, error, diverged, loading } = useWorkspace();
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -23,7 +26,7 @@ const { calendars, categories, error, diverged, loading } = useWorkspace();
     The server placed things a little differently from the preview, and its answer is what you are
     looking at now.
   </p>
-  <p v-else-if="loading" class="text-muted-foreground text-sm">Loading the schedule…</p>
+  <p v-else-if="loading" class="text-muted-foreground text-sm">{{ t('app.loading') }}</p>
 
   <!--
     A new account can schedule nothing until a category has hours, and a

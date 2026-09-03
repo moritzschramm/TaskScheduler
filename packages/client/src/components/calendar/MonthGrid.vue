@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from '@/i18n';
 import type { CivilDate } from '@ambitime/scheduler';
 import type {
   CompletedBlock,
@@ -9,6 +10,8 @@ import type {
 } from '@ambitime/shared';
 import { monthWeeks, specialWeekOn, weekdayHeadings } from '@/lib/month';
 import { formatFullDate, localDate, sameCivilDate } from '@/lib/time';
+
+const { t } = useI18n();
 
 /**
  * A month at a glance — what the week grid cannot show (spec §4.3, §6.1).
@@ -102,7 +105,7 @@ const byDay = computed(() => {
   for (const block of props.fixedBlocks) {
     add(block.start, {
       key: `f-${block.appointmentId}-${block.start}`,
-      title: block.isUnavailability ? 'Unavailable' : block.title,
+      title: block.isUnavailability ? t('common.unavailable') : block.title,
       kind: block.isUnavailability ? 'unavailability' : 'appointment',
     });
   }
@@ -215,7 +218,7 @@ function classesFor(kind: DayEntry['kind']): string {
               day.inMonth ? '' : 'text-muted-foreground',
               day.isToday ? 'text-primary font-semibold' : '',
             ]"
-            :aria-label="`Show the week of ${day.label}`"
+            :aria-label="t('calendar.showWeekOf', { day: day.label })"
             data-testid="open-day"
             @click="emit('openDay', day.date)"
           >
@@ -226,8 +229,8 @@ function classesFor(kind: DayEntry['kind']): string {
             v-if="editable"
             type="button"
             class="text-muted-foreground hover:text-foreground px-0.5 leading-none"
-            :aria-label="`Block out ${day.label}`"
-            title="Mark the whole day unavailable — anything scheduled moves"
+            :aria-label="t('calendar.blockDay', { day: day.label })"
+            :title="t('calendar.blockDayHint')"
             data-testid="block-day"
             @click="emit('blockDay', day.date)"
           >
@@ -259,7 +262,7 @@ function classesFor(kind: DayEntry['kind']): string {
             class="text-muted-foreground px-1 text-[0.7rem]"
             data-testid="month-day-more"
           >
-            +{{ day.hidden }} more
+            {{ t('calendar.more', { count: day.hidden }) }}
           </li>
         </ul>
 
@@ -269,7 +272,7 @@ function classesFor(kind: DayEntry['kind']): string {
           thing anybody needs to know about it.
         -->
         <span v-if="day.pastHorizon" class="sr-only" data-testid="past-horizon">
-          Beyond the scheduling horizon; work for this day is still in the backlog.
+          {{ t('calendar.pastHorizon') }}
         </span>
       </div>
     </div>

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
+import { useI18n } from '@/i18n';
 import AvailabilitySection from '@/components/settings/AvailabilitySection.vue';
 import CategoriesSection from '@/components/settings/CategoriesSection.vue';
 import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
 import { useWorkspace } from '@/lib/workspace';
+
+const { t } = useI18n();
 
 /**
  * The kinds of thing you do, and when you may do them (spec §4.3, §6.2 rule 1).
@@ -26,11 +29,9 @@ onMounted(ensureLoaded);
 <template>
   <div class="flex flex-col gap-8 p-6" data-testid="categories-view">
     <header class="max-w-prose space-y-1">
-      <h1 class="text-xl font-semibold tracking-tight">Activity types</h1>
+      <h1 class="text-xl font-semibold tracking-tight">{{ t('categories.title') }}</h1>
       <p class="text-muted-foreground text-sm">
-        An activity type is a kind of thing you do — work, exercise, errands — and the hours you are
-        willing to do it in. Every task belongs to one, and those hours are the only times it can be
-        scheduled.
+        {{ t('categories.lead') }}
       </p>
     </header>
 
@@ -41,7 +42,7 @@ onMounted(ensureLoaded);
 
       <section v-if="categories.length === 0" class="max-w-prose" data-testid="no-categories-hint">
         <p class="text-muted-foreground text-sm">
-          Add an activity type above, then give it the hours it may be scheduled in.
+          {{ t('categories.emptyHint') }}
         </p>
       </section>
       <AvailabilitySection v-else :configuration="configuration" :submit="submit" />

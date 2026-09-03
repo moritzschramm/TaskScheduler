@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { resendVerification, session, signOut, startHeartbeat, stopHeartbeat } from '@/lib/session';
 import { resetWorkspace } from '@/lib/workspace';
+import { useI18n } from '@/i18n';
 
 /**
  * The frame around every signed-in page.
@@ -18,12 +19,22 @@ import { resetWorkspace } from '@/lib/workspace';
 
 const router = useRouter();
 
-const primary = [
-  { to: '/', label: 'Schedule', testId: 'nav-schedule' },
-  { to: '/tasks', label: 'Tasks', testId: 'nav-tasks' },
-  { to: '/categories', label: 'Activity types', testId: 'nav-categories' },
-  { to: '/appointments', label: 'Appointments', testId: 'nav-appointments' },
-] as const;
+const { t } = useI18n();
+
+/**
+ * The labels are computed, not constants.
+ *
+ * A frozen array built at module load would keep the language it was built in
+ * for the life of the tab, so switching language in settings would leave the
+ * navigation in the old one — the one part of the screen a reader would be
+ * certain was broken.
+ */
+const primary = computed(() => [
+  { to: '/', label: t('nav.schedule'), testId: 'nav-schedule' },
+  { to: '/tasks', label: t('nav.tasks'), testId: 'nav-tasks' },
+  { to: '/categories', label: t('nav.categories'), testId: 'nav-categories' },
+  { to: '/appointments', label: t('nav.appointments'), testId: 'nav-appointments' },
+]);
 
 // Presence is a fact about a signed-in page being open (§11), so the beat
 // starts with the shell and stops with it.
@@ -102,7 +113,7 @@ async function confirmAgain() {
       href="#main"
       data-testid="skip-link"
     >
-      Skip to the main content
+      {{ t('app.skipToContent') }}
     </a>
 
     <header
@@ -111,7 +122,7 @@ async function confirmAgain() {
       data-testid="app-shell-header"
     >
       <div class="flex items-baseline gap-3">
-        <span class="text-sm font-semibold tracking-tight">Ambitime</span>
+        <span class="text-sm font-semibold tracking-tight">{{ t('app.name') }}</span>
         <Badge v-if="active" variant="secondary" data-testid="active-context">
           {{ active.isPersonal ? 'Personal' : active.name }}
         </Badge>
@@ -130,7 +141,7 @@ async function confirmAgain() {
         (WCAG 1.4.1), and the exact match on Schedule keeps it from staying lit
         on every route beneath `/`.
       -->
-      <nav class="flex flex-1 items-center gap-1" aria-label="Main">
+      <nav class="flex flex-1 items-center gap-1" :aria-label="t('app.mainLandmark')">
         <RouterLink
           v-for="link in primary"
           :key="link.to"
@@ -160,17 +171,19 @@ async function confirmAgain() {
           to="/history"
           data-testid="history-link"
         >
-          History
+          {{ t('app.history') }}
         </RouterLink>
         <RouterLink
           class="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
           to="/settings"
           data-testid="settings-link"
         >
-          Settings
+          {{ t('app.settings') }}
         </RouterLink>
         <span class="text-muted-foreground text-xs">{{ session.user.email }}</span>
-        <Button variant="ghost" size="sm" data-testid="sign-out" @click="leave">Sign out</Button>
+        <Button variant="ghost" size="sm" data-testid="sign-out" @click="leave">{{
+          t('app.signOut')
+        }}</Button>
       </div>
     </header>
 
@@ -185,10 +198,10 @@ async function confirmAgain() {
       data-testid="unverified-banner"
     >
       <p v-if="resent" data-testid="verification-resent">
-        Sent. Check <strong>{{ session?.user.email }}</strong> for the link.
+        {{ t('verify.sent', { email: session?.user.email ?? '' }) }}
       </p>
       <p v-else-if="resendError" data-testid="verification-resend-error">{{ resendError }}</p>
-      <p v-else>Confirm your email address so Ambitime can reach you when a due date is at risk.</p>
+      <p v-else>{{ t('verify.prompt') }}</p>
 
       <div class="flex items-center gap-2">
         <Button
@@ -199,7 +212,7 @@ async function confirmAgain() {
           data-testid="resend-verification"
           @click="confirmAgain"
         >
-          {{ resending ? 'Sending…' : 'Send the link again' }}
+          {{ resending ? `${t('verify.resend')}…` : t('verify.resend') }}
         </Button>
         <Button
           variant="ghost"
@@ -207,7 +220,7 @@ async function confirmAgain() {
           data-testid="dismiss-verification"
           @click="dismissed = true"
         >
-          Not now
+          {{ t('verify.dismiss') }}
         </Button>
       </div>
     </div>

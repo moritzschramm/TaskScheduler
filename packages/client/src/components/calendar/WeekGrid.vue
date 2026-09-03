@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useI18n } from '@/i18n';
 import type { CompletedBlock, FixedBlock, ScheduledBlock } from '@ambitime/shared';
 import type { CivilDate, ResolvedWindow } from '@ambitime/scheduler';
 import {
@@ -14,6 +15,8 @@ import {
   type GridBlock,
 } from '@/lib/grid';
 import { formatDayLabel, formatMinuteOfDay, sameCivilDate } from '@/lib/time';
+
+const { t } = useI18n();
 
 const props = withDefaults(
   defineProps<{
@@ -187,7 +190,7 @@ function toggleGrab(block: GridBlock, day: CivilDate): void {
 }
 
 function abandonNudge(): void {
-  if (pending.value !== null) announcement.value = 'Move cancelled.';
+  if (pending.value !== null) announcement.value = t('calendar.moveCancelled');
   pending.value = null;
   dragOriginY = null;
 }
@@ -298,7 +301,7 @@ function heightOf(block: GridBlock): number {
  */
 function labelFor(block: GridBlock, dayLabel: string): string {
   const when = `${dayLabel}, ${formatMinuteOfDay(block.startMin)} to ${formatMinuteOfDay(block.endMin)}`;
-  const kind = block.kind === 'unavailability' ? 'Unavailable' : block.title;
+  const kind = block.kind === 'unavailability' ? t('common.unavailable') : block.title;
 
   // Said, not only shown: the strike-through and the fade are invisible to a
   // screen reader, and "done" is the whole of what distinguishes this block.
@@ -392,8 +395,8 @@ function classesFor(block: GridBlock): string {
             v-if="editable && blockable"
             type="button"
             class="hover:text-foreground px-1 leading-none"
-            :aria-label="`Block out ${column.label}`"
-            title="Mark the whole day unavailable — anything scheduled moves"
+            :aria-label="t('calendar.blockDay', { day: column.label })"
+            :title="t('calendar.blockDayHint')"
             data-testid="block-day"
             @click="emit('blockDay', column.day)"
           >

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useI18n } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { requestPasswordReset } from '@/lib/session';
+
+const { t } = useI18n();
 
 /**
  * Asking for a reset link (spec §10.1).
@@ -38,9 +41,9 @@ async function submit() {
   <main class="flex min-h-full items-center justify-center p-8">
     <Card class="w-full max-w-sm" data-testid="forgot-password">
       <CardHeader>
-        <CardTitle>Reset your password</CardTitle>
+        <CardTitle>{{ t('auth.forgotTitle') }}</CardTitle>
         <CardDescription>
-          We will email you a link that lets you choose a new one.
+          {{ t('auth.forgotLead') }}
         </CardDescription>
       </CardHeader>
 
@@ -55,24 +58,24 @@ async function submit() {
             once, and for an hour.
           </p>
           <p class="text-muted-foreground text-sm">
-            Nothing arrived? Check the spam folder, then
+            {{ t('auth.forgotNothing') }}
             <button
               type="button"
               class="underline underline-offset-4"
               data-testid="reset-again"
               @click="sent = false"
             >
-              try a different address</button
+              {{ t('auth.tryAnother') }}</button
             >.
           </p>
           <Button as-child variant="outline">
-            <RouterLink to="/sign-in">Back to sign in</RouterLink>
+            <RouterLink to="/sign-in">{{ t('auth.backToSignIn') }}</RouterLink>
           </Button>
         </div>
 
         <form v-else class="flex flex-col gap-4" @submit.prevent="submit">
           <div class="flex flex-col gap-1.5">
-            <label class="text-sm font-medium" for="email">Email</label>
+            <label class="text-sm font-medium" for="email">{{ t('auth.email') }}</label>
             <input
               id="email"
               v-model="email"
@@ -93,13 +96,13 @@ async function submit() {
           </Button>
 
           <p class="text-muted-foreground text-center text-sm">
-            Remembered it?
+            {{ t('auth.remembered') }}
             <RouterLink
               class="underline underline-offset-4"
               to="/sign-in"
               data-testid="back-to-sign-in"
             >
-              Sign in
+              {{ t('auth.signIn') }}
             </RouterLink>
           </p>
         </form>

@@ -1,3 +1,5 @@
+import { language, translate, type MessageKey } from '@/i18n';
+
 /**
  * Focus levels, in words (spec §4.4, §6.5).
  *
@@ -10,21 +12,27 @@
  * One vocabulary, exported, so the task editor and the window editor cannot
  * label the same number differently — which would be worse than no label,
  * because matching a task to a window is exactly what the number is for.
+ *
+ * The labels are message keys rather than words. A frozen array of English
+ * would survive a language change and put "Very high focus" in the middle of a
+ * German form; resolving at call time means the list is in whatever language is
+ * in force when it is read.
  */
 export interface FocusLevel {
   value: number;
-  label: string;
+  label: MessageKey;
 }
 
 export const FOCUS_LEVELS: readonly FocusLevel[] = [
-  { value: 1, label: 'Very low focus' },
-  { value: 2, label: 'Low focus' },
-  { value: 3, label: 'Medium focus' },
-  { value: 4, label: 'High focus' },
-  { value: 5, label: 'Very high focus' },
+  { value: 1, label: 'focus.veryLow' },
+  { value: 2, label: 'focus.low' },
+  { value: 3, label: 'focus.medium' },
+  { value: 4, label: 'focus.high' },
+  { value: 5, label: 'focus.veryHigh' },
 ] as const;
 
 /** The word for a level, or the bare number if one ever falls outside the scale. */
 export function focusLabel(level: number): string {
-  return FOCUS_LEVELS.find((entry) => entry.value === level)?.label ?? String(level);
+  const found = FOCUS_LEVELS.find((entry) => entry.value === level);
+  return found === undefined ? String(level) : translate(language.value, found.label);
 }

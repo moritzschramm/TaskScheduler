@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
+import { useI18n } from '@/i18n';
 import { wallClockToInstant, type CivilDate } from '@ambitime/scheduler';
 import AppointmentEditor from '@/components/calendar/AppointmentEditor.vue';
 import MonthGrid from '@/components/calendar/MonthGrid.vue';
@@ -17,6 +18,8 @@ import { formatCivilDate, formatDayLabel, toIso } from '@/lib/time';
 import { dayOf, useWorkspace } from '@/lib/workspace';
 import type { GridBlock } from '@/lib/grid';
 import type { ScheduledBlock } from '@ambitime/shared';
+
+const { t, plural } = useI18n();
 
 /**
  * The week, and only the week (spec §6.1, §13).
@@ -154,9 +157,11 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
 
 <template>
   <div class="flex flex-col gap-6 p-6" data-testid="calendar-view">
-    <WeekToolbar title="Schedule">
+    <WeekToolbar :title="t('schedule.title')">
       <template #actions>
-        <Button size="sm" data-testid="new-task" @click="newTask">New task</Button>
+        <Button size="sm" data-testid="new-task" @click="newTask">{{
+          t('schedule.newTask')
+        }}</Button>
       </template>
     </WeekToolbar>
     <WorkspaceStatus />
@@ -173,13 +178,12 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         role="status"
         data-testid="no-windows-yet"
       >
-        <h2 class="text-sm font-semibold">Nothing can be scheduled in this week.</h2>
+        <h2 class="text-sm font-semibold">{{ t('schedule.noWindowsTitle') }}</h2>
         <p class="text-sm">
-          No availability window falls in it, so the engine has nowhere to put anything — the whole
-          week below is closed. Availability is set per category, in settings.
+          {{ t('schedule.noWindowsBody') }}
         </p>
         <Button as-child size="sm" data-testid="set-up-availability">
-          <RouterLink to="/settings">Set up availability</RouterLink>
+          <RouterLink to="/categories">{{ t('schedule.noWindowsAction') }}</RouterLink>
         </Button>
       </section>
 
@@ -196,9 +200,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         data-testid="scheduled-elsewhere"
       >
         <h2 class="text-sm font-semibold">
-          {{ scheduledElsewhere.length }}
-          {{ scheduledElsewhere.length === 1 ? 'task is' : 'tasks are' }} scheduled outside this
-          week
+          {{ plural('schedule.elsewhere', scheduledElsewhere.length) }}
         </h2>
         <ul class="space-y-1">
           <li v-for="block in scheduledElsewhere" :key="block.occurrenceId" class="text-sm">
@@ -224,8 +226,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         data-testid="unschedulable-notice"
       >
         <h2 class="text-sm font-semibold">
-          {{ unschedulable.length }}
-          {{ unschedulable.length === 1 ? 'task is' : 'tasks are' }} not being scheduled
+          {{ plural('schedule.unschedulable', unschedulable.length) }}
         </h2>
         <ul class="space-y-1">
           <li v-for="entry in unschedulable" :key="entry.occurrenceId" class="text-sm">
@@ -303,7 +304,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
       <Dialog
         v-if="editing.kind === 'task'"
         v-model:open="taskDialogOpen"
-        :title="editing.task === null ? 'New task' : 'Edit task'"
+        :title="editing.task === null ? t('editor.newTask') : t('editor.editTask')"
         data-testid="editor-panel"
       >
         <TaskEditor
@@ -331,7 +332,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
       <Dialog
         v-else-if="editing.kind === 'block'"
         v-model:open="blockDialogOpen"
-        :title="editing.block === null ? 'New appointment' : 'Edit appointment'"
+        :title="editing.block === null ? t('appointments.editorNew') : t('appointments.editorEdit')"
         data-testid="editor-panel"
       >
         <AppointmentEditor

@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
+import { useI18n } from '@/i18n';
 import { useAutosave } from '@/lib/autosave';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
+
+const { t } = useI18n();
 
 /**
  * Categories — the kinds of activity a task can be (spec §4.3).
@@ -123,19 +126,20 @@ async function remove(id: string, version: number): Promise<void> {
 <template>
   <section class="space-y-4" data-testid="categories-section">
     <header>
-      <h2 class="sr-only">Activity types</h2>
+      <h2 class="sr-only">{{ t('categories.title') }}</h2>
       <p class="text-muted-foreground text-sm">
-        Shared across every planner you own. The cooldown is protected time after each task of the
-        kind, and cannot be compressed. Changes save themselves.
+        {{ t('categories.shared') }}
       </p>
     </header>
 
     <table class="w-full text-sm">
       <thead class="text-muted-foreground text-left text-xs">
         <tr>
-          <th class="pb-2 font-medium">Name</th>
-          <th class="pb-2 font-medium">Cooldown (min)</th>
-          <th class="pb-2"><span class="sr-only">Actions</span></th>
+          <th class="pb-2 font-medium">{{ t('common.name') }}</th>
+          <th class="pb-2 font-medium">{{ t('categories.cooldown') }}</th>
+          <th class="pb-2">
+            <span class="sr-only">{{ t('tasks.column.actions') }}</span>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -149,7 +153,7 @@ async function remove(id: string, version: number): Promise<void> {
             <Input
               v-if="drafts.get(category.id)"
               v-model="drafts.get(category.id)!.name"
-              :aria-label="`Name of ${category.name}`"
+              :aria-label="t('categories.nameOf', { name: category.name })"
               data-testid="category-name"
               @input="edited(category.id)"
             />
@@ -160,7 +164,7 @@ async function remove(id: string, version: number): Promise<void> {
               v-model.number="drafts.get(category.id)!.defaultCooldownMin"
               type="number"
               min="0"
-              :aria-label="`Cooldown for ${category.name}`"
+              :aria-label="t('categories.cooldownOf', { name: category.name })"
               data-testid="category-cooldown"
               @input="edited(category.id)"
             />
@@ -171,11 +175,11 @@ async function remove(id: string, version: number): Promise<void> {
                 variant="ghost"
                 size="sm"
                 :disabled="busy || autosave.busy.value"
-                :aria-label="`Delete ${category.name}`"
+                :aria-label="t('categories.deleteNamed', { name: category.name })"
                 data-testid="delete-category"
                 @click="remove(category.id, category.version)"
               >
-                Delete
+                {{ t('common.delete') }}
               </Button>
             </div>
           </td>
@@ -183,16 +187,18 @@ async function remove(id: string, version: number): Promise<void> {
 
         <tr class="border-t">
           <td class="py-2 pr-3">
-            <Label for="new-category-name" class="sr-only">New category name</Label>
+            <Label for="new-category-name" class="sr-only">{{ t('categories.newName') }}</Label>
             <Input
               id="new-category-name"
               v-model="fresh.name"
-              placeholder="Exercise"
+              :placeholder="t('categories.namePlaceholder')"
               data-testid="new-category-name"
             />
           </td>
           <td class="py-2 pr-3">
-            <Label for="new-category-cooldown" class="sr-only">New category cooldown</Label>
+            <Label for="new-category-cooldown" class="sr-only">{{
+              t('categories.newCooldown')
+            }}</Label>
             <Input
               id="new-category-cooldown"
               v-model.number="fresh.defaultCooldownMin"
@@ -208,7 +214,7 @@ async function remove(id: string, version: number): Promise<void> {
               data-testid="add-category"
               @click="create"
             >
-              Add
+              {{ t('common.add') }}
             </Button>
           </td>
         </tr>

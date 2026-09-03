@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useI18n } from '@/i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MINIMUM_PASSWORD_LENGTH, resetPassword } from '@/lib/session';
+
+const { t } = useI18n();
 
 /**
  * Choosing a new password (spec §10.1).
@@ -61,9 +64,9 @@ async function submit() {
   <main class="flex min-h-full items-center justify-center p-8">
     <Card class="w-full max-w-sm" data-testid="reset-password">
       <CardHeader>
-        <CardTitle>Choose a new password</CardTitle>
+        <CardTitle>{{ t('auth.resetTitle') }}</CardTitle>
         <CardDescription v-if="!linkError && token">
-          Signing in on your other devices will need the new one.
+          {{ t('auth.resetLead') }}
         </CardDescription>
       </CardHeader>
 
@@ -80,16 +83,16 @@ async function submit() {
           data-testid="reset-link-dead"
         >
           <p class="text-sm">
-            That link has expired or has already been used. Reset links work once, and for an hour.
+            {{ t('auth.resetExpired') }}
           </p>
           <Button as-child data-testid="request-another">
-            <RouterLink to="/forgot-password">Send me a new link</RouterLink>
+            <RouterLink to="/forgot-password">{{ t('auth.sendNewLink') }}</RouterLink>
           </Button>
         </div>
 
         <form v-else class="flex flex-col gap-4" @submit.prevent="submit">
           <div class="flex flex-col gap-1.5">
-            <label class="text-sm font-medium" for="password">New password</label>
+            <label class="text-sm font-medium" for="password">{{ t('auth.newPassword') }}</label>
             <input
               id="password"
               v-model="password"

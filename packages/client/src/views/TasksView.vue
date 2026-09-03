@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
+import { useI18n } from '@/i18n';
 import BacklogPanel from '@/components/panels/BacklogPanel.vue';
 import TaskListPanel from '@/components/panels/TaskListPanel.vue';
 import TaskActions from '@/components/tasks/TaskActions.vue';
@@ -8,6 +9,8 @@ import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
 import { Dialog } from '@/components/ui/dialog';
 import { useWorkspace } from '@/lib/workspace';
 import type { ScheduledBlock } from '@ambitime/shared';
+
+const { t, plural } = useI18n();
 
 /**
  * Everything there is to do, whether or not it has a slot yet (spec §4.4, §6.7).
@@ -54,7 +57,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
 <template>
   <div class="flex flex-col gap-6 p-6" data-testid="tasks-view">
     <header class="flex flex-wrap items-center justify-between gap-4">
-      <h1 class="text-xl font-semibold tracking-tight">Tasks</h1>
+      <h1 class="text-xl font-semibold tracking-tight">{{ t('tasks.title') }}</h1>
     </header>
 
     <WorkspaceStatus />
@@ -72,8 +75,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         data-testid="unschedulable-notice"
       >
         <h2 class="text-sm font-semibold">
-          {{ unschedulable.length }}
-          {{ unschedulable.length === 1 ? 'task is' : 'tasks are' }} not being scheduled
+          {{ plural('schedule.unschedulable', unschedulable.length) }}
         </h2>
         <ul class="space-y-1">
           <li v-for="entry in unschedulable" :key="entry.occurrenceId" class="text-sm">
@@ -112,7 +114,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
       <Dialog
         v-if="editing.kind === 'task'"
         v-model:open="taskDialogOpen"
-        :title="editing.task === null ? 'New task' : 'Edit task'"
+        :title="editing.task === null ? t('editor.newTask') : t('editor.editTask')"
         data-testid="editor-panel"
       >
         <TaskEditor

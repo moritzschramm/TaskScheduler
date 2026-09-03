@@ -22,6 +22,7 @@ import { ApiError } from './api';
 import { now } from './clock';
 import { fetchConfiguration, fetchContext, fetchHistory, runCommand } from './commands';
 import { windowsForWeek } from './grid';
+import { language, translate, type MessageKey } from '@/i18n';
 import { monthOf, shiftMonth } from './month';
 import { optimisticBlocks, schedulesAgree } from './optimistic';
 import {
@@ -252,16 +253,23 @@ const openWindows = computed<ResolvedWindow[]>(() =>
  * window is a fact about the calendar and is fixed once in settings; a missing
  * category or estimate is a fact about one task and is fixed in its editor.
  */
-const REASONS: Record<string, string> = {
-  no_category: 'needs an activity type before a window can apply to it',
-  no_duration: 'needs an estimate before there is anything to fit',
+const REASONS: Record<string, MessageKey> = {
+  no_category: 'schedule.reason.noCategory',
+  no_duration: 'schedule.reason.noDuration',
 };
+
+function reasonTextOf(reason: string): string {
+  const key = REASONS[reason];
+  return key === undefined ? reason : translate(language.value, key);
+}
 
 const unschedulable = computed(() =>
   (view.value?.schedule.unschedulable ?? []).map((entry) => ({
     ...entry,
     title: tasks.value.find((task) => task.id === entry.taskId)?.title ?? 'Untitled task',
-    reasonText: REASONS[entry.reason] ?? entry.reason,
+    // Translated as the computed re-evaluates, so switching language
+    // re-words the notice rather than leaving the last language in it.
+    reasonText: reasonTextOf(entry.reason),
   })),
 );
 

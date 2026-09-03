@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import type { CapacityCell, Category } from '@ambitime/shared';
 
@@ -30,12 +31,13 @@ const props = defineProps<{ cells: CapacityCell[]; categories: Category[] }>();
  */
 const weeks = computed(() => [...new Set(props.cells.map((cell) => cell.weekStart))].sort());
 
-const ORDINALS = ['This week', 'Next week'] as const;
+const ORDINALS = ['capacity.thisWeek', 'capacity.nextWeek'] as const;
 
 /** Falls back to the date, so a third week would still say something true. */
 function weekLabel(weekStart: string): string {
   const index = weeks.value.indexOf(weekStart);
-  return ORDINALS[index] ?? `Week of ${weekStart}`;
+  const ordinal = ORDINALS[index];
+  return ordinal === undefined ? t('capacity.weekOf', { week: weekStart }) : t(ordinal);
 }
 
 const named = computed(() =>
@@ -59,6 +61,8 @@ function barClass(status: string): string {
   if (status === 'tight') return 'bg-amber-500';
   return 'bg-primary/60';
 }
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -67,10 +71,10 @@ function barClass(status: string): string {
     data-testid="capacity-panel"
     aria-labelledby="capacity-title"
   >
-    <h2 id="capacity-title" class="text-sm font-semibold">Capacity</h2>
+    <h2 id="capacity-title" class="text-sm font-semibold">{{ t('capacity.title') }}</h2>
 
     <p v-if="named.length === 0" class="text-muted-foreground text-sm">
-      No categories have availability in this horizon.
+      {{ t('capacity.empty') }}
     </p>
 
     <ul v-else class="space-y-2.5">
@@ -107,7 +111,7 @@ function barClass(status: string): string {
           class="text-destructive text-xs"
           data-testid="contiguity-warning"
         >
-          Enough total time, but no unbroken run long enough for a sequence here.
+          {{ t('capacity.noContiguous') }}
         </p>
       </li>
     </ul>

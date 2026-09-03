@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from '@/i18n';
 import { useRoute } from 'vue-router';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { loadSession, resendVerification, session } from '@/lib/session';
+
+const { t } = useI18n();
 
 /**
  * Where a confirmation link lands (spec §10.1).
@@ -58,21 +61,21 @@ async function resend() {
     <Card class="w-full max-w-sm" data-testid="verify-email">
       <template v-if="failure === null">
         <CardHeader>
-          <CardTitle>Your email is confirmed</CardTitle>
+          <CardTitle>{{ t('auth.verifiedTitle') }}</CardTitle>
           <CardDescription>
-            Ambitime can reach you now — a due date at risk, or an appointment somebody moved.
+            {{ t('auth.verifiedLead') }}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button as-child data-testid="verified-continue">
-            <RouterLink to="/">Open my schedule</RouterLink>
+            <RouterLink to="/">{{ t('auth.openSchedule') }}</RouterLink>
           </Button>
         </CardContent>
       </template>
 
       <template v-else>
         <CardHeader>
-          <CardTitle>That link did not work</CardTitle>
+          <CardTitle>{{ t('auth.verifyFailed') }}</CardTitle>
           <CardDescription data-testid="verify-error">
             {{
               failure === 'TOKEN_EXPIRED'
@@ -105,7 +108,7 @@ async function resend() {
           </Button>
 
           <Button v-if="!session" as-child variant="outline">
-            <RouterLink to="/sign-in">Sign in</RouterLink>
+            <RouterLink to="/sign-in">{{ t('auth.signIn') }}</RouterLink>
           </Button>
         </CardContent>
       </template>

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useI18n } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { fromLocalInput, toLocalInput } from '@/lib/time';
 import type { CommandRequest, FixedBlock } from '@ambitime/shared';
+
+const { t } = useI18n();
 
 /**
  * Fixed blocks — spec §7.4's `AddAppointment` and `AddUnavailability`.
@@ -257,22 +260,22 @@ async function cancelBlock(): Promise<void> {
       <h2 class="text-lg font-semibold">
         {{
           isCreate
-            ? 'New appointment'
+            ? t('appointments.editorNew')
             : isUnavailability
-              ? 'Edit unavailability'
-              : 'Edit appointment'
+              ? t('appointments.editorEditUnavailability')
+              : t('appointments.editorEdit')
         }}
       </h2>
       <p class="text-muted-foreground text-sm">
-        Tasks are scheduled around fixed blocks, never through them.
+        {{ t('appointments.lead2') }}
       </p>
     </header>
 
     <fieldset v-if="isCreate" class="flex items-center gap-4">
-      <legend class="sr-only">Kind of block</legend>
+      <legend class="sr-only">{{ t('appointments.kindLegend') }}</legend>
       <label class="flex items-center gap-2 text-sm">
         <input v-model="kind" type="radio" value="appointment" data-testid="kind-appointment" />
-        Appointment
+        {{ t('appointments.kindAppointment') }}
       </label>
       <label class="flex items-center gap-2 text-sm">
         <input
@@ -281,26 +284,26 @@ async function cancelBlock(): Promise<void> {
           value="unavailability"
           data-testid="kind-unavailability"
         />
-        Unavailable
+        {{ t('appointments.kindUnavailability') }}
       </label>
     </fieldset>
 
     <div v-if="!isUnavailability" class="space-y-1">
-      <Label for="appointment-title">Title</Label>
+      <Label for="appointment-title">{{ t('common.title') }}</Label>
       <Input id="appointment-title" v-model="title" data-testid="appointment-title" />
     </div>
     <p v-else class="text-muted-foreground text-sm" data-testid="unavailability-note">
-      An unavailable block carries no title — it only says the time is taken.
+      {{ t('appointments.untitledNote') }}
     </p>
 
     <div v-if="!isUnavailability" class="space-y-1">
-      <Label for="appointment-notes">Notes</Label>
+      <Label for="appointment-notes">{{ t('common.notes') }}</Label>
       <Input id="appointment-notes" v-model="notes" data-testid="appointment-notes" />
     </div>
 
     <div class="grid gap-3 sm:grid-cols-2">
       <div class="space-y-1">
-        <Label for="appointment-start">Starts</Label>
+        <Label for="appointment-start">{{ t('appointments.starts') }}</Label>
         <input
           id="appointment-start"
           v-model="start"
@@ -310,7 +313,7 @@ async function cancelBlock(): Promise<void> {
         />
       </div>
       <div class="space-y-1">
-        <Label for="appointment-end">Ends</Label>
+        <Label for="appointment-end">{{ t('appointments.ends') }}</Label>
         <input
           id="appointment-end"
           v-model="end"
@@ -324,29 +327,29 @@ async function cancelBlock(): Promise<void> {
     <fieldset v-if="isCreate" class="space-y-2" data-testid="recurrence-fieldset">
       <label class="flex items-center gap-2 text-sm">
         <input v-model="repeats" type="checkbox" data-testid="appointment-repeats" />
-        Repeats
+        {{ t('appointments.repeats') }}
       </label>
       <div v-if="repeats" class="flex flex-wrap items-center gap-2">
         <Select
           v-model="frequency"
           class="w-48"
-          aria-label="How often"
+          :aria-label="t('appointments.howOften')"
           data-testid="appointment-frequency"
         >
-          <option value="DAILY">every day</option>
-          <option value="WEEKLY">every week, on this weekday</option>
-          <option value="MONTHLY">every month</option>
+          <option value="DAILY">{{ t('appointments.daily') }}</option>
+          <option value="WEEKLY">{{ t('appointments.weekly') }}</option>
+          <option value="MONTHLY">{{ t('appointments.monthly') }}</option>
         </Select>
 
         <Select
           v-model="ends"
           class="w-40"
-          aria-label="When it stops"
+          :aria-label="t('appointments.whenItStops')"
           data-testid="appointment-ends"
         >
-          <option value="never">with no end</option>
-          <option value="after">for a number of times</option>
-          <option value="on">until a date</option>
+          <option value="never">{{ t('appointments.endsNever') }}</option>
+          <option value="after">{{ t('appointments.endsAfter') }}</option>
+          <option value="on">{{ t('appointments.endsOn') }}</option>
         </Select>
 
         <Input
@@ -355,7 +358,7 @@ async function cancelBlock(): Promise<void> {
           type="number"
           min="1"
           class="w-24"
-          aria-label="How many times"
+          :aria-label="t('appointments.howManyTimes')"
           data-testid="appointment-count"
         />
         <input
@@ -363,13 +366,13 @@ async function cancelBlock(): Promise<void> {
           v-model="untilDate"
           type="date"
           class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-          aria-label="Last day it happens"
+          :aria-label="t('appointments.lastDay')"
           data-testid="appointment-until"
         />
       </div>
 
       <p v-if="repeats && ends === 'on'" class="text-muted-foreground text-xs">
-        Includes the day you name.
+        {{ t('appointments.inclusive') }}
       </p>
     </fieldset>
 
@@ -378,29 +381,29 @@ async function cancelBlock(): Promise<void> {
       class="space-y-1"
       data-testid="scope-fieldset"
     >
-      <legend class="text-sm font-medium">This change applies to</legend>
+      <legend class="text-sm font-medium">{{ t('appointments.scopeLegend') }}</legend>
       <label class="flex items-center gap-2 text-sm">
         <input v-model="scope" type="radio" value="occurrence" data-testid="scope-occurrence" />
-        only this occurrence
+        {{ t('appointments.scopeOccurrence') }}
       </label>
       <label class="flex items-center gap-2 text-sm">
         <input v-model="scope" type="radio" value="this_and_future" data-testid="scope-future" />
-        this and all future occurrences
+        {{ t('appointments.scopeFuture') }}
       </label>
       <label class="flex items-center gap-2 text-sm">
         <input v-model="scope" type="radio" value="series" data-testid="scope-series" />
-        every occurrence, past ones included
+        {{ t('appointments.scopeSeries') }}
       </label>
     </fieldset>
 
-    <p class="text-muted-foreground text-xs">Local to {{ timeZone }}.</p>
+    <p class="text-muted-foreground text-xs">{{ t('appointments.localTo', { zone: timeZone }) }}</p>
     <p v-if="interval === null" class="text-destructive text-sm" data-testid="interval-invalid">
-      A block must end after it starts.
+      {{ t('appointments.backwards') }}
     </p>
 
     <div class="flex flex-wrap items-center gap-2">
       <Button :disabled="!canSave" data-testid="save-appointment" @click="save">
-        {{ isCreate ? 'Add block' : 'Save block' }}
+        {{ isCreate ? t('appointments.addBlock') : t('appointments.saveBlock') }}
       </Button>
       <Button
         variant="ghost"
@@ -408,7 +411,7 @@ async function cancelBlock(): Promise<void> {
         data-testid="cancel-appointment-edit"
         @click="emit('cancel')"
       >
-        Cancel
+        {{ t('common.cancel') }}
       </Button>
       <template v-if="block">
         <span class="grow" />
@@ -418,7 +421,7 @@ async function cancelBlock(): Promise<void> {
           data-testid="delete-appointment"
           @click="cancelBlock"
         >
-          Remove block
+          {{ t('appointments.removeBlock') }}
         </Button>
       </template>
     </div>

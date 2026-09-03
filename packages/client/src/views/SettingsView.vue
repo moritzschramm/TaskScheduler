@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
+import { useI18n } from '@/i18n';
 import CalendarSection from '@/components/settings/CalendarSection.vue';
 import DisplaySection from '@/components/settings/DisplaySection.vue';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,8 @@ import { loadSession } from '@/lib/session';
 import { invalidateWorkspace } from '@/lib/workspace';
 import { browserZone, timeZones } from '@/lib/zones';
 import type { CalendarConfiguration, CalendarSummary, CommandRequest } from '@ambitime/shared';
+
+const { t } = useI18n();
 
 /**
  * The configuration screen (plan M11): the planner itself and how dates are
@@ -63,7 +66,7 @@ async function load({ silent = false } = {}): Promise<void> {
     const id = selectedId.value;
     configuration.value = id === null ? null : await fetchConfiguration(id);
   } catch (cause) {
-    error.value = message(cause, 'Could not load the settings');
+    error.value = message(cause, t('errors.settings'));
   } finally {
     loading.value = false;
   }
@@ -89,7 +92,7 @@ async function submit(request: CommandRequest): Promise<boolean> {
     invalidateWorkspace();
     return true;
   } catch (cause) {
-    error.value = message(cause, 'That change could not be applied');
+    error.value = message(cause, t('errors.command'));
     return false;
   }
 }
@@ -109,7 +112,7 @@ async function createCalendar(): Promise<void> {
     newCalendar.value = { name: '', timezone: browserZone() };
     await load();
   } catch (cause) {
-    error.value = message(cause, 'That calendar could not be created');
+    error.value = message(cause, t('errors.calendar'));
   }
 }
 
@@ -127,12 +130,12 @@ watch(selectedId, () => load());
   <div class="flex flex-col gap-8 p-6" data-testid="settings-view">
     <header class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <h1 class="text-xl font-semibold tracking-tight">Settings</h1>
+        <h1 class="text-xl font-semibold tracking-tight">{{ t('settings.title') }}</h1>
         <Select
           v-if="calendars.length > 1"
           v-model="selectedId as string"
           class="w-auto"
-          aria-label="Planner"
+          :aria-label="t('settings.plannerLabel')"
           data-testid="settings-calendar-select"
         >
           <option v-for="entry in calendars" :key="entry.id" :value="entry.id">
@@ -146,7 +149,7 @@ watch(selectedId, () => load());
         to="/"
         data-testid="back-to-schedule"
       >
-        Back to the schedule
+        {{ t('settings.back') }}
       </RouterLink>
     </header>
 
@@ -154,7 +157,7 @@ watch(selectedId, () => load());
       {{ error }}
     </p>
 
-    <p v-if="loading" class="text-muted-foreground text-sm">Loading the settings…</p>
+    <p v-if="loading" class="text-muted-foreground text-sm">{{ t('settings.loading') }}</p>
 
     <!--
       A signed-up user has a tenant but no calendar: nothing creates one for
@@ -167,26 +170,24 @@ watch(selectedId, () => load());
       data-testid="no-calendar"
     >
       <header>
-        <h2 class="text-lg font-semibold">Create a planner</h2>
+        <h2 class="text-lg font-semibold">{{ t('settings.createTitle') }}</h2>
         <p class="text-muted-foreground text-sm">
-          A planner is one self-contained world to schedule in: its own time zone, its own hours,
-          its own tasks. Most people need only one. Tasks, hours and special weeks are separate per
-          planner, activity types are shared.
+          {{ t('settings.createLead') }}
         </p>
       </header>
 
       <div class="space-y-1">
-        <Label for="first-calendar-name">Name</Label>
+        <Label for="first-calendar-name">{{ t('common.name') }}</Label>
         <Input
           id="first-calendar-name"
           v-model="newCalendar.name"
-          placeholder="Work"
+          :placeholder="t('gettingStarted.namePlaceholder')"
           data-testid="first-calendar-name"
         />
       </div>
 
       <div class="space-y-1">
-        <Label for="first-calendar-timezone">Time zone</Label>
+        <Label for="first-calendar-timezone">{{ t('settings.timeZone') }}</Label>
         <Select
           id="first-calendar-timezone"
           v-model="newCalendar.timezone"
@@ -201,7 +202,7 @@ watch(selectedId, () => load());
         data-testid="create-calendar"
         @click="createCalendar"
       >
-        Create planner
+        {{ t('settings.create') }}
       </Button>
     </section>
 
@@ -223,24 +224,26 @@ watch(selectedId, () => load());
         data-testid="add-planner-details"
         @toggle="addingPlanner = ($event.target as HTMLDetailsElement).open"
       >
-        <summary class="cursor-pointer text-sm font-semibold">Add another planner</summary>
+        <summary class="cursor-pointer text-sm font-semibold">
+          {{ t('settings.addAnother') }}
+        </summary>
         <div v-if="addingPlanner" class="max-w-md space-y-3 pt-3">
           <p class="text-muted-foreground text-sm">
-            Tasks, hours and special weeks are separate per planner, activity types are shared.
+            {{ t('settings.addAnotherLead') }}
           </p>
 
           <div class="space-y-1">
-            <Label for="another-calendar-name">Name</Label>
+            <Label for="another-calendar-name">{{ t('common.name') }}</Label>
             <Input
               id="another-calendar-name"
               v-model="newCalendar.name"
-              placeholder="Work"
+              :placeholder="t('gettingStarted.namePlaceholder')"
               data-testid="another-calendar-name"
             />
           </div>
 
           <div class="space-y-1">
-            <Label for="another-calendar-timezone">Time zone</Label>
+            <Label for="another-calendar-timezone">{{ t('settings.timeZone') }}</Label>
             <Select
               id="another-calendar-timezone"
               v-model="newCalendar.timezone"
@@ -255,7 +258,7 @@ watch(selectedId, () => load());
             data-testid="create-another-calendar"
             @click="createCalendar"
           >
-            Create planner
+            {{ t('settings.create') }}
           </Button>
         </div>
       </details>

@@ -1443,7 +1443,9 @@ describe('seed via the API, render the client', () => {
 
       // And the calendar-level cause is stated once, where it can be fixed.
       expect(wrapper.find('[data-testid="no-windows-yet"]').exists()).toBe(true);
-      expect(wrapper.find('[data-testid="set-up-availability"]').text()).toContain('availability');
+      expect(wrapper.find('[data-testid="set-up-availability"]').text()).toContain(
+        'scheduling hours',
+      );
 
       // §14: the screen that explains an empty calendar is the first screen a
       // new account sees, so it is the last one that may be unreadable.
