@@ -3,7 +3,7 @@ import { commandSchema, type Command, type CreatedEntity } from '@ambitime/share
 import { z } from 'zod';
 import { withTenantContext } from '../db/context.js';
 import { commands } from '../db/schema/index.js';
-import { deriveCalendarSchedule, type DerivedSchedule } from '../schedule/derive.js';
+import type { DerivedSchedule } from '../schedule/derive.js';
 import { toInstant, toIso } from '../schedule/instants.js';
 import { countAffectedTasks, snapshotPlacements } from './affected.js';
 import { CommandValidationError, PreconditionFailedError } from './errors.js';
@@ -135,22 +135,17 @@ export async function applyCommand(
         // One function rather than two, because two would drift — and the drift
         // would show as a schedule that changed the moment somebody touched it,
         // which is the impression the job exists to remove.
-        await refreshWithin(tx, {
-          tenantId: ctx.tenantId,
-          actorId: ctx.actorId,
-          calendarId,
-          timeZone: await calendarTimeZone(ctx, calendarId),
-          now: ctx.now,
-          config: ctx.config,
-        });
-
-        // Re-read after the refresh so the response carries the schedule the
-        // caller's own command produced, demand and all.
+        //
+        // Its own result is the response's, rather than a second derive to
+        // "re-read after the refresh": the refresh generated the demand before
+        // it solved, so what it returns already carries it, and solving again
+        // could only produce the same answer at the same `now`.
         schedules.push(
-          await deriveCalendarSchedule({
-            tx,
+          await refreshWithin(tx, {
             tenantId: ctx.tenantId,
+            actorId: ctx.actorId,
             calendarId,
+            timeZone: await calendarTimeZone(ctx, calendarId),
             now: ctx.now,
             config: ctx.config,
           }),
@@ -161,7 +156,12 @@ export async function applyCommand(
         calendarIds,
         changes: ctx.journal,
         ...(outcome.targets === undefined ? {} : { targets: outcome.targets }),
-        affectedTasks: countAffectedTasks(ctx.journal, placedBefore, await snapshotPlacements(tx)),
+        affectedTasks: countAffectedTasks(
+          ctx.journal,
+          placedBefore,
+          await snapshotPlacements(tx, calendarIds),
+          calendarIds,
+        ),
       };
 
       return {

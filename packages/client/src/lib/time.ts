@@ -115,9 +115,33 @@ export function parseMinuteOfDay(value: string): number | null {
   return minutes >= 0 && minutes <= 1440 ? minutes : null;
 }
 
+/**
+ * Display formatters, kept rather than rebuilt.
+ *
+ * Constructing an `Intl.DateTimeFormat` costs far more than using one — the
+ * same reason the scheduler caches its zone formatter — and these are built in
+ * render paths: one per day heading, one per month cell, one per history row.
+ * A month grid was constructing eighty-four of them on every keystroke that
+ * touched the page.
+ *
+ * Keyed by locale and shape, because that is all a formatter depends on. The
+ * set of locales one browser session uses is one or two, so this never grows.
+ */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}|${JSON.stringify(options)}`;
+  let found = formatters.get(key);
+  if (found === undefined) {
+    found = new Intl.DateTimeFormat(locale, options);
+    formatters.set(key, found);
+  }
+  return found;
+}
+
 /** ISO-8601 weekday names, 1 = Monday … 7 = Sunday, in the user's locale. */
-export function weekdayNames(locale: string): string[] {
-  const format = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' });
+export function weekdayNames(locale: string, width: 'long' | 'short' = 'long'): string[] {
+  const format = formatter(locale, { weekday: width, timeZone: 'UTC' });
   // 2026-03-23 is a Monday, so this walks Monday to Sunday in ISO order.
   return Array.from({ length: 7 }, (_, offset) =>
     format.format(new Date(Date.UTC(2026, 2, 23 + offset))),
@@ -157,10 +181,25 @@ export function fromLocalInput(value: string, timeZone: string): string | null {
 /** `2026-03-23` → `Mon 23 Mar`, in the user's locale. */
 export function formatDayLabel(date: CivilDate, locale: string): string {
   const utc = new Date(Date.UTC(date.year, date.month - 1, date.day));
-  return new Intl.DateTimeFormat(locale, {
+  return formatter(locale, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     timeZone: 'UTC',
   }).format(utc);
+}
+
+/** A civil date spelled out — `Monday 23 March` — for a label or a title. */
+export function formatFullDate(date: CivilDate, locale: string): string {
+  return formatter(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(date.year, date.month - 1, date.day)));
+}
+
+/** An instant as a date and time, for a log or an audit row. */
+export function formatDateTime(iso: string, locale: string): string {
+  return formatter(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
 }

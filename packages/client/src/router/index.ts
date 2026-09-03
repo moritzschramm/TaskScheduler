@@ -1,16 +1,31 @@
 import { createRouter, createWebHistory, type Router, type RouterHistory } from 'vue-router';
 import ScheduleView from '@/views/ScheduleView.vue';
-import TasksView from '@/views/TasksView.vue';
-import CategoriesView from '@/views/CategoriesView.vue';
-import AppointmentsView from '@/views/AppointmentsView.vue';
-import AuditView from '@/views/AuditView.vue';
-import SettingsView from '@/views/SettingsView.vue';
 import SignInView from '@/views/SignInView.vue';
-import SignUpView from '@/views/SignUpView.vue';
-import ForgotPasswordView from '@/views/ForgotPasswordView.vue';
-import ResetPasswordView from '@/views/ResetPasswordView.vue';
-import VerifyEmailView from '@/views/VerifyEmailView.vue';
 import { loadSession, RESET_PASSWORD_PATH, session, VERIFY_EMAIL_PATH } from '@/lib/session';
+
+/**
+ * Every view but two is loaded when it is first visited.
+ *
+ * The application shipped as one 489 kB bundle, which meant the sign-in form
+ * carried the scheduling engine, the table library and every dialog in the
+ * app — for a page whose entire content is two fields. Splitting on the route
+ * is the standard remedy and costs nothing at runtime: a chunk is fetched
+ * once, on a navigation the user has already committed to.
+ *
+ * **Schedule and sign-in stay eager.** They are the two landing pages — one of
+ * them is where every session begins — and a lazily-loaded landing page trades
+ * a smaller bundle for a blank screen at the exact moment somebody is deciding
+ * whether the application works.
+ */
+const TasksView = () => import('@/views/TasksView.vue');
+const CategoriesView = () => import('@/views/CategoriesView.vue');
+const AppointmentsView = () => import('@/views/AppointmentsView.vue');
+const AuditView = () => import('@/views/AuditView.vue');
+const SettingsView = () => import('@/views/SettingsView.vue');
+const SignUpView = () => import('@/views/SignUpView.vue');
+const ForgotPasswordView = () => import('@/views/ForgotPasswordView.vue');
+const ResetPasswordView = () => import('@/views/ResetPasswordView.vue');
+const VerifyEmailView = () => import('@/views/VerifyEmailView.vue');
 
 /**
  * Auth-aware routing (plan M10).

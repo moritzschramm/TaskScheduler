@@ -8,7 +8,7 @@ import {
 import { calendars } from '../db/schema/index.js';
 import { withTenantContext } from '../db/context.js';
 import { generateDemand } from '../commands/demand.js';
-import { deriveCalendarSchedule } from '../schedule/derive.js';
+import { deriveCalendarSchedule, type DerivedSchedule } from '../schedule/derive.js';
 import { produceSignals } from '../notifications/produce.js';
 import { toIso } from '../schedule/instants.js';
 import type { CommandContext } from '../commands/context.js';
@@ -89,11 +89,18 @@ export interface RefreshWithinInput {
  * The write path uses this one: its command has to be applied, the demand
  * generated, the schedule derived and the signals written in a single
  * transaction, or a reader could catch the three disagreeing.
+ *
+ * **Returns what it derived.** The apply pipeline needs the schedule it just
+ * produced in order to answer the caller, and used to re-derive to get it —
+ * two full solves per command, the second one guaranteed to agree with the
+ * first, because the only thing between them is `produceSignals` and
+ * notifications are not an input to a solve. Handing the result back removes
+ * the second pass without the caller having to know why the first was enough.
  */
 export async function refreshWithin(
   tx: Transaction,
   { tenantId, actorId, calendarId, timeZone, now, config }: RefreshWithinInput,
-): Promise<void> {
+): Promise<DerivedSchedule> {
   const ctx: CommandContext = {
     tx,
     tenantId,
@@ -122,4 +129,6 @@ export async function refreshWithin(
   const derived = await deriveCalendarSchedule({ tx, tenantId, calendarId, now, config });
 
   await produceSignals({ tx, tenantId, userId: actorId, derived, config });
+
+  return derived;
 }

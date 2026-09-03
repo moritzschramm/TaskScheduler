@@ -1,11 +1,8 @@
 import {
-  backlogResponseSchema,
   notificationListSchema,
   calendarListSchema,
-  capacityResponseSchema,
   scheduleResponseSchema,
   taskListSchema,
-  type BacklogEntry,
   type CalendarSummary,
   type CapacityCell,
   type CompletedBlock,
@@ -31,6 +28,8 @@ export interface ScheduleView {
   fixedBlocks: FixedBlock[];
   /** What was done, still drawn where it was done (§3.4, §7.3). */
   completedBlocks: CompletedBlock[];
+  /** Utilization from the same solve, so the two cannot disagree (§6.6). */
+  capacity: CapacityCell[];
 }
 
 export async function fetchCalendars(): Promise<CalendarSummary[]> {
@@ -47,20 +46,20 @@ export async function fetchSchedule(calendarId: string): Promise<ScheduleView> {
   return scheduleResponseSchema.parse(await expectOk(response));
 }
 
-export async function fetchBacklog(calendarId: string): Promise<BacklogEntry[]> {
-  const response = await api.api.calendars[':calendarId'].backlog.$get({ param: { calendarId } });
-  return backlogResponseSchema.parse(await expectOk(response)).entries;
-}
-
 export async function fetchTasks(calendarId: string): Promise<TaskNode[]> {
   const response = await api.api.calendars[':calendarId'].tasks.$get({ param: { calendarId } });
   return taskListSchema.parse(await expectOk(response)).tasks;
 }
 
-export async function fetchCapacity(calendarId: string): Promise<CapacityCell[]> {
-  const response = await api.api.calendars[':calendarId'].capacity.$get({ param: { calendarId } });
-  return capacityResponseSchema.parse(await expectOk(response)).cells;
-}
+/**
+ * No `fetchBacklog` or `fetchCapacity`.
+ *
+ * Both endpoints still exist for a caller that wants one of those answers on
+ * its own — but every screen here wants them *beside* the schedule, and each
+ * costs a full solve of the same calendar to produce something
+ * `fetchSchedule` already returned. Reaching for them from a view is almost
+ * always a way of paying three times for one answer.
+ */
 
 /** The engine's signals for the signed-in user (spec §11). */
 export async function fetchNotifications(): Promise<Notification[]> {

@@ -1,6 +1,6 @@
 import { daysFromCivil, type CivilDate } from '@ambitime/scheduler';
 import type { WeekTypeOverrideEntry } from '@ambitime/shared';
-import { addDays, formatCivilDate, parseCivilDate, weekDays } from './time';
+import { addDays, formatCivilDate, parseCivilDate, weekDays, weekdayNames } from './time';
 
 /**
  * The month, as the grid that draws it needs (spec §4.3, §6.1).
@@ -106,12 +106,6 @@ export function formatMonth(month: CivilDate, locale: string): string {
 
 /** Column headings: the seven weekday names, rotated to the viewer's start. */
 export function weekdayHeadings(locale: string, firstDayOfWeek: number): string[] {
-  // 2024-01-01 was a Monday, so this indexes ISO weekdays 1–7 directly.
-  const names = Array.from({ length: 7 }, (_, index) =>
-    new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(
-      new Date(Date.UTC(2024, 0, index + 1)),
-    ),
-  );
-
+  const names = weekdayNames(locale, 'short');
   return Array.from({ length: 7 }, (_, offset) => names[(firstDayOfWeek - 1 + offset) % 7] ?? '');
 }

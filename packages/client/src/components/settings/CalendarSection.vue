@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useAutosave } from '@/lib/autosave';
+import { timeZonesIncluding } from '@/lib/zones';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
@@ -87,10 +88,7 @@ function windowsOfKind(
 const readOnly = computed(() => !props.configuration.calendar.isOwner);
 
 /** Every zone the browser knows, so a typo cannot reach the command. */
-const timeZones = computed(() => {
-  const known = Intl.supportedValuesOf('timeZone');
-  return known.includes(timezone.value) ? known : [timezone.value, ...known];
-});
+const zones = computed(() => timeZonesIncluding(timezone.value));
 
 function editedCalendar(): void {
   autosave.save('calendar', async () => {
@@ -162,7 +160,7 @@ function editedWindows(kind: 'working' | 'shareable'): void {
           :disabled="readOnly"
           data-testid="calendar-timezone"
         >
-          <option v-for="zone in timeZones" :key="zone" :value="zone">{{ zone }}</option>
+          <option v-for="zone in zones" :key="zone" :value="zone">{{ zone }}</option>
         </Select>
       </div>
 

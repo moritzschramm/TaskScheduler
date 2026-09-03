@@ -332,6 +332,17 @@ export const scheduleResponseSchema = z.object({
   fixedBlocks: z.array(fixedBlockSchema),
   /** What was done, still drawn where it was done. */
   completedBlocks: z.array(completedBlockSchema),
+  /**
+   * Utilization per (category, week), from the very same solve (§6.6).
+   *
+   * Carried here rather than fetched beside it. Capacity is a reading *of* a
+   * schedule — supply against the demand that was placed in it — so computing
+   * it needs the derived result and nothing else. Asking for it separately
+   * meant a second full solve of the same calendar at a slightly later `now`,
+   * which is both wasted work and a way for the indicator to disagree with the
+   * grid it sits under.
+   */
+  capacity: z.array(capacityCellSchema),
 });
 
 export const backlogResponseSchema = z.object({

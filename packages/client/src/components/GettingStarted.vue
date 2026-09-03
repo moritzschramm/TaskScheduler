@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiError } from '@/lib/api';
+import { browserZone } from '@/lib/zones';
 import { createdId, runCommand } from '@/lib/commands';
 import { useWorkspace } from '@/lib/workspace';
 
@@ -116,11 +117,6 @@ async function begin(): Promise<void> {
   } finally {
     busy.value = false;
   }
-}
-
-/** The viewer's own zone — a good guess, and changeable in settings. */
-function browserZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 </script>
 

@@ -25,9 +25,7 @@ import { windowsForWeek } from './grid';
 import { monthOf, shiftMonth } from './month';
 import { optimisticBlocks, schedulesAgree } from './optimistic';
 import {
-  fetchBacklog,
   fetchCalendars,
-  fetchCapacity,
   fetchNotifications,
   fetchSchedule,
   fetchTasks,
@@ -366,15 +364,18 @@ async function load(): Promise<void> {
     const id = selectedId.value;
     if (id === null) return;
 
-    const [schedule, entries, taskList, config, log, context, signals, cells] = await Promise.all([
+    // Six requests, one solve. The backlog and the capacity reading are both
+    // products of the schedule's own solve, and asking for them separately made
+    // a single screen cost three — three loads of the same calendar, three
+    // greedy passes over the same fortnight, and three writes of the same
+    // placement cache, for two arrays the first answer already contained.
+    const [schedule, taskList, config, log, context, signals] = await Promise.all([
       fetchSchedule(id),
-      fetchBacklog(id),
       fetchTasks(id),
       fetchConfiguration(id),
       fetchHistory(),
       fetchContext(id),
       fetchNotifications(),
-      fetchCapacity(id),
     ]);
 
     configuration.value = config;
@@ -382,10 +383,10 @@ async function load(): Promise<void> {
     history.value = log;
     engineContext.value = context;
     notifications.value = signals;
-    capacity.value = cells;
 
     view.value = schedule;
-    backlog.value = entries;
+    backlog.value = schedule.schedule.backlog;
+    capacity.value = schedule.capacity;
     tasks.value = taskList;
 
     // Re-point the open editor at the freshly read row rather than closing it:

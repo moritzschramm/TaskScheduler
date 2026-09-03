@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { placements, taskOccurrences } from '../db/schema/index.js';
 import type { RowChange } from './journal.js';
 import type { Transaction } from '../db/client.js';
@@ -31,6 +31,7 @@ import type { Transaction } from '../db/client.js';
 /** A placed occurrence, reduced to what a comparison needs. */
 interface PlacedTask {
   taskId: string;
+  calendarId: string;
   /** The range literal. Postgres normalises it, so equal spans compare equal. */
   during: string;
 }
@@ -38,28 +39,44 @@ interface PlacedTask {
 export type PlacementSnapshot = ReadonlyMap<string, PlacedTask>;
 
 /**
- * Every placement the tenant currently has cached, by occurrence.
+ * The placements currently cached, by occurrence.
  *
- * Tenant-wide rather than per-calendar because the "before" side is taken
- * before the handler runs, when which calendars it will touch is not yet known
- * — and taking it afterwards would miss any placement that had already
- * cascaded away with a deleted occurrence. RLS scopes the read to the tenant
- * and the cache is bounded by the horizon, so the wider net costs nothing.
+ * The "before" side is taken with no `calendarIds`, because it happens before
+ * the handler runs and which calendars it will touch is not yet known — and
+ * taking it afterwards would miss any placement that had already cascaded away
+ * with a deleted occurrence. RLS scopes that read to the tenant.
  *
- * Calendars the command does not re-derive cannot change, so widening the
- * snapshot cannot widen the count.
+ * The "after" side names the calendars, because by then they are known and
+ * only those were re-derived. A calendar the command did not touch cannot have
+ * moved, so narrowing the second read cannot narrow the count — it only stops
+ * the query walking a second calendar's fortnight to prove nothing changed in
+ * it.
  */
-export async function snapshotPlacements(tx: Transaction): Promise<PlacementSnapshot> {
+export async function snapshotPlacements(
+  tx: Transaction,
+  calendarIds?: readonly string[],
+): Promise<PlacementSnapshot> {
+  if (calendarIds !== undefined && calendarIds.length === 0) return new Map();
+
   const rows = await tx
     .select({
       occurrenceId: placements.occurrenceId,
       taskId: taskOccurrences.taskId,
+      calendarId: placements.calendarId,
       during: placements.during,
     })
     .from(placements)
-    .innerJoin(taskOccurrences, eq(taskOccurrences.id, placements.occurrenceId));
+    .innerJoin(taskOccurrences, eq(taskOccurrences.id, placements.occurrenceId))
+    .where(
+      calendarIds === undefined ? undefined : inArray(placements.calendarId, [...calendarIds]),
+    );
 
-  return new Map(rows.map((row) => [row.occurrenceId, { taskId: row.taskId, during: row.during }]));
+  return new Map(
+    rows.map((row) => [
+      row.occurrenceId,
+      { taskId: row.taskId, calendarId: row.calendarId, during: row.during },
+    ]),
+  );
 }
 
 /**
@@ -74,15 +91,24 @@ export function countAffectedTasks(
   changes: readonly RowChange[],
   before: PlacementSnapshot,
   after: PlacementSnapshot,
+  /** The calendars the command re-derived; nothing else can have moved. */
+  derivedCalendarIds: readonly string[],
 ): number {
   const affected = new Set<string>();
+  const derived = new Set(derivedCalendarIds);
 
   for (const change of changes) {
     if (change.table === 'tasks') affected.add(change.id);
   }
 
   // Moved or unplaced. The task id comes from the side that has the row.
+  //
+  // Restricted to what the "after" side covers: it names the calendars that
+  // were re-derived, so a placement absent from it because its calendar was
+  // never looked at has not moved — only one that its own calendar re-derived
+  // without has.
   for (const [occurrenceId, placed] of before) {
+    if (!derived.has(placed.calendarId)) continue;
     const now = after.get(occurrenceId);
     if (now === undefined || now.during !== placed.during) affected.add(placed.taskId);
   }

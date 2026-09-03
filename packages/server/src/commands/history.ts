@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { commands } from '../db/schema/index.js';
 import { UNDO_HISTORY_DEPTH } from './tuning.js';
 import type { CommandContext } from './context.js';
@@ -61,14 +61,33 @@ const EMPTY_JOURNAL: CommandJournal = { calendarIds: [], changes: [] };
  * more recently than you is not what anyone means by pressing it. §7.5 does not
  * say, and this is the reading that cannot surprise someone badly.
  */
-export async function readHistory(ctx: CommandContext): Promise<History> {
+export interface HistoryOptions {
+  /**
+   * Whether to read the row images each entry carries.
+   *
+   * Undo and redo need them — they *are* the reversal (§12). Everything else
+   * wants the shape of the stacks and the label on top of each, and `inverse`
+   * is by far the largest column in the log: one bulk reflow journals a row
+   * image per task it moved. Reading two hundred of those to render the word
+   * "Undo: Move task" was most of the cost of the button.
+   */
+  withJournal?: boolean;
+}
+
+export async function readHistory(
+  ctx: CommandContext,
+  { withJournal = true }: HistoryOptions = {},
+): Promise<History> {
   const rows = await ctx.tx
     .select({
       id: commands.id,
       seq: commands.seq,
       type: commands.type,
       groupId: commands.groupId,
-      inverse: commands.inverse,
+      // Selected conditionally rather than always: the folding below is
+      // identical either way, so the two callers differ only in what they ask
+      // the database to send.
+      inverse: withJournal ? commands.inverse : sql<null>`null`,
     })
     .from(commands)
     .where(eq(commands.actorId, ctx.actorId))

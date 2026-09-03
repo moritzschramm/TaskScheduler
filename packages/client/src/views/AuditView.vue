@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
 import { fetchAudit } from '@/lib/commands';
 import { displayLocale } from '@/lib/session';
+import { formatDateTime } from '@/lib/time';
 import type { AuditEntry } from '@ambitime/shared';
 
 /**
@@ -48,10 +49,7 @@ function readable(type: string): string {
 }
 
 function when(iso: string): string {
-  return new Intl.DateTimeFormat(displayLocale(), {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(iso));
+  return formatDateTime(iso, displayLocale());
 }
 
 onMounted(() => load());

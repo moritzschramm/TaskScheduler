@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useAutosave } from '@/lib/autosave';
+import { timeZones } from '@/lib/zones';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { session } from '@/lib/session';
@@ -66,8 +67,6 @@ watch(
  * server's own answer back to it as an edit.
  */
 watch([locale, timeZone, firstDayOfWeek], () => !seeding && edited(), { flush: 'sync' });
-
-const timeZones = computed(() => Intl.supportedValuesOf('timeZone'));
 
 /** A handful of tags rather than every one the runtime knows: BCP-47 has
  * thousands, and a list nobody can scroll is worse than a short one. */
@@ -146,7 +145,7 @@ function edited(): void {
         <Label for="settings-timezone">Time zone</Label>
         <Select id="settings-timezone" v-model="timeZone" data-testid="settings-timezone">
           <option value="">Follow each planner ({{ calendarTimeZone }})</option>
-          <option v-for="zone in timeZones" :key="zone" :value="zone">{{ zone }}</option>
+          <option v-for="zone in timeZones()" :key="zone" :value="zone">{{ zone }}</option>
         </Select>
       </div>
 

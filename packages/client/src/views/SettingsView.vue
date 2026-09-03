@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import CalendarSection from '@/components/settings/CalendarSection.vue';
 import DisplaySection from '@/components/settings/DisplaySection.vue';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { createdId, fetchConfiguration, runCommand } from '@/lib/commands';
 import { fetchCalendars } from '@/lib/schedule';
 import { loadSession } from '@/lib/session';
 import { invalidateWorkspace } from '@/lib/workspace';
+import { browserZone, timeZones } from '@/lib/zones';
 import type { CalendarConfiguration, CalendarSummary, CommandRequest } from '@ambitime/shared';
 
 /**
@@ -38,12 +39,15 @@ const loading = ref(true);
 
 const newCalendar = ref({ name: '', timezone: browserZone() });
 
-const timeZones = computed(() => Intl.supportedValuesOf('timeZone'));
-
-/** The viewer's own zone as the default for a new calendar — a good guess. */
-function browserZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
-}
+/**
+ * Whether the add-a-planner picker has been opened.
+ *
+ * Its four hundred `<option>` elements are built only once somebody asks for
+ * them. A `<details>` hides its content visually and still renders it, so a
+ * folded-away zone picker was costing the settings page a third of its DOM for
+ * a form most people never open.
+ */
+const addingPlanner = ref(false);
 
 async function load({ silent = false } = {}): Promise<void> {
   // A refresh after a save is not a page load: there is already a correct
@@ -188,7 +192,7 @@ watch(selectedId, () => load());
           v-model="newCalendar.timezone"
           data-testid="first-calendar-timezone"
         >
-          <option v-for="zone in timeZones" :key="zone" :value="zone">{{ zone }}</option>
+          <option v-for="zone in timeZones()" :key="zone" :value="zone">{{ zone }}</option>
         </Select>
       </div>
 
@@ -212,9 +216,13 @@ watch(selectedId, () => load());
         only rendered when there were none, so the first planner closed the door
         behind it. Folded away, because most people do need exactly one.
       -->
-      <details class="rounded-lg border p-4" data-testid="add-planner-details">
+      <details
+        class="rounded-lg border p-4"
+        data-testid="add-planner-details"
+        @toggle="addingPlanner = ($event.target as HTMLDetailsElement).open"
+      >
         <summary class="cursor-pointer text-sm font-semibold">Add another planner</summary>
-        <div class="max-w-md space-y-3 pt-3">
+        <div v-if="addingPlanner" class="max-w-md space-y-3 pt-3">
           <p class="text-muted-foreground text-sm">
             A second planner is for a life that genuinely has two — a job whose hours and holidays
             have nothing to do with your own. Tasks, hours and special weeks are separate; activity
@@ -238,7 +246,7 @@ watch(selectedId, () => load());
               v-model="newCalendar.timezone"
               data-testid="another-calendar-timezone"
             >
-              <option v-for="zone in timeZones" :key="zone" :value="zone">{{ zone }}</option>
+              <option v-for="zone in timeZones()" :key="zone" :value="zone">{{ zone }}</option>
             </Select>
           </div>
 

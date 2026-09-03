@@ -193,13 +193,19 @@ function checkOverlaps(
     }
   }
 
+  // Sorted once, not once per placement. The order matters only so that two
+  // runs report the same violations in the same order (§6.3), and re-deriving
+  // it inside the loop made the pass O(placements × blocks log blocks) for a
+  // result that cannot change between iterations.
+  const blocks = sorted(
+    context.fixedBlocks,
+    byId((b) => b.id),
+  );
+
   for (const placement of ordered) {
     const footprint = footprintOf(placement);
 
-    for (const block of sorted(
-      context.fixedBlocks,
-      byId((b) => b.id),
-    )) {
+    for (const block of blocks) {
       if (overlaps(placement.interval, block.interval)) {
         violations.push({
           code: 'fixed_block_overlap',

@@ -7,8 +7,8 @@ import type {
   ScheduledBlock,
   WeekTypeOverrideEntry,
 } from '@ambitime/shared';
-import { monthWeeks, specialWeekOn, weekdayHeadings, type MonthDay } from '@/lib/month';
-import { localDate, sameCivilDate } from '@/lib/time';
+import { monthWeeks, specialWeekOn, weekdayHeadings } from '@/lib/month';
+import { formatFullDate, localDate, sameCivilDate } from '@/lib/time';
 
 /**
  * A month at a glance — what the week grid cannot show (spec §4.3, §6.1).
@@ -72,7 +72,6 @@ interface DayEntry {
   kind: 'task' | 'appointment' | 'unavailability' | 'completed';
 }
 
-const weeks = computed(() => monthWeeks(props.month, props.firstDayOfWeek));
 const headings = computed(() => weekdayHeadings(props.locale, props.firstDayOfWeek));
 
 /**
@@ -111,42 +110,61 @@ const byDay = computed(() => {
   return map;
 });
 
-function entriesOn(day: MonthDay): DayEntry[] {
-  return byDay.value.get(`${day.date.year}-${day.date.month}-${day.date.day}`) ?? [];
-}
-
-function isToday(day: MonthDay): boolean {
-  return props.today !== null && sameCivilDate(day.date, props.today);
+/** A day number a comparison can use directly. */
+function ordinal(date: CivilDate): number {
+  return date.year * 10000 + date.month * 100 + date.day;
 }
 
 /**
- * True once the day is past the point anything could be placed on it.
+ * Everything a cell renders, worked out once per cell.
  *
- * Compared by date rather than by instant: the horizon ends at a moment inside
- * some day, and a cell is either drawn as schedulable or it is not.
+ * The template used to ask for each of these as it drew: four calls to
+ * `specialWeekOn` — a linear scan re-parsing every date range — three to
+ * `entriesOn`, and two formatter constructions for the labels, on each of up
+ * to forty-two cells. All nine answers depend only on the day, so they are
+ * computed together and the template reads fields.
  */
-function pastHorizon(day: MonthDay): boolean {
-  const end = props.horizonEnd;
-  if (end === null) return false;
-  const asNumber = (date: CivilDate) => date.year * 10000 + date.month * 100 + date.day;
-  return asNumber(day.date) > asNumber(end);
+interface Cell {
+  key: string;
+  date: CivilDate;
+  inMonth: boolean;
+  isToday: boolean;
+  /** Past the point anything could be placed (§6.1); compared by date, not instant. */
+  pastHorizon: boolean;
+  specialWeek: string | null;
+  label: string;
+  shown: DayEntry[];
+  hidden: number;
 }
+
+const weeks = computed<Cell[][]>(() => {
+  const today = props.today;
+  const horizon = props.horizonEnd === null ? null : ordinal(props.horizonEnd);
+
+  return monthWeeks(props.month, props.firstDayOfWeek).map((week) =>
+    week.map((day) => {
+      const entries = byDay.value.get(`${day.date.year}-${day.date.month}-${day.date.day}`) ?? [];
+
+      return {
+        key: day.key,
+        date: day.date,
+        inMonth: day.inMonth,
+        isToday: today !== null && sameCivilDate(day.date, today),
+        pastHorizon: horizon !== null && ordinal(day.date) > horizon,
+        specialWeek: specialWeekOn(day.date, props.specialWeeks)?.name ?? null,
+        label: formatFullDate(day.date, props.locale),
+        shown: entries.slice(0, SHOWN_PER_DAY),
+        hidden: Math.max(entries.length - SHOWN_PER_DAY, 0),
+      };
+    }),
+  );
+});
 
 function classesFor(kind: DayEntry['kind']): string {
   if (kind === 'task') return 'bg-primary/15 text-foreground';
   if (kind === 'completed') return 'bg-primary/[0.06] text-muted-foreground line-through';
   if (kind === 'unavailability') return 'bg-muted-foreground/15 text-muted-foreground';
   return 'bg-secondary text-secondary-foreground';
-}
-
-/** The label a cell announces, so the grid reads as a calendar to a screen reader. */
-function dayLabel(day: MonthDay): string {
-  return new Intl.DateTimeFormat(props.locale, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(day.date.year, day.date.month - 1, day.date.day)));
 }
 </script>
 
@@ -170,7 +188,7 @@ function dayLabel(day: MonthDay): string {
         class="relative min-h-24 border-r p-1.5 last:border-r-0"
         :class="[
           day.inMonth ? '' : 'bg-muted/30',
-          isToday(day) ? 'ring-primary/40 ring-inset ring-2' : '',
+          day.isToday ? 'ring-primary/40 ring-inset ring-2' : '',
         ]"
         data-testid="month-day"
         :data-date="day.key"
@@ -183,10 +201,10 @@ function dayLabel(day: MonthDay): string {
           as fourteen unrelated notes.
         -->
         <div
-          v-if="specialWeekOn(day.date, specialWeeks)"
+          v-if="day.specialWeek !== null"
           class="pointer-events-none absolute inset-0 bg-amber-100/70 dark:bg-amber-900/25"
           data-testid="special-week-shade"
-          :data-name="specialWeekOn(day.date, specialWeeks)!.name"
+          :data-name="day.specialWeek"
         />
 
         <div class="relative flex items-start justify-between gap-1">
@@ -195,9 +213,9 @@ function dayLabel(day: MonthDay): string {
             class="hover:underline"
             :class="[
               day.inMonth ? '' : 'text-muted-foreground',
-              isToday(day) ? 'text-primary font-semibold' : '',
+              day.isToday ? 'text-primary font-semibold' : '',
             ]"
-            :aria-label="`Show the week of ${dayLabel(day)}`"
+            :aria-label="`Show the week of ${day.label}`"
             data-testid="open-day"
             @click="emit('openDay', day.date)"
           >
@@ -208,7 +226,7 @@ function dayLabel(day: MonthDay): string {
             v-if="editable"
             type="button"
             class="text-muted-foreground hover:text-foreground px-0.5 leading-none"
-            :aria-label="`Block out ${dayLabel(day)}`"
+            :aria-label="`Block out ${day.label}`"
             title="Mark the whole day unavailable — anything scheduled moves"
             data-testid="block-day"
             @click="emit('blockDay', day.date)"
@@ -218,16 +236,16 @@ function dayLabel(day: MonthDay): string {
         </div>
 
         <p
-          v-if="specialWeekOn(day.date, specialWeeks)"
+          v-if="day.specialWeek !== null"
           class="relative truncate text-[0.65rem] text-amber-900 dark:text-amber-200"
           data-testid="special-week-name"
         >
-          {{ specialWeekOn(day.date, specialWeeks)!.name }}
+          {{ day.specialWeek }}
         </p>
 
         <ul class="relative mt-0.5 space-y-0.5">
           <li
-            v-for="entry in entriesOn(day).slice(0, SHOWN_PER_DAY)"
+            v-for="entry in day.shown"
             :key="entry.key"
             class="truncate rounded px-1 py-0.5 text-[0.7rem]"
             :class="classesFor(entry.kind)"
@@ -237,11 +255,11 @@ function dayLabel(day: MonthDay): string {
             {{ entry.title }}
           </li>
           <li
-            v-if="entriesOn(day).length > SHOWN_PER_DAY"
+            v-if="day.hidden > 0"
             class="text-muted-foreground px-1 text-[0.7rem]"
             data-testid="month-day-more"
           >
-            +{{ entriesOn(day).length - SHOWN_PER_DAY }} more
+            +{{ day.hidden }} more
           </li>
         </ul>
 
@@ -250,7 +268,7 @@ function dayLabel(day: MonthDay): string {
           boundary falls mid-month and which side a given day is on is the only
           thing anybody needs to know about it.
         -->
-        <span v-if="pastHorizon(day)" class="sr-only" data-testid="past-horizon">
+        <span v-if="day.pastHorizon" class="sr-only" data-testid="past-horizon">
           Beyond the scheduling horizon; work for this day is still in the backlog.
         </span>
       </div>

@@ -34,6 +34,13 @@ import type { Clock } from '../app.js';
  * fortnight — and it keeps the same property the write path has: the schedule
  * is a function of the source, computed the same way whoever asks.
  *
+ * Cheap is not free, though, and **one screen must not cost several solves.**
+ * `/schedule` therefore answers with everything a solve produces — the
+ * placements, the backlog and the capacity reading — rather than leaving a
+ * client to ask for each and pay for a fresh solve per question. The separate
+ * `/backlog` and `/capacity` endpoints remain for callers that want only one,
+ * and neither is on the path any screen takes.
+ *
  * The cache is still written on the way through, which is what §3.4 wants it
  * for: a baseline for change detection, not a source of truth.
  */
@@ -82,6 +89,15 @@ export function calendarRoutes(auth: Auth, clock: Clock, retentionDays?: number)
                 end: to === undefined ? derived.horizon.end : toInstantCeil(to),
               };
 
+              // Both readings come from this one `derived`, so the grid and
+              // the indicator under it cannot disagree (§6.6).
+              const report = computeCapacity({
+                context: derived.context,
+                placements: derived.placements,
+                backlog: derived.backlog,
+                config: DEFAULT_TUNING,
+              });
+
               return {
                 schedule: await presentSchedule({ tx, schedule: derived }),
                 fixedBlocks: await readFixedBlocks(
@@ -91,6 +107,7 @@ export function calendarRoutes(auth: Auth, clock: Clock, retentionDays?: number)
                   derived.context.calendars[0]?.timeZone ?? 'UTC',
                 ),
                 completedBlocks: await readCompletedBlocks(tx, calendarId, window),
+                capacity: report.cells.map(presentCapacityCell),
               };
             });
 
@@ -238,16 +255,21 @@ export function calendarRoutes(auth: Auth, clock: Clock, retentionDays?: number)
       .get('/history', requireContext(auth), async (c) => {
         const context = c.get('context');
 
+        // Without the row images: this answers "what would the buttons say",
+        // and the images are only needed by the command that presses one.
         const history = await withRequestContext(c.get('db'), context, (tx) =>
-          readHistory({
-            tx,
-            tenantId: context.tenantId,
-            actorId: context.userId,
-            now: nowOf(clock),
-            nowIso: clock().toISOString(),
-            config: DEFAULT_TUNING,
-            journal: [],
-          }),
+          readHistory(
+            {
+              tx,
+              tenantId: context.tenantId,
+              actorId: context.userId,
+              now: nowOf(clock),
+              nowIso: clock().toISOString(),
+              config: DEFAULT_TUNING,
+              journal: [],
+            },
+            { withJournal: false },
+          ),
         );
 
         const typesOf = (units: { entries: { type: string }[] }[]): string[] | null => {
