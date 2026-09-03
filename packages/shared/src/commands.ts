@@ -239,6 +239,27 @@ export const completeTaskParams = z.object({ taskId: uuid, actualEnd: instant.op
 export const postponeRestOfDayParams = z.object({ calendarId: uuid, date: civilDate });
 
 /**
+ * Spec §7.2's sick day, said the other way round — the one a person reaches for.
+ *
+ * `PostponeRestOfDay` pushes each task past a floor, which reads as an
+ * instruction to the scheduler about tasks. But somebody who wakes up ill is
+ * not making a decision about their tasks; they are making one about their
+ * *day*, and the tasks are a consequence. Saying it as "this day is not
+ * available" gets the consequence for free — the day has no capacity, so
+ * nothing can be placed in it — and needs no floor per task, so undoing it is
+ * removing what it added rather than restoring forty replaced floors.
+ *
+ * It also holds. A floor stops a task being scheduled before an instant, and
+ * nothing stops a later command from putting something back on the day; the
+ * blocks stay until somebody takes them away.
+ *
+ * Existing appointments are left where they are and reported for attention
+ * (§7.2): being unavailable is not the same as those meetings having been
+ * cancelled, and cancelling them is not this command's to assume.
+ */
+export const blockOutDayParams = z.object({ calendarId: uuid, date: civilDate });
+
+/**
  * Spec §7.2. The vacation action, at week grain. `week` is any local date in
  * the week to clear; the server snaps it to that week's start, since where a
  * week begins is the user's `firstDayOfWeek` setting (§13) and not the caller's
@@ -562,6 +583,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   command('DeferTask', deferTaskParams),
   command('CompleteTask', completeTaskParams),
   command('PostponeRestOfDay', postponeRestOfDayParams),
+  command('BlockOutDay', blockOutDayParams),
   command('ClearWeek', clearWeekParams),
   command('ExtendTask', extendTaskParams),
   command('CancelTask', cancelTaskParams),
@@ -601,6 +623,7 @@ export type ClearFloorParams = z.infer<typeof clearFloorParams>;
 export type DeferTaskParams = z.infer<typeof deferTaskParams>;
 export type CompleteTaskParams = z.infer<typeof completeTaskParams>;
 export type PostponeRestOfDayParams = z.infer<typeof postponeRestOfDayParams>;
+export type BlockOutDayParams = z.infer<typeof blockOutDayParams>;
 export type ClearWeekParams = z.infer<typeof clearWeekParams>;
 export type ExtendTaskParams = z.infer<typeof extendTaskParams>;
 export type CancelTaskParams = z.infer<typeof cancelTaskParams>;

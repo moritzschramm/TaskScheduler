@@ -129,6 +129,17 @@ export interface CommandJournal {
   changes: RowChange[];
   /** For `Undo` / `Redo`: the commands this entry reversed or replayed (§7.5). */
   targets?: string[];
+  /**
+   * How many tasks the command wrote or moved — what the history reports.
+   *
+   * Not needed to reverse anything, and it lives here only because `inverse` is
+   * `jsonb` and this is the one place per command that survives. It is written
+   * by the apply pipeline, which is the only layer that can see a placement
+   * either side of the change; see `affected.ts`. Absent on entries recorded
+   * before it existed, which is why every reader treats it as unknown rather
+   * than as zero.
+   */
+  affectedTasks?: number;
 }
 
 /** Per-table insert types, so call sites keep their column-name checking. */

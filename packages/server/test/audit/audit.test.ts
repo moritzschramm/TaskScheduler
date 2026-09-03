@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { auditResponseSchema } from '@ambitime/shared';
 import { pruneAudit } from '../../src/audit/read.js';
@@ -75,7 +76,7 @@ describe('the audit view', () => {
     expect(entries.every((entry) => entry.actorId === world.userId)).toBe(true);
   });
 
-  it('counts what each command touched without shipping the row images', async () => {
+  it('counts the tasks a command touched, without shipping the row images', async () => {
     await world.run({
       type: 'CreateTask',
       params: {
@@ -88,12 +89,65 @@ describe('the audit view', () => {
 
     const [latest] = (await audit()).entries;
 
-    // A create writes the task and its occurrence, so more than one row —
-    // counted rather than listed, because the images are what undo runs on and
-    // an audit answers "how much did this touch".
-    expect(latest!.changed).toBeGreaterThan(1);
+    // One task, though the create wrote two rows: it inserted the task and its
+    // occurrence, and a person who made one thing did not make two.
+    expect(latest!.affectedTasks).toBe(1);
     expect(latest!.calendarIds).toContain(world.calendarId);
     expect(JSON.stringify(latest)).not.toContain('"before"');
+  });
+
+  /**
+   * The reason the count is not `changes.length`.
+   *
+   * `BlockOutDay` writes one row — an unavailability — and moves everything
+   * that was on the day. A row count answers "1", which is true about the
+   * database and useless about the week; the history is read by somebody asking
+   * what the button did to their tasks.
+   */
+  it('counts the tasks a command moved, not the rows it wrote', async () => {
+    for (const title of ['Alpha', 'Beta', 'Gamma']) {
+      await world.run({
+        type: 'CreateTask',
+        params: {
+          calendarId: world.calendarId,
+          title,
+          categoryId: world.categoryId,
+          estimatedDurationMin: 120,
+        },
+      } as never);
+    }
+
+    await world.run({
+      type: 'BlockOutDay',
+      params: { calendarId: world.calendarId, date: '2026-03-23' },
+    } as never);
+
+    const [latest] = (await audit()).entries;
+    expect(latest!.type).toBe('BlockOutDay');
+    expect(latest!.affectedTasks).toBe(3);
+  });
+
+  it('says it does not know, rather than none, for an entry from before it counted', async () => {
+    await world.run({
+      type: 'CreateTask',
+      params: {
+        calendarId: world.calendarId,
+        title: 'Older than the field',
+        categoryId: world.categoryId,
+        estimatedDurationMin: 60,
+      },
+    } as never);
+
+    // What a row written before `affectedTasks` existed looks like: an inverse
+    // with changes and calendars in it and no count.
+    await withSystemPrivileges(handle.db, (tx) =>
+      tx.execute(
+        sql`update commands set inverse = inverse - 'affectedTasks' where type = 'CreateTask'`,
+      ),
+    );
+
+    const [latest] = (await audit()).entries;
+    expect(latest!.affectedTasks).toBeNull();
   });
 
   it('pages on the log’s own order, not on a timestamp', async () => {

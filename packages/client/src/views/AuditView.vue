@@ -97,7 +97,7 @@ onMounted(() => load());
           <th scope="col" class="py-1.5 pr-3 font-medium">What</th>
           <th scope="col" class="py-1.5 pr-3 font-medium">Who</th>
           <th scope="col" class="py-1.5 pr-3 font-medium">When</th>
-          <th scope="col" class="py-1.5 pr-3 font-medium">Rows changed</th>
+          <th scope="col" class="py-1.5 pr-3 font-medium">Tasks affected</th>
         </tr>
       </thead>
       <tbody>
@@ -114,7 +114,19 @@ onMounted(() => load());
           </td>
           <td class="text-muted-foreground py-1.5 pr-3">{{ entry.actorEmail ?? entry.actorId }}</td>
           <td class="py-1.5 pr-3 tabular-nums">{{ when(entry.issuedAt) }}</td>
-          <td class="py-1.5 pr-3 tabular-nums">{{ entry.changed }}</td>
+          <!--
+            What moved, not how many rows were written. The two are barely
+            related: blocking out a day writes one appointment and reflows the
+            afternoon, and "1" would have been a true answer to a question
+            nobody was asking. An entry from before the log counted this says
+            so, rather than claiming none.
+          -->
+          <td class="py-1.5 pr-3 tabular-nums" data-testid="audit-affected">
+            <template v-if="entry.affectedTasks === null">
+              <span class="text-muted-foreground" title="Recorded before this was counted">—</span>
+            </template>
+            <template v-else>{{ entry.affectedTasks }}</template>
+          </td>
         </tr>
       </tbody>
     </table>

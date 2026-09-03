@@ -47,7 +47,7 @@ const props = withDefaults(
     /** M11: the grid becomes a way in to the editors, not only a picture. */
     editable?: boolean;
     /**
-     * Whether a day offers "postpone the rest of it" (§7.2).
+     * Whether a day offers "I'm not available" (§7.2).
      *
      * A bulk action on *tasks*, so it belongs on the screen that draws tasks.
      * On Commitments it was an arrow that appeared to do nothing, because
@@ -73,7 +73,8 @@ const emit = defineEmits<{
   completeBlock: [block: GridBlock];
   /** A task dropped, or nudged, onto a new local start (spec §7.3, §13). */
   moveBlock: [payload: { block: GridBlock; day: CivilDate; startMin: number }];
-  postponeDay: [day: CivilDate];
+  /** "I'm out this day" — the whole day becomes unavailable (§7.2). */
+  blockDay: [day: CivilDate];
 }>();
 
 /**
@@ -385,17 +386,24 @@ function classesFor(block: GridBlock): string {
             here is a header button now: a day column is four pixels of chrome,
             and hiding "make something new" inside it made the commonest act on
             the page the hardest one to find.
+
+            What is left says something about the *day* rather than about its
+            tasks. "Move the rest of this day's tasks into later days" was an
+            instruction to the scheduler, phrased in its vocabulary, and it
+            asked the reader to work out that this was how one says "I'm ill".
+            Blocking the day out says that directly, and the tasks move for the
+            ordinary reason that nothing fits in a day you are not there for.
           -->
           <button
             v-if="editable && postponable"
             type="button"
             class="hover:text-foreground px-1 leading-none"
-            :aria-label="`Postpone the rest of ${column.label}`"
-            title="Move the rest of this day's tasks into later days"
-            data-testid="postpone-day"
-            @click="emit('postponeDay', column.day)"
+            :aria-label="`Block out ${column.label}`"
+            title="Mark the whole day unavailable — anything scheduled moves"
+            data-testid="block-day"
+            @click="emit('blockDay', column.day)"
           >
-            ⤓
+            ⊘
           </button>
         </div>
 

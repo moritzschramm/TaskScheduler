@@ -9,6 +9,7 @@ import type {
   EditAppointmentParams,
 } from '@ambitime/shared';
 import type { Appointment, NewAppointment } from '../../db/schema/index.js';
+import type { Instant } from '@ambitime/scheduler';
 import { appointmentParticipants, notifications } from '../../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 
@@ -329,6 +330,30 @@ function interval(startIso: string, endIso: string): string {
  * read-then-write check does not. What is added here is only a sentence a user
  * can act on.
  */
+/**
+ * Inserts a content-free block, with the overlap refusal already translated.
+ *
+ * Shared with the bulk family, whose "block out this day" writes the same rows
+ * for a different reason. Keeping one entry point means `is_unavailability`,
+ * the empty title and the exclusion-violation message are decided once.
+ */
+export async function insertUnavailability(
+  ctx: CommandContext,
+  calendarId: string,
+  span: { start: Instant; end: Instant },
+): Promise<string> {
+  const values: NewAppointment = {
+    tenantId: ctx.tenantId,
+    calendarId,
+    ownerId: ctx.actorId,
+    title: '',
+    during: toRangeLiteral(span),
+    isUnavailability: true,
+  };
+
+  return insertingBlock(() => insertRow(ctx, 'appointments', values), calendarId);
+}
+
 async function insertingBlock<T>(action: () => Promise<T>, calendarId: string): Promise<T> {
   try {
     return await action();

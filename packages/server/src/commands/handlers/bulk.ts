@@ -1,12 +1,13 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type { Instant, Interval } from '@ambitime/scheduler';
 import { appointments, placements, taskOccurrences, tasks } from '../../db/schema/index.js';
 import type { AttentionItem, CommandContext, HandlerOutcome } from '../context.js';
-import { calendarTimeZone } from '../entities.js';
+import { calendarTimeZone, requireCalendar } from '../entities.js';
 import { updateWhere } from '../journal.js';
-import { toIso } from '../../schedule/instants.js';
+import { insertUnavailability } from './appointments.js';
+import { isoText, toInstant, toInstantCeil, toIso } from '../../schedule/instants.js';
 import { dayFromParam, weekFromParam } from '@ambitime/scheduler';
-import type { ClearWeekParams, PostponeRestOfDayParams } from '@ambitime/shared';
+import type { BlockOutDayParams, ClearWeekParams, PostponeRestOfDayParams } from '@ambitime/shared';
 
 /**
  * The bulk deferral family (spec §7.2) — the sick day and the vacation.
@@ -18,9 +19,13 @@ import type { ClearWeekParams, PostponeRestOfDayParams } from '@ambitime/shared'
  * least responsible for. The command log records that the reflow happened; the
  * counter records that a person chose to push something.
  *
- * The mechanism is a floor, because a floor is the only thing in the model that
- * says "not before". Clearing the day and re-deriving would put everything back
- * where it was, since nothing would have changed.
+ * Two mechanisms, for two readings of the same day off. `PostponeRestOfDay` and
+ * `ClearWeek` set a **floor**, because a floor is the only thing in the model
+ * that says "not before" — clearing the span and re-deriving would put
+ * everything back where it was, since nothing would have changed.
+ * `BlockOutDay` instead removes the day's capacity, so the reflow falls out of
+ * the ordinary solve; see its own comment for why that is the one a person
+ * reaches for.
  */
 
 /**
@@ -41,6 +46,109 @@ export async function postponeRestOfDay(
   const day = dayFromParam(params.date, timeZone);
 
   return reflow(ctx, params.calendarId, day, day.end);
+}
+
+/**
+ * `BlockOutDay(calendar, date)` — the same day off, said as a fact about the day.
+ *
+ * Fills the day with unavailability instead of pushing each task past a floor.
+ * The reflow then happens for the ordinary reason — there is no capacity left
+ * — which means it also *stays* happened: a floor is a one-off instruction and
+ * the next command is free to schedule into the day again, while a block is
+ * still there tomorrow.
+ *
+ * **Written as the gaps between what is already booked, not as one 24-hour
+ * block.** The exclusion constraint (§5.3) refuses two overlapping blocks in a
+ * calendar, so a single whole-day row would be rejected outright by any day
+ * with a meeting in it — which is most days worth blocking out. Filling around
+ * them is the only version of this that works on a Tuesday.
+ *
+ * Those meetings then stay exactly where they were, and come back as attention
+ * items (§7.2). Being unavailable does not cancel what other people are
+ * expecting of you; it means somebody has to tell them, and that somebody is
+ * not a scheduler.
+ */
+export async function blockOutDay(
+  params: BlockOutDayParams,
+  ctx: CommandContext,
+): Promise<HandlerOutcome> {
+  await requireCalendar(ctx, params.calendarId);
+
+  const timeZone = await calendarTimeZone(ctx, params.calendarId);
+  const day = dayFromParam(params.date, timeZone);
+
+  // A day in progress is blocked from now on, not from midnight. The hours
+  // already spent are a record of what happened — completed blocks are drawn in
+  // them (§7.3) — and painting them unavailable afterwards would be the one
+  // claim here that is not true.
+  const span = { start: Math.max(day.start, ctx.now), end: day.end };
+  if (span.end <= span.start) return { calendarIds: [params.calendarId] };
+
+  for (const gap of gapsIn(span, await concreteBlocks(ctx, params.calendarId, span))) {
+    await insertUnavailability(ctx, params.calendarId, gap);
+  }
+
+  return {
+    calendarIds: [params.calendarId],
+    attention: await appointmentsIn(ctx, params.calendarId, span),
+  };
+}
+
+/**
+ * The blocks in `span` that occupy real time in the table.
+ *
+ * Recurring templates and their modified occurrences are excluded for the same
+ * reason the exclusion constraint excludes them (migration 0008): a template's
+ * `during` stands for a series rather than for that one hour. Its expansions
+ * are not rows at all, so a recurring meeting on this day will end up sharing
+ * its hour with a block — which the engine tolerates exactly as it tolerates
+ * two overlapping expansions, and which leaves the day unavailable either way.
+ */
+async function concreteBlocks(
+  ctx: CommandContext,
+  calendarId: string,
+  span: Interval,
+): Promise<Interval[]> {
+  const rows = await ctx.tx
+    .select({
+      startAt: isoText(sql`lower(${appointments.during})`),
+      endAt: isoText(sql`upper(${appointments.during})`),
+    })
+    .from(appointments)
+    .where(
+      and(
+        eq(appointments.calendarId, calendarId),
+        ne(appointments.status, 'cancelled'),
+        isNull(appointments.recurrenceRule),
+        isNull(appointments.recurrenceParentId),
+        sql`${appointments.during} && tstzrange(${instant(span.start)}, ${instant(span.end)}, '[)')`,
+      ),
+    );
+
+  return rows
+    .map((row) => ({ start: toInstant(row.startAt), end: toInstantCeil(row.endAt) }))
+    .sort((a, b) => a.start - b.start);
+}
+
+/**
+ * What is left of `span` once `taken` is removed from it.
+ *
+ * `taken` arrives sorted by start and may overlap itself — the constraint stops
+ * concrete blocks colliding, but a modified occurrence is exempt from it — so
+ * the cursor only ever moves forward.
+ */
+function gapsIn(span: Interval, taken: readonly Interval[]): Interval[] {
+  const gaps: Interval[] = [];
+  let cursor = span.start;
+
+  for (const block of taken) {
+    if (block.start > cursor) gaps.push({ start: cursor, end: Math.min(block.start, span.end) });
+    cursor = Math.max(cursor, block.end);
+    if (cursor >= span.end) return gaps;
+  }
+
+  if (cursor < span.end) gaps.push({ start: cursor, end: span.end });
+  return gaps;
 }
 
 /**
@@ -114,6 +222,17 @@ async function reflow(
   };
 }
 
+/**
+ * The appointments in `span` a person now has to do something about (§7.2).
+ *
+ * Unavailability is excluded, and has to be. Those rows are content-free by
+ * definition (§7.4) — no title, no participants — so there is nobody to
+ * renegotiate with and nothing to name in the notice; the UI would print a
+ * blank line saying it needed attention. `BlockOutDay` made the omission
+ * obvious by reporting the very blocks it had just written, but it was already
+ * wrong for the other two: an afternoon you had marked unavailable last week
+ * does not need rescheduling because you are ill today.
+ */
 async function appointmentsIn(
   ctx: CommandContext,
   calendarId: string,
@@ -130,6 +249,7 @@ async function appointmentsIn(
       and(
         eq(appointments.calendarId, calendarId),
         ne(appointments.status, 'cancelled'),
+        eq(appointments.isUnavailability, false),
         sql`${appointments.during} && tstzrange(${instant(span.start)}, ${instant(span.end)}, '[)')`,
       ),
     );

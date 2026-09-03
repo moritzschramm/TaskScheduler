@@ -54,7 +54,7 @@ export async function readAudit(
 
   return {
     entries: page.map((row) => {
-      const inverse = (row.inverse ?? {}) as { changes?: unknown[]; calendarIds?: string[] };
+      const inverse = (row.inverse ?? {}) as { affectedTasks?: number; calendarIds?: string[] };
 
       return {
         id: row.id,
@@ -64,9 +64,10 @@ export async function readAudit(
         actorEmail: row.actorEmail,
         params: row.params,
         groupId: row.groupId,
-        // Counted rather than listed: the row images are what undo runs on and
-        // can be large, while an audit answers "how much did this touch".
-        changed: inverse.changes?.length ?? 0,
+        // Counted at write time rather than derived here: the row images say
+        // what the command wrote, and the question is what it *moved*, which
+        // only the pipeline that re-derived the schedule was ever able to see.
+        affectedTasks: inverse.affectedTasks ?? null,
         calendarIds: inverse.calendarIds ?? [],
         issuedAt: new Date(row.issuedAt).toISOString(),
       };

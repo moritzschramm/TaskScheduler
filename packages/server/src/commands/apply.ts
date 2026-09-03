@@ -5,6 +5,7 @@ import { withTenantContext } from '../db/context.js';
 import { commands } from '../db/schema/index.js';
 import { deriveCalendarSchedule, type DerivedSchedule } from '../schedule/derive.js';
 import { toInstant, toIso } from '../schedule/instants.js';
+import { countAffectedTasks, snapshotPlacements } from './affected.js';
 import { CommandValidationError, PreconditionFailedError } from './errors.js';
 import { COMMAND_TARGETS, dispatch } from './registry.js';
 import { refreshWithin } from '../jobs/refresh.js';
@@ -116,6 +117,10 @@ export async function applyCommand(
           : { expectedVersion: command.expectedVersion }),
       };
 
+      // Taken before the handler runs: which calendars it will touch is not yet
+      // known, and an occurrence it deletes takes its placement with it.
+      const placedBefore = await snapshotPlacements(tx);
+
       const outcome = await dispatch(command, ctx);
 
       // Sorted and deduplicated so a command touching two calendars derives them
@@ -156,6 +161,7 @@ export async function applyCommand(
         calendarIds,
         changes: ctx.journal,
         ...(outcome.targets === undefined ? {} : { targets: outcome.targets }),
+        affectedTasks: countAffectedTasks(ctx.journal, placedBefore, await snapshotPlacements(tx)),
       };
 
       return {

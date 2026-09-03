@@ -652,14 +652,18 @@ describe('seed via the API, render the client', () => {
       expect(done.manualFloor).toBeNull();
     });
 
-    it('postpones the rest of a day from its column', async () => {
-      await wrapper.findAll('[data-testid="postpone-day"]')[1]!.trigger('click');
+    it('blocks out a day from its column', async () => {
+      await wrapper.findAll('[data-testid="block-day"]')[1]!.trigger('click');
       await settle();
 
-      // Tuesday's task is pushed out of Tuesday; the appointment on Monday is
-      // untouched, because §7.2 leaves those to a person.
       const columns = wrapper.findAll('[data-testid="day-column"]');
+
+      // Tuesday is unavailable and holds nothing; the task left because there
+      // was nowhere in the day for it, not because it was told to.
+      expect(columns[1]!.find('[data-testid="block-unavailability"]').exists()).toBe(true);
       expect(columns[1]!.find('[data-testid="block-task"]').exists()).toBe(false);
+
+      // Monday's appointment is untouched, because §7.2 leaves those to a person.
       expect(columns[0]!.find('[data-testid="block-appointment"]').exists()).toBe(true);
     });
 

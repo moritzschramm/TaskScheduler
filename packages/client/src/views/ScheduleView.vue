@@ -111,9 +111,17 @@ async function completeBlock(block: GridBlock): Promise<void> {
   await submit({ type: 'CompleteTask', params: { taskId: block.taskId } });
 }
 
-async function postponeDay(day: CivilDate): Promise<void> {
+/**
+ * "I'm not in this day" (spec §7.2).
+ *
+ * One gesture for a sick day or for something coming up, and it says the thing
+ * that is actually true — the day is not available — rather than instructing
+ * the scheduler to shuffle tasks out of it. What follows is the same either
+ * way, because a day with no capacity holds nothing.
+ */
+async function blockDay(day: CivilDate): Promise<void> {
   await submit({
-    type: 'PostponeRestOfDay',
+    type: 'BlockOutDay',
     params: { calendarId: selectedId.value!, date: formatCivilDate(day) },
   });
 }
@@ -236,7 +244,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         @select-block="editBlock"
         @move-block="moveBlock"
         @complete-block="completeBlock"
-        @postpone-day="postponeDay"
+        @block-day="blockDay"
       />
 
       <div class="grid gap-8 lg:grid-cols-[2fr_1fr]">

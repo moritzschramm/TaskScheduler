@@ -24,6 +24,7 @@ import {
   moveTaskParams,
   moveToBacklogParams,
   postponeRestOfDayParams,
+  blockOutDayParams,
   promoteFromBacklogParams,
   redoParams,
   setAvailabilityWindowsParams,
@@ -90,6 +91,7 @@ export const commandRequestSchema = z.discriminatedUnion('type', [
   request('DeferTask', deferTaskParams),
   request('CompleteTask', completeTaskParams),
   request('PostponeRestOfDay', postponeRestOfDayParams),
+  request('BlockOutDay', blockOutDayParams),
   request('ClearWeek', clearWeekParams),
   request('ExtendTask', extendTaskParams),
   request('CancelTask', cancelTaskParams),
@@ -454,8 +456,15 @@ export const auditEntrySchema = z.object({
   /** What the command was asked to do. Parameters, not row images. */
   params: z.unknown(),
   groupId: uuid.nullable(),
-  /** How many source rows it changed. */
-  changed: z.int().nonnegative(),
+  /**
+   * How many tasks it wrote or moved.
+   *
+   * `null` on entries recorded before the log carried it — unknown, which a
+   * reader must not render as none. The number a row count would have given is
+   * not a substitute: a command that writes one appointment can move a dozen
+   * tasks, and it is the dozen somebody is looking for.
+   */
+  affectedTasks: z.int().nonnegative().nullable(),
   /** Which calendars it re-derived, if any. */
   calendarIds: z.array(uuid),
   issuedAt: instant,

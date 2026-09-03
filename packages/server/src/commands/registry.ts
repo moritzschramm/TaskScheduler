@@ -1,7 +1,7 @@
 import type { Command, CommandType } from '@ambitime/shared';
 import type { CommandContext, HandlerOutcome } from './context.js';
 import { addAppointment, addUnavailability, editAppointment } from './handlers/appointments.js';
-import { clearWeek, postponeRestOfDay } from './handlers/bulk.js';
+import { blockOutDay, clearWeek, postponeRestOfDay } from './handlers/bulk.js';
 import { clearFloor, completeTask, deferTask, moveTask } from './handlers/manual.js';
 import { createTask, editTask } from './handlers/tasks.js';
 import { cancelTask, extendTask, moveToBacklog, promoteFromBacklog } from './handlers/lifecycle.js';
@@ -51,6 +51,8 @@ export function dispatch(command: Command, ctx: CommandContext): Promise<Handler
       return completeTask(command.params, ctx);
     case 'PostponeRestOfDay':
       return postponeRestOfDay(command.params, ctx);
+    case 'BlockOutDay':
+      return blockOutDay(command.params, ctx);
     case 'ClearWeek':
       return clearWeek(command.params, ctx);
     case 'ExtendTask':
@@ -122,6 +124,8 @@ export const COMMAND_TARGETS: Readonly<
   DeferTask: 'task',
   CompleteTask: 'task',
   PostponeRestOfDay: null,
+  // Names a day, not a row.
+  BlockOutDay: null,
   ClearWeek: null,
   ExtendTask: 'task',
   CancelTask: 'task',

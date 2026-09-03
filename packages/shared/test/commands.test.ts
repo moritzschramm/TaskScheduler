@@ -61,6 +61,7 @@ describe('the command envelope (spec §7.1)', () => {
     expect([...COMMAND_TYPES].sort()).toEqual([
       'AddAppointment',
       'AddUnavailability',
+      'BlockOutDay',
       'CancelTask',
       'ClearFloor',
       'ClearWeek',
