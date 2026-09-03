@@ -22,6 +22,7 @@ import { ApiError } from './api';
 import { now } from './clock';
 import { fetchConfiguration, fetchContext, fetchHistory, runCommand } from './commands';
 import { windowsForWeek } from './grid';
+import { monthOf, shiftMonth } from './month';
 import { optimisticBlocks, schedulesAgree } from './optimistic';
 import {
   fetchBacklog,
@@ -105,7 +106,7 @@ const anchor = ref<CivilDate | null>(null);
  * A preference about looking, not about scheduling — nothing outside it is
  * hidden from the engine, and a block that falls outside is still placed. Held
  * here rather than in a component so it survives moving between Schedule and
- * Commitments.
+ * Appointments.
  *
  * **Stored in this browser, not on the server.** §13's user settings are the
  * ones that change what the schedule *means* — zone, locale, first day — and
@@ -164,7 +165,41 @@ function setDayRange(startMin: number, endMin: number): void {
   }
 }
 
+/**
+ * Which shape the calendar is drawn in.
+ *
+ * A preference about looking rather than about scheduling, so it lives beside
+ * the day range and in the same place — this browser. The two views share one
+ * anchor, which is what makes clicking a day in the month land on that week
+ * rather than on wherever the week view was left.
+ */
+const MODE_KEY = 'ambitime.calendarMode';
+
+export type CalendarMode = 'week' | 'month';
+
+export function readStoredMode(): CalendarMode {
+  try {
+    return globalThis.localStorage?.getItem(MODE_KEY) === 'month' ? 'month' : 'week';
+  } catch {
+    return 'week';
+  }
+}
+
+const mode = ref<CalendarMode>(readStoredMode());
+
+function setMode(next: CalendarMode): void {
+  mode.value = next;
+  try {
+    globalThis.localStorage?.setItem(MODE_KEY, next);
+  } catch {
+    // Same as the day range: it applies to this session either way.
+  }
+}
+
 let started = false;
+
+/** Only ever reached before the first read, when nothing is drawn anyway. */
+const EPOCH_MONTH: CivilDate = { year: 1970, month: 1, day: 1 };
 
 const calendar = computed(() => calendars.value.find((entry) => entry.id === selectedId.value));
 
@@ -187,6 +222,25 @@ const days = computed<CivilDate[]>(() =>
 const today = computed<CivilDate | null>(() =>
   calendar.value ? localDate(now().toISOString(), zone.value) : null,
 );
+
+/** The month the anchor falls in — the month view's subject. */
+const month = computed<CivilDate>(() => monthOf(anchor.value ?? today.value ?? EPOCH_MONTH));
+
+/**
+ * The last day anything can be scheduled on (spec §6.1).
+ *
+ * Read from the engine's own horizon rather than computed from a constant, so
+ * the month grid marks the same boundary the solver used. Null until the first
+ * read, when a grid that claimed everything was past the horizon would be
+ * alarming and wrong.
+ */
+const horizonEnd = computed<CivilDate | null>(() => {
+  const context = engineContext.value;
+  if (context === null) return null;
+  // The horizon is half-open, so its end instant belongs to the day after the
+  // last schedulable one — a minute back lands inside that last day.
+  return localDate(new Date((context.horizon.end - 1) * 60_000).toISOString(), zone.value);
+});
 
 /** The hours the calendar is open across the seven days being drawn (§4.3). */
 const openWindows = computed<ResolvedWindow[]>(() =>
@@ -418,6 +472,17 @@ function shiftWeek(weeks: number): void {
   if (anchor.value !== null) anchor.value = addDays(anchor.value, weeks * 7);
 }
 
+/**
+ * Moves the anchor a whole month, landing on the first of it.
+ *
+ * Both views move the one anchor, so paging months and then switching to the
+ * week opens the first week of the month you paged to — rather than the week
+ * you had been looking at before, which is somewhere else entirely by then.
+ */
+function shiftMonths(months: number): void {
+  if (anchor.value !== null) anchor.value = shiftMonth(monthOf(anchor.value), months);
+}
+
 /** Jumps the week to the one containing `date` — used to follow a placement. */
 function showWeekOf(date: CivilDate): void {
   anchor.value = weekDays(date, firstDayOfWeek.value)[0] ?? date;
@@ -463,6 +528,8 @@ export interface Workspace {
   taskDialogOpen: WritableComputedRef<boolean>;
   blockDialogOpen: WritableComputedRef<boolean>;
   anchor: Ref<CivilDate | null>;
+  mode: Ref<CalendarMode>;
+  setMode: (next: CalendarMode) => void;
   dayStartMin: Ref<number>;
   dayEndMin: Ref<number>;
   setDayRange: (startMin: number, endMin: number) => void;
@@ -471,6 +538,9 @@ export interface Workspace {
   zone: ComputedRef<string>;
   days: ComputedRef<CivilDate[]>;
   today: ComputedRef<CivilDate | null>;
+  month: ComputedRef<CivilDate>;
+  firstDayOfWeek: ComputedRef<number>;
+  horizonEnd: ComputedRef<CivilDate | null>;
   openWindows: ComputedRef<ResolvedWindow[]>;
   unschedulable: ComputedRef<
     { taskId: string; occurrenceId: string; title: string; reasonText: string }[]
@@ -481,6 +551,7 @@ export interface Workspace {
   load: () => Promise<void>;
   submit: (request: CommandRequest) => Promise<boolean>;
   shiftWeek: (weeks: number) => void;
+  shiftMonths: (months: number) => void;
   showWeekOf: (date: CivilDate) => void;
   parentOf: (task: TaskNode) => TaskNode | null;
   openTask: (taskId: string) => void;
@@ -515,6 +586,8 @@ export function useWorkspace(): Workspace {
     taskDialogOpen,
     blockDialogOpen,
     anchor,
+    mode,
+    setMode,
     dayStartMin,
     dayEndMin,
     setDayRange,
@@ -523,6 +596,9 @@ export function useWorkspace(): Workspace {
     zone,
     days,
     today,
+    month,
+    firstDayOfWeek,
+    horizonEnd,
     openWindows,
     unschedulable,
     noWindows,
@@ -531,6 +607,7 @@ export function useWorkspace(): Workspace {
     load,
     submit,
     shiftWeek,
+    shiftMonths,
     showWeekOf,
     parentOf,
     openTask,

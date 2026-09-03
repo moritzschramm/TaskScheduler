@@ -73,7 +73,7 @@ describe('the primary navigation', () => {
       'Schedule',
       'Tasks',
       'Activity types',
-      'Commitments',
+      'Appointments',
     ]);
     expect(wrapper.find('[data-testid="nav-categories"]').attributes('href')).toBe('/categories');
     wrapper.unmount();

@@ -46,14 +46,8 @@ const props = withDefaults(
     locale?: string;
     /** M11: the grid becomes a way in to the editors, not only a picture. */
     editable?: boolean;
-    /**
-     * Whether a day offers "I'm not available" (§7.2).
-     *
-     * A bulk action on *tasks*, so it belongs on the screen that draws tasks.
-     * On Commitments it was an arrow that appeared to do nothing, because
-     * nothing it could move was on screen.
-     */
-    postponable?: boolean;
+    /** Whether each day heading offers "I'm not available this day" (§7.2). */
+    blockable?: boolean;
   }>(),
   {
     windows: () => [],
@@ -63,7 +57,7 @@ const props = withDefaults(
     dayEndMin: 22 * 60,
     locale: 'en-GB',
     editable: false,
-    postponable: false,
+    blockable: false,
   },
 );
 
@@ -395,7 +389,7 @@ function classesFor(block: GridBlock): string {
             ordinary reason that nothing fits in a day you are not there for.
           -->
           <button
-            v-if="editable && postponable"
+            v-if="editable && blockable"
             type="button"
             class="hover:text-foreground px-1 leading-none"
             :aria-label="`Block out ${column.label}`"

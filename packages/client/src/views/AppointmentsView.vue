@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import AppointmentEditor from '@/components/calendar/AppointmentEditor.vue';
+import MonthGrid from '@/components/calendar/MonthGrid.vue';
 import WeekGrid from '@/components/calendar/WeekGrid.vue';
 import WeekToolbar from '@/components/calendar/WeekToolbar.vue';
 import OverridesSection from '@/components/settings/OverridesSection.vue';
 import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { formatCivilDate } from '@/lib/time';
 import { useWorkspace } from '@/lib/workspace';
+import type { CivilDate } from '@ambitime/scheduler';
 import type { GridBlock } from '@/lib/grid';
 
 /**
@@ -19,9 +22,10 @@ import type { GridBlock } from '@/lib/grid';
  * too would invite dragging one, and a drag on this screen means something
  * else.
  *
- * Week types share the screen for the same reason: a holiday is the other way
- * a week fills up, and both answers to "why is nothing being placed here" now
- * live on one page.
+ * Special weeks share the screen for the same reason: a holiday is the other
+ * way a week fills up, and both answers to "why is nothing being placed here"
+ * now live on one page. The month view is where they are legible — a fortnight
+ * away is one shaded band there and seven paging gestures here.
  */
 const {
   view,
@@ -36,9 +40,16 @@ const {
   openWindows,
   dayStartMin,
   dayEndMin,
+  mode,
+  month,
+  firstDayOfWeek,
+  horizonEnd,
+  selectedId,
   ensureLoaded,
   submit,
   newBlockAt,
+  setMode,
+  showWeekOf,
 } = useWorkspace();
 
 onMounted(ensureLoaded);
@@ -61,13 +72,27 @@ function editBlock(block: GridBlock): void {
   );
   if (found !== undefined) editing.value = { kind: 'block', block: found };
 }
+
+/** "I'm not in this day" — the same one gesture the Schedule offers (§7.2). */
+async function blockDay(day: CivilDate): Promise<void> {
+  await submit({
+    type: 'BlockOutDay',
+    params: { calendarId: selectedId.value!, date: formatCivilDate(day) },
+  });
+}
+
+/** A day clicked in the month opens that week, which is where the hours are. */
+function openDay(day: CivilDate): void {
+  showWeekOf(day);
+  setMode('week');
+}
 </script>
 
 <template>
   <div class="flex flex-col gap-6 p-6" data-testid="appointments-view">
-    <WeekToolbar title="Commitments">
+    <WeekToolbar title="Appointments">
       <template #actions>
-        <Button size="sm" data-testid="add-block" @click="newBlock">New fixed block</Button>
+        <Button size="sm" data-testid="add-block" @click="newBlock">New appointment</Button>
       </template>
     </WeekToolbar>
     <WorkspaceStatus />
@@ -79,6 +104,7 @@ function editBlock(block: GridBlock): void {
       </p>
 
       <WeekGrid
+        v-if="mode === 'week'"
         :days="days"
         :time-zone="zone"
         :blocks="[]"
@@ -89,13 +115,30 @@ function editBlock(block: GridBlock): void {
         :today="today"
         :locale="locale"
         editable
+        blockable
         @select-block="editBlock"
+        @block-day="blockDay"
+      />
+
+      <MonthGrid
+        v-else
+        :month="month"
+        :time-zone="zone"
+        :first-day-of-week="firstDayOfWeek"
+        :locale="locale"
+        :fixed-blocks="view.fixedBlocks"
+        :special-weeks="configuration?.weekTypeOverrides ?? []"
+        :today="today"
+        :horizon-end="horizonEnd"
+        editable
+        @open-day="openDay"
+        @block-day="blockDay"
       />
 
       <Dialog
         v-if="editing.kind === 'block'"
         v-model:open="blockDialogOpen"
-        :title="editing.block === null ? 'New fixed block' : 'Edit fixed block'"
+        :title="editing.block === null ? 'New appointment' : 'Edit appointment'"
         data-testid="editor-panel"
       >
         <AppointmentEditor

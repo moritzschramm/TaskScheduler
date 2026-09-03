@@ -257,7 +257,7 @@ async function cancelBlock(): Promise<void> {
       <h2 class="text-lg font-semibold">
         {{
           isCreate
-            ? 'New fixed block'
+            ? 'New appointment'
             : isUnavailability
               ? 'Edit unavailability'
               : 'Edit appointment'

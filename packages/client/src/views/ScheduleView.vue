@@ -2,9 +2,11 @@
 import { onMounted } from 'vue';
 import { wallClockToInstant, type CivilDate } from '@ambitime/scheduler';
 import AppointmentEditor from '@/components/calendar/AppointmentEditor.vue';
+import MonthGrid from '@/components/calendar/MonthGrid.vue';
 import WeekGrid from '@/components/calendar/WeekGrid.vue';
 import WeekToolbar from '@/components/calendar/WeekToolbar.vue';
 import NotificationCentre from '@/components/NotificationCentre.vue';
+import BacklogPanel from '@/components/panels/BacklogPanel.vue';
 import CapacityPanel from '@/components/panels/CapacityPanel.vue';
 import TaskActions from '@/components/tasks/TaskActions.vue';
 import TaskEditor from '@/components/tasks/TaskEditor.vue';
@@ -45,10 +47,17 @@ const {
   unschedulable,
   noWindows,
   scheduledElsewhere,
+  backlog,
+  configuration,
+  mode,
+  month,
+  firstDayOfWeek,
+  horizonEnd,
   ensureLoaded,
   submit,
   openTask,
   showWeekOf,
+  setMode,
   selectedId,
 } = useWorkspace();
 
@@ -119,6 +128,12 @@ async function completeBlock(block: GridBlock): Promise<void> {
  * the scheduler to shuffle tasks out of it. What follows is the same either
  * way, because a day with no capacity holds nothing.
  */
+/** A day clicked in the month opens that week, which is where the hours are. */
+function openDay(day: CivilDate): void {
+  showWeekOf(day);
+  setMode('week');
+}
+
 async function blockDay(day: CivilDate): Promise<void> {
   await submit({
     type: 'BlockOutDay',
@@ -229,6 +244,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
       </section>
 
       <WeekGrid
+        v-if="mode === 'week'"
         :days="days"
         :time-zone="zone"
         :blocks="view.schedule.blocks"
@@ -240,12 +256,38 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         :today="today"
         :locale="locale"
         editable
-        postponable
+        blockable
         @select-block="editBlock"
         @move-block="moveBlock"
         @complete-block="completeBlock"
         @block-day="blockDay"
       />
+
+      <!--
+        The month, with the backlog beside it.
+        Those two answer one question together: the grid shows where the weeks
+        are already full and the special weeks that empty them, and the backlog
+        is what did not fit. Reading them apart is what makes an overloaded
+        month look like a quiet one.
+      -->
+      <div v-else class="grid items-start gap-8 lg:grid-cols-[3fr_1fr]">
+        <MonthGrid
+          :month="month"
+          :time-zone="zone"
+          :first-day-of-week="firstDayOfWeek"
+          :locale="locale"
+          :blocks="view.schedule.blocks"
+          :fixed-blocks="view.fixedBlocks"
+          :completed-blocks="view.completedBlocks"
+          :special-weeks="configuration?.weekTypeOverrides ?? []"
+          :today="today"
+          :horizon-end="horizonEnd"
+          editable
+          @open-day="openDay"
+          @block-day="blockDay"
+        />
+        <BacklogPanel :entries="backlog" />
+      </div>
 
       <div class="grid gap-8 lg:grid-cols-[2fr_1fr]">
         <NotificationCentre :notifications="notifications" :submit="submit" />
@@ -289,7 +331,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
       <Dialog
         v-else-if="editing.kind === 'block'"
         v-model:open="blockDialogOpen"
-        :title="editing.block === null ? 'New fixed block' : 'Edit fixed block'"
+        :title="editing.block === null ? 'New appointment' : 'Edit appointment'"
         data-testid="editor-panel"
       >
         <AppointmentEditor

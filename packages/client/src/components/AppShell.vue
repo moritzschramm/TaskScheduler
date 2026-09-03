@@ -22,7 +22,7 @@ const primary = [
   { to: '/', label: 'Schedule', testId: 'nav-schedule' },
   { to: '/tasks', label: 'Tasks', testId: 'nav-tasks' },
   { to: '/categories', label: 'Activity types', testId: 'nav-categories' },
-  { to: '/appointments', label: 'Commitments', testId: 'nav-appointments' },
+  { to: '/appointments', label: 'Appointments', testId: 'nav-appointments' },
 ] as const;
 
 // Presence is a fact about a signed-in page being open (§11), so the beat
