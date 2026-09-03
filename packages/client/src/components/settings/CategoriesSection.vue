@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
+import { useAutosave } from '@/lib/autosave';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +15,12 @@ import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
  *
  * Edited in place rather than in a dialog. There are two fields, and a modal
  * for two fields costs a user more attention than it saves them.
+ *
+ * **No Save button.** A change to a name or a cooldown is saved once you stop
+ * typing; see `useAutosave` for why that is safe to do on every keystroke.
+ * Add and Delete keep their buttons, because both are discrete acts rather
+ * than edits — one needs a moment to say the row is complete, and the other is
+ * not something to do because a field lost focus.
  */
 const props = defineProps<{
   configuration: CalendarConfiguration;
@@ -29,11 +36,24 @@ const busy = ref(false);
 const drafts = reactive(new Map<string, Draft>());
 const fresh = ref<Draft>({ name: '', defaultCooldownMin: 0 });
 
+const autosave = useAutosave();
+
+/**
+ * Reconciles which rows exist; never overwrites one that does.
+ *
+ * Every save re-reads, so this watch fires moments after each keystroke
+ * settles. Re-seeding wholesale — which is what it used to do, correctly, for
+ * a form with a Save button — would put the server's copy back into a field
+ * somebody is still typing in, one round trip behind them.
+ */
 watch(
   () => props.configuration.categories,
   (categories) => {
-    drafts.clear();
+    const live = new Set(categories.map((category) => category.id));
+    for (const id of [...drafts.keys()]) if (!live.has(id)) drafts.delete(id);
+
     for (const category of categories) {
+      if (drafts.has(category.id)) continue;
       drafts.set(category.id, {
         name: category.name,
         defaultCooldownMin: category.defaultCooldownMin,
@@ -59,23 +79,28 @@ async function create(): Promise<void> {
   }
 }
 
-async function save(id: string, version: number): Promise<void> {
-  const draft = drafts.get(id);
-  if (draft === undefined) return;
+/**
+ * Queues a save of one row.
+ *
+ * The version and the draft are read when the save *runs*, not when it is
+ * queued: a debounced closure over the version the row had eight keystrokes ago
+ * would be refused as a conflict with the user's own earlier save (§5.4).
+ */
+function edited(id: string): void {
+  autosave.save(id, async () => {
+    const category = props.configuration.categories.find((entry) => entry.id === id);
+    const draft = drafts.get(id);
+    if (category === undefined || draft === undefined || draft.name.trim() === '') return;
 
-  busy.value = true;
-  try {
     await props.submit({
       type: 'EditCategory',
-      expectedVersion: version,
+      expectedVersion: category.version,
       params: {
         categoryId: id,
         patch: { name: draft.name, defaultCooldownMin: Number(draft.defaultCooldownMin) },
       },
     });
-  } finally {
-    busy.value = false;
-  }
+  });
 }
 
 async function remove(id: string, version: number): Promise<void> {
@@ -101,7 +126,7 @@ async function remove(id: string, version: number): Promise<void> {
       <h2 class="sr-only">Activity types</h2>
       <p class="text-muted-foreground text-sm">
         Shared across every planner you own. The cooldown is protected time after each task of the
-        kind, and cannot be compressed.
+        kind, and cannot be compressed. Changes save themselves.
       </p>
     </header>
 
@@ -126,6 +151,7 @@ async function remove(id: string, version: number): Promise<void> {
               v-model="drafts.get(category.id)!.name"
               :aria-label="`Name of ${category.name}`"
               data-testid="category-name"
+              @input="edited(category.id)"
             />
           </td>
           <td class="w-32 py-2 pr-3">
@@ -136,23 +162,15 @@ async function remove(id: string, version: number): Promise<void> {
               min="0"
               :aria-label="`Cooldown for ${category.name}`"
               data-testid="category-cooldown"
+              @input="edited(category.id)"
             />
           </td>
           <td class="py-2">
             <div class="flex justify-end gap-2">
               <Button
-                variant="outline"
-                size="sm"
-                :disabled="busy"
-                data-testid="save-category"
-                @click="save(category.id, category.version)"
-              >
-                Save
-              </Button>
-              <Button
                 variant="ghost"
                 size="sm"
-                :disabled="busy"
+                :disabled="busy || autosave.busy.value"
                 :aria-label="`Delete ${category.name}`"
                 data-testid="delete-category"
                 @click="remove(category.id, category.version)"

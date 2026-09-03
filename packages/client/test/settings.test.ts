@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import DisplaySection from '@/components/settings/DisplaySection.vue';
+import { AUTOSAVE_DELAY_MS } from '@/lib/autosave';
 import { formatDayLabel, formatMinuteOfDay, weekdayNames } from '@/lib/time';
 import { parseCivilDate } from '@/lib/time';
 import type { CommandRequest } from '@ambitime/shared';
@@ -15,12 +16,34 @@ import type { CommandRequest } from '@ambitime/shared';
  */
 describe('display settings', () => {
   function section() {
+    // Installed before the component exists, so the debounce's `setTimeout` is
+    // the fake one. Installing it afterwards leaves a real timer running that
+    // no amount of advancing the clock will reach — which is exactly the shape
+    // of test that passes by never asserting anything.
+    vi.useFakeTimers();
     const submit = vi.fn<(request: CommandRequest) => Promise<boolean>>().mockResolvedValue(true);
     const wrapper = mount(DisplaySection, {
       props: { calendarTimeZone: 'Europe/Berlin', submit },
     });
     return { wrapper, submit };
   }
+
+  /**
+   * Lets the debounce elapse.
+   *
+   * There is no Save button any more, so what a test has to wait for is the
+   * quiet period rather than a click. Fake timers rather than a real delay:
+   * Vue's own scheduler runs on microtasks, so nothing else here is affected.
+   * `advanceTimersByTimeAsync` drains those between ticks, which is what lets
+   * the awaited `submit` inside the debounced action actually run.
+   */
+  async function settle(): Promise<void> {
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('offers "follow the calendar" as a real choice, not an empty box', () => {
     const { wrapper } = section();
@@ -34,7 +57,10 @@ describe('display settings', () => {
   it('sends null to clear a setting rather than omitting it', async () => {
     const { wrapper, submit } = section();
 
-    await wrapper.find('[data-testid="save-display"]').trigger('click');
+    await wrapper.find('[data-testid="settings-locale"]').setValue('de-DE');
+    await settle();
+    await wrapper.find('[data-testid="settings-locale"]').setValue('');
+    await settle();
 
     // Omitting would mean "leave it alone"; `null` means "put me back to
     // following whatever I am looking at" (§13).
@@ -44,17 +70,34 @@ describe('display settings', () => {
     });
   });
 
-  it('sends what was chosen', async () => {
+  it('sends what was chosen, without being asked to save', async () => {
     const { wrapper, submit } = section();
 
     await wrapper.find('[data-testid="settings-locale"]').setValue('de-DE');
     await wrapper.find('[data-testid="settings-timezone"]').setValue('Europe/Lisbon');
     await wrapper.find('[data-testid="settings-first-day"]').setValue('7');
-    await wrapper.find('[data-testid="save-display"]').trigger('click');
+    await settle();
 
     expect(submit.mock.calls.at(-1)?.[0]).toMatchObject({
       params: { patch: { locale: 'de-DE', timeZone: 'Europe/Lisbon', firstDayOfWeek: 7 } },
     });
+  });
+
+  /**
+   * Three changes in a row are one intent, not three.
+   *
+   * Without the debounce each keystroke would be its own command: three rows in
+   * the audit log (§12) and three re-derives, for one visit to this screen.
+   */
+  it('coalesces a burst of changes into one command', async () => {
+    const { wrapper, submit } = section();
+
+    await wrapper.find('[data-testid="settings-locale"]').setValue('de-DE');
+    await wrapper.find('[data-testid="settings-timezone"]').setValue('Europe/Lisbon');
+    await wrapper.find('[data-testid="settings-first-day"]').setValue('7');
+    await settle();
+
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 
   it('previews the effect before it is saved', async () => {

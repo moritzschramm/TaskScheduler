@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Button } from '@/components/ui/button';
+import { useAutosave } from '@/lib/autosave';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { session } from '@/lib/session';
@@ -25,23 +25,47 @@ const props = defineProps<{
   submit: (request: CommandRequest) => Promise<boolean>;
 }>();
 
-const busy = ref(false);
+const autosave = useAutosave();
+
 const locale = ref('');
 const timeZone = ref('');
 const firstDayOfWeek = ref('');
 
+/** True while the fields are being filled from the server, not by a person. */
+let seeding = false;
+
+// Seeded once from the session. Not re-seeded on every answer: each save
+// reloads the session, and a watch that fired on that would fight the select
+// the user is still holding open.
 watch(
-  () => session.value,
-  (active) => {
+  () => session.value?.user.id,
+  () => {
+    seeding = true;
+    const active = session.value;
     locale.value = active?.settings.locale ?? '';
     timeZone.value = active?.settings.timeZone ?? '';
     firstDayOfWeek.value =
       active?.settings.firstDayOfWeek === null || active?.settings.firstDayOfWeek === undefined
         ? ''
         : String(active.settings.firstDayOfWeek);
+    seeding = false;
   },
   { immediate: true },
 );
+
+/**
+ * Any change a person made, saved.
+ *
+ * A watcher rather than three `@update:model-value` bindings: the fields are
+ * what a save reads, so watching them is watching the thing itself — and a
+ * listener has to be remembered on each new control, which is how one quietly
+ * stops saving.
+ *
+ * `flush: 'sync'` so it runs while `seeding` still says who assigned the value.
+ * A deferred watcher would fire after the seed had finished and report the
+ * server's own answer back to it as an edit.
+ */
+watch([locale, timeZone, firstDayOfWeek], () => !seeding && edited(), { flush: 'sync' });
 
 const timeZones = computed(() => Intl.supportedValuesOf('timeZone'));
 
@@ -74,9 +98,15 @@ const preview = computed(() => {
   };
 });
 
-async function save(): Promise<void> {
-  busy.value = true;
-  try {
+/**
+ * Saved as chosen, with the preview above it already showing the answer.
+ *
+ * All three are selects, so there is no half-typed state to guard against —
+ * every change is a complete value. The debounce is still worth having for
+ * somebody arrowing through a list of six hundred time zones.
+ */
+function edited(): void {
+  autosave.save('display', async () => {
     await props.submit({
       type: 'UpdateSettings',
       params: {
@@ -89,9 +119,7 @@ async function save(): Promise<void> {
         },
       },
     });
-  } finally {
-    busy.value = false;
-  }
+  });
 }
 </script>
 
@@ -100,8 +128,8 @@ async function save(): Promise<void> {
     <header>
       <h2 class="text-lg font-semibold">Dates and times</h2>
       <p class="text-muted-foreground text-sm">
-        How things are shown to you. Scheduling itself follows each planner's own zone, so changing
-        these moves nothing.
+        How things are shown to you, saved as you change them. Scheduling itself follows each
+        planner's own zone, so changing these moves nothing.
       </p>
     </header>
 
@@ -142,7 +170,5 @@ async function save(): Promise<void> {
       <p>{{ preview.date }} at {{ preview.time }}</p>
       <p class="text-muted-foreground text-xs">Weeks start on {{ preview.weekStartsOn }}.</p>
     </div>
-
-    <Button :disabled="busy" data-testid="save-display" @click="save">Save</Button>
   </section>
 </template>

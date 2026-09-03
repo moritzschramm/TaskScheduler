@@ -1,18 +1,23 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
+import { useAutosave } from '@/lib/autosave';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
 
 /**
- * Week-type overrides — holidays, a conference week, parental leave (spec §4.3).
+ * Special weeks — a holiday, a conference week, parental leave (spec §4.3).
  *
- * A range of dates whose availability is edited separately, in the section
- * above. Creating one immediately empties its dates, because an override
- * *replaces* the default window set and a new one has no windows yet; the
- * caption says so, since discovering it from a blank fortnight would be a poor
- * way to learn it.
+ * Called "week types" until it was pointed out that the name describes the
+ * database rather than the thing: what a person has is a fortnight away, and
+ * what they want to see is that fortnight shaded on a calendar. The month view
+ * is where these became legible, and the name follows it.
+ *
+ * A range of dates whose availability is edited separately, on Activity types.
+ * Creating one immediately empties its dates, because it *replaces* the default
+ * window set and a new one has no windows yet; the caption says so, since
+ * discovering it from a blank fortnight would be a poor way to learn it.
  *
  * Dates are half-open — the end date is the first day back — which is stated
  * rather than implied, because every other interval in the system is half-open
@@ -33,13 +38,19 @@ const busy = ref(false);
 const drafts = reactive(new Map<string, Draft>());
 const fresh = ref<Draft>({ name: '', startDate: '', endDate: '' });
 
+const autosave = useAutosave();
+
 const readOnly = computed(() => !props.configuration.calendar.isOwner);
 
+/** Membership only; an existing draft is the user's, not the server's. */
 watch(
   () => props.configuration.weekTypeOverrides,
   (overrides) => {
-    drafts.clear();
+    const live = new Set(overrides.map((override) => override.id));
+    for (const id of [...drafts.keys()]) if (!live.has(id)) drafts.delete(id);
+
     for (const override of overrides) {
+      if (drafts.has(override.id)) continue;
       drafts.set(override.id, {
         name: override.name,
         startDate: override.startDate,
@@ -76,23 +87,29 @@ async function create(): Promise<void> {
   }
 }
 
-async function save(id: string, version: number): Promise<void> {
-  const draft = drafts.get(id);
-  if (draft === undefined) return;
+/**
+ * Queues a save of one row, reading its version as the save runs (§5.4).
+ *
+ * A half-entered range is not sent. A `<input type=date>` reports an empty
+ * value while it is being filled in, and a command with no start date would be
+ * refused — noisily, in the middle of typing the one that follows it.
+ */
+function edited(id: string): void {
+  autosave.save(id, async () => {
+    const override = props.configuration.weekTypeOverrides.find((entry) => entry.id === id);
+    const draft = drafts.get(id);
+    if (override === undefined || draft === undefined) return;
+    if (draft.name.trim() === '' || draft.startDate >= draft.endDate) return;
 
-  busy.value = true;
-  try {
     await props.submit({
       type: 'EditWeekTypeOverride',
-      expectedVersion: version,
+      expectedVersion: override.version,
       params: {
         weekTypeOverrideId: id,
         patch: { name: draft.name, startDate: draft.startDate, endDate: draft.endDate },
       },
     });
-  } finally {
-    busy.value = false;
-  }
+  });
 }
 
 async function remove(id: string, version: number): Promise<void> {
@@ -112,11 +129,11 @@ async function remove(id: string, version: number): Promise<void> {
 <template>
   <section class="space-y-4" data-testid="overrides-section">
     <header>
-      <h2 class="text-lg font-semibold">Week types</h2>
+      <h2 class="text-lg font-semibold">Special weeks</h2>
       <p class="text-muted-foreground text-sm">
-        A date range whose availability replaces the default one. A new week type has no windows
-        yet, so its dates are unavailable until you give it some. The end date is the first day
-        back.
+        A stretch of dates whose hours replace your usual ones — a holiday, a conference, a week
+        working elsewhere. A new one has no hours yet, so its dates are unavailable until you give
+        it some on Activity types. The end date is the first day back, and changes save themselves.
       </p>
     </header>
 
@@ -143,6 +160,7 @@ async function remove(id: string, version: number): Promise<void> {
               :disabled="readOnly"
               :aria-label="`Name of ${override.name}`"
               data-testid="override-name"
+              @input="edited(override.id)"
             />
           </td>
           <td class="w-40 py-2 pr-3">
@@ -152,6 +170,7 @@ async function remove(id: string, version: number): Promise<void> {
               type="date"
               :disabled="readOnly"
               :aria-label="`Start of ${override.name}`"
+              @input="edited(override.id)"
             />
           </td>
           <td class="w-40 py-2 pr-3">
@@ -161,23 +180,15 @@ async function remove(id: string, version: number): Promise<void> {
               type="date"
               :disabled="readOnly"
               :aria-label="`End of ${override.name}`"
+              @input="edited(override.id)"
             />
           </td>
           <td class="py-2">
             <div class="flex justify-end gap-2">
               <Button
-                variant="outline"
-                size="sm"
-                :disabled="readOnly || busy"
-                data-testid="save-override"
-                @click="save(override.id, override.version)"
-              >
-                Save
-              </Button>
-              <Button
                 variant="ghost"
                 size="sm"
-                :disabled="readOnly || busy"
+                :disabled="readOnly || busy || autosave.busy.value"
                 :aria-label="`Delete ${override.name}`"
                 data-testid="delete-override"
                 @click="remove(override.id, override.version)"
@@ -190,7 +201,7 @@ async function remove(id: string, version: number): Promise<void> {
 
         <tr class="border-t">
           <td class="py-2 pr-3">
-            <Label for="new-override-name" class="sr-only">New week type name</Label>
+            <Label for="new-override-name" class="sr-only">New special week name</Label>
             <Input
               id="new-override-name"
               v-model="fresh.name"
@@ -200,7 +211,7 @@ async function remove(id: string, version: number): Promise<void> {
             />
           </td>
           <td class="py-2 pr-3">
-            <Label for="new-override-start" class="sr-only">New week type start</Label>
+            <Label for="new-override-start" class="sr-only">New special week start</Label>
             <Input
               id="new-override-start"
               v-model="fresh.startDate"
@@ -210,7 +221,7 @@ async function remove(id: string, version: number): Promise<void> {
             />
           </td>
           <td class="py-2 pr-3">
-            <Label for="new-override-end" class="sr-only">New week type end</Label>
+            <Label for="new-override-end" class="sr-only">New special week end</Label>
             <Input
               id="new-override-end"
               v-model="fresh.endDate"

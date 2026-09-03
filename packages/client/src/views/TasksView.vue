@@ -94,6 +94,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
       <div class="grid gap-8 lg:grid-cols-[2fr_1fr]">
         <TaskListPanel
           :tasks="tasks"
+          :categories="categories"
           :selected-id="editing.kind === 'task' ? (editing.task?.id ?? null) : null"
           editable
           @select="(task) => (editing = { kind: 'task', task, parent: parentOf(task) })"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Button } from '@/components/ui/button';
+import { useAutosave } from '@/lib/autosave';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import WeekdayWindowEditor, { type WindowRule } from './WeekdayWindowEditor.vue';
@@ -9,27 +9,48 @@ import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
 /**
  * When each category may be scheduled in this planner (spec §4.3).
  *
- * Two selectors address one set: the **category**, and the **week type** — the
- * default set, or the replacement set belonging to one week-type override. That
- * is the shape of the data (a window points at an override, or at nothing), and
- * a screen that flattened it would have to invent an answer to "which week is
- * this Tuesday?".
+ * Two selectors address one set: the **activity type**, and the **special
+ * week** — the default set, or the replacement set belonging to one of them.
+ * That is the shape of the data (a window points at a special week, or at
+ * nothing), and a screen that flattened it would have to invent an answer to
+ * "which week is this Tuesday?".
  *
- * The override sets are also where the difference matters most: an override
- * *replaces* the default set for its dates, so a holiday week with no windows
- * of its own is a week with no availability at all. Making that a visible,
- * separately-edited set is what stops it being a surprise.
+ * Special weeks are where the difference matters most: one *replaces* the
+ * default set for its dates, so a holiday with no windows of its own is a
+ * stretch with no availability at all. Making that a visible, separately-edited
+ * set is what stops it being a surprise.
+ *
+ * **No Save button.** A range is written when it is added, removed or changed.
+ * The button was the last thing standing between "I set my hours" and hours
+ * that were actually set — and a form whose whole content is a week of times
+ * has no natural moment at which a person decides they are done.
  */
 const props = defineProps<{
   configuration: CalendarConfiguration;
   submit: (request: CommandRequest) => Promise<boolean>;
 }>();
 
-const busy = ref(false);
 const categoryId = ref('');
-/** `''` addresses the default set; otherwise a week-type override's id. */
+/** `''` addresses the default set; otherwise a special week's id. */
 const weekTypeId = ref('');
 const rules = ref<WindowRule[]>([]);
+
+const autosave = useAutosave();
+
+/**
+ * Which set the editor is currently showing, as one string.
+ *
+ * The re-seed below keys off this rather than off the data, because the data
+ * changes as a *result* of editing: every save re-reads, so a watch on the
+ * windows alone would put the server's copy back over an edit in progress, one
+ * round trip behind the user.
+ */
+const address = computed(() => `${categoryId.value}|${weekTypeId.value}`);
+/** True while `rules` is being filled from the server, not by a person. */
+let seeding = false;
+const seededAddress = ref<string | null>(null);
+/** Set on every change, cleared once a save of that change has landed. */
+const unsent = ref(false);
 
 const readOnly = computed(() => !props.configuration.calendar.isOwner);
 
@@ -51,11 +72,15 @@ watch(
   { immediate: true },
 );
 
-// Re-seeded whenever the address or the server's answer changes, so the editor
-// always shows the set it is about to replace rather than the last one opened.
 watch(
-  [() => props.configuration.availability, categoryId, weekTypeId],
-  ([availability]) => {
+  [() => props.configuration.availability, address],
+  ([availability, key]) => {
+    // A change of address always re-seeds — it is a different set. The same
+    // address only re-seeds when there is nothing typed and unsent, so an
+    // answer to an earlier keystroke cannot overwrite a later one.
+    if (key === seededAddress.value && unsent.value) return;
+
+    seeding = true;
     rules.value = availability
       .filter(
         (window) =>
@@ -68,15 +93,35 @@ watch(
         endMin,
         focusLevel: focusLevel ?? undefined,
       }));
+
+    seededAddress.value = key;
+    seeding = false;
   },
   { immediate: true },
 );
 
-async function save(): Promise<void> {
-  if (categoryId.value === '') return;
+// Sync, so a seed's own assignment is still inside `seeding` when this runs.
+watch(rules, () => !seeding && edited(), { flush: 'sync' });
 
-  busy.value = true;
-  try {
+/**
+ * Writes the set as it now stands.
+ *
+ * The whole week goes every time, because that is what the command means: §4.3
+ * describes a category as owning "the set", and `SetAvailabilityWindows`
+ * replaces it. So adding one range and removing another are the same call, and
+ * there is no partial state in between for a failure to leave behind.
+ *
+ * Backwards ranges are held back rather than sent and refused. The editor
+ * already flags one in red, and a user dragging an end time past a start would
+ * otherwise get an error banner for a value they are halfway through changing.
+ */
+function edited(): void {
+  unsent.value = true;
+
+  autosave.save('availability', async () => {
+    if (categoryId.value === '' || readOnly.value) return;
+    if (rules.value.some((rule) => rule.startMin >= rule.endMin)) return;
+
     await props.submit({
       type: 'SetAvailabilityWindows',
       params: {
@@ -91,9 +136,9 @@ async function save(): Promise<void> {
         })),
       },
     });
-  } finally {
-    busy.value = false;
-  }
+
+    unsent.value = false;
+  });
 }
 </script>
 
@@ -109,7 +154,8 @@ async function save(): Promise<void> {
       <h2 class="text-lg font-semibold">Scheduling hours</h2>
       <p class="text-muted-foreground text-sm">
         The hours the scheduler may place this kind of thing in — not simply when you are free. A
-        week type replaces the default set for its dates rather than adding to it.
+        special week replaces the default set for its dates rather than adding to it. Changes save
+        themselves.
       </p>
     </header>
 
@@ -138,14 +184,14 @@ async function save(): Promise<void> {
         </div>
 
         <div class="space-y-1">
-          <Label for="availability-week-type">Week type</Label>
+          <Label for="availability-week-type">Special week</Label>
           <Select
             id="availability-week-type"
             v-model="weekTypeId"
             :disabled="readOnly"
             data-testid="availability-week-type"
           >
-            <option value="">Default weeks</option>
+            <option value="">Ordinary weeks</option>
             <option
               v-for="override in configuration.weekTypeOverrides"
               :key="override.id"
@@ -165,14 +211,9 @@ async function save(): Promise<void> {
         data-testid="availability-editor"
       />
 
-      <div class="flex items-center gap-3">
-        <Button :disabled="readOnly || busy" data-testid="save-availability" @click="save">
-          Save availability
-        </Button>
-        <span v-if="rules.length === 0" class="text-muted-foreground text-xs">
-          Saving an empty week means this activity type is never scheduled here.
-        </span>
-      </div>
+      <p v-if="rules.length === 0" class="text-muted-foreground text-xs">
+        An empty week means this activity type is never scheduled here.
+      </p>
     </template>
   </section>
 </template>

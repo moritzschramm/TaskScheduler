@@ -8,6 +8,7 @@ import type { DatabaseHandle } from '@ambitime/server/db';
 import { recordingEmailSender } from '@ambitime/server/email';
 import { setupTestDatabase } from '@ambitime/server/testing';
 import App from '@/App.vue';
+import { AUTOSAVE_DELAY_MS } from '@/lib/autosave';
 import { resetClock, setClock } from '@/lib/clock';
 import { createAppRouter } from '@/router';
 import { loadSession, signIn } from '@/lib/session';
@@ -266,7 +267,10 @@ describe('seed via the API, render the client', () => {
     await times[1]!.setValue('17:00');
     expect(tuesday.exists()).toBe(true);
 
-    await wrapper.find('[data-testid="save-working-window"]').trigger('click');
+    // No Save button: the window writes itself once the times stop changing.
+    // The delay is imported rather than guessed, so a change to it moves this
+    // test with it instead of leaving a flake behind.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DELAY_MS + 100));
     await settle();
     expect(wrapper.find('[data-testid="settings-error"]').exists()).toBe(false);
 

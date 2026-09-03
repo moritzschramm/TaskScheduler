@@ -1,18 +1,24 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import {
   createCoreRowModel,
   useTable,
   type ColumnDef,
   type TableFeatures,
 } from '@tanstack/vue-table';
-import type { TaskNode } from '@ambitime/shared';
+import type { Category, TaskNode } from '@ambitime/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 const props = withDefaults(
-  defineProps<{ tasks: TaskNode[]; selectedId?: string | null; editable?: boolean }>(),
-  { selectedId: null, editable: false },
+  defineProps<{
+    tasks: TaskNode[];
+    /** Names for the groups; a task's own is `effectiveCategoryId` (§4.3). */
+    categories?: Category[];
+    selectedId?: string | null;
+    editable?: boolean;
+  }>(),
+  { categories: () => [], selectedId: null, editable: false },
 );
 
 const emit = defineEmits<{ select: [task: TaskNode]; addChild: [parent: TaskNode]; addRoot: [] }>();
@@ -37,6 +43,19 @@ const MAX_DEPTH = 5;
  * left margin rather than a second data structure — and because parents always
  * precede their children, the visual nesting is the query's ordering rather
  * than something rebuilt here.
+ *
+ * **Grouped by activity type, and collapsible.** A flat list of everything is
+ * the same shape as the backlog and answers the same question badly: what a
+ * person wants from this screen is "how much work is there, of what kind", and
+ * a category is the only division the system actually schedules by (§6.2 rule
+ * 1). Every group starts open, because collapsing is a thing you do to a
+ * section you have decided to ignore — never the state you should have to
+ * undo before you can read the page.
+ *
+ * Inheritance keeps the trees whole. A subtask with no category of its own
+ * takes its parent's (§4.4), so a group holds entire subtrees unless somebody
+ * has deliberately said otherwise — and when they have, the task appears under
+ * the type they gave it, which is the thing they were asking for.
  */
 
 // v9 carries the row-model factories on `features` rather than as separate
@@ -60,6 +79,72 @@ const table = useTable({
 
 const rows = computed(() => table.getRowModel().rows);
 const headers = computed(() => table.getHeaderGroups()[0]?.headers ?? []);
+
+/** Groups the user has folded away. Empty is the default: everything open. */
+const collapsed = ref(new Set<string>());
+
+/** The key a task with no activity type is grouped under. */
+const NO_CATEGORY = '';
+
+const byId = computed(() => new Map(props.tasks.map((task) => [task.id, task])));
+
+/**
+ * How deep to indent a task *within its group*.
+ *
+ * Counted as ancestors that are in the same group rather than taken from
+ * `depth`, so a subtask whose type was overridden sits at the left edge of the
+ * group it was moved to rather than three levels in under nothing.
+ */
+function indentOf(task: TaskNode, groupKey: string): number {
+  let indent = 0;
+  let current = task.parentId === null ? undefined : byId.value.get(task.parentId);
+
+  while (current !== undefined) {
+    if ((current.effectiveCategoryId ?? NO_CATEGORY) === groupKey) indent += 1;
+    current = current.parentId === null ? undefined : byId.value.get(current.parentId);
+  }
+
+  return indent;
+}
+
+interface Group {
+  key: string;
+  name: string;
+  rows: { row: (typeof rows.value)[number]; indent: number }[];
+}
+
+/**
+ * The groups, in the order their first task appears.
+ *
+ * Not alphabetical: the tree's own order is somebody's ordering of their work,
+ * and re-sorting the containers around it would move the group you were reading
+ * every time you renamed a category.
+ */
+const groups = computed<Group[]>(() => {
+  const found = new Map<string, Group>();
+
+  for (const row of rows.value) {
+    const key = row.original.effectiveCategoryId ?? NO_CATEGORY;
+    const existing = found.get(key);
+    const entry = { row, indent: indentOf(row.original, key) };
+
+    if (existing === undefined) found.set(key, { key, name: nameOf(key), rows: [entry] });
+    else existing.rows.push(entry);
+  }
+
+  return [...found.values()];
+});
+
+function nameOf(key: string): string {
+  if (key === NO_CATEGORY) return 'No activity type';
+  return props.categories.find((category) => category.id === key)?.name ?? 'Unknown activity type';
+}
+
+function toggle(key: string): void {
+  const next = new Set(collapsed.value);
+  if (!next.delete(key)) next.add(key);
+  collapsed.value = next;
+}
 
 function inheritedPriority(task: TaskNode): boolean {
   return task.ownPriority === null && task.effectivePriority !== null;
@@ -113,50 +198,75 @@ function canHaveChildren(task: TaskNode): boolean {
         </tr>
       </thead>
 
-      <tbody>
+      <tbody
+        v-for="group in groups"
+        :key="group.key"
+        data-testid="task-group"
+        :data-group="group.key"
+      >
+        <tr class="bg-muted/40 border-b">
+          <th :colspan="headers.length" scope="colgroup" class="py-1.5 pr-3 text-left">
+            <button
+              type="button"
+              class="flex w-full items-center gap-2 text-left"
+              :aria-expanded="!collapsed.has(group.key)"
+              data-testid="toggle-group"
+              @click="toggle(group.key)"
+            >
+              <span class="text-muted-foreground text-xs" aria-hidden="true">
+                {{ collapsed.has(group.key) ? '▸' : '▾' }}
+              </span>
+              <span class="text-sm font-semibold">{{ group.name }}</span>
+              <span class="text-muted-foreground text-xs font-normal">{{ group.rows.length }}</span>
+            </button>
+          </th>
+        </tr>
+
         <tr
-          v-for="row in rows"
-          :key="row.id"
+          v-for="entry in collapsed.has(group.key) ? [] : group.rows"
+          :key="entry.row.id"
           class="border-b last:border-0"
-          :class="row.original.id === selectedId ? 'bg-accent/50' : ''"
+          :class="entry.row.original.id === selectedId ? 'bg-accent/50' : ''"
           data-testid="task-row"
-          :data-task-id="row.original.id"
-          :data-depth="row.original.depth"
-          :data-selected="row.original.id === selectedId ? 'true' : 'false'"
+          :data-task-id="entry.row.original.id"
+          :data-depth="entry.row.original.depth"
+          :data-selected="entry.row.original.id === selectedId ? 'true' : 'false'"
         >
           <td class="py-1.5 pr-3">
-            <span :style="{ paddingLeft: `${(row.original.depth - 1) * 16}px` }">
+            <span :style="{ paddingLeft: `${entry.indent * 16}px` }">
               <button
                 v-if="editable"
                 type="button"
                 class="hover:underline"
                 data-testid="select-task"
-                @click="emit('select', row.original)"
+                @click="emit('select', entry.row.original)"
               >
-                {{ row.original.title }}
+                {{ entry.row.original.title }}
               </button>
-              <template v-else>{{ row.original.title }}</template>
+              <template v-else>{{ entry.row.original.title }}</template>
             </span>
           </td>
           <td class="py-1.5 pr-3">
-            <Badge v-if="row.original.status !== 'active'" variant="secondary">
-              {{ row.original.status }}
+            <Badge v-if="entry.row.original.status !== 'active'" variant="secondary">
+              {{ entry.row.original.status }}
             </Badge>
             <span v-else class="text-muted-foreground text-xs">
-              {{ row.original.isLeaf ? 'leaf' : 'parent' }}
+              {{ entry.row.original.isLeaf ? 'leaf' : 'parent' }}
             </span>
           </td>
           <td class="py-1.5 pr-3 tabular-nums">
-            {{ row.original.estimatedDurationMin ?? '—' }}
+            {{ entry.row.original.estimatedDurationMin ?? '—' }}
           </td>
           <td class="py-1.5 pr-3 tabular-nums">
-            <span :class="inheritedPriority(row.original) ? 'text-muted-foreground italic' : ''">
-              {{ row.original.effectivePriority ?? '—' }}
+            <span
+              :class="inheritedPriority(entry.row.original) ? 'text-muted-foreground italic' : ''"
+            >
+              {{ entry.row.original.effectivePriority ?? '—' }}
             </span>
           </td>
           <td class="py-1.5 pr-3 tabular-nums">
-            <span :class="inheritedDue(row.original) ? 'text-muted-foreground italic' : ''">
-              {{ formatDue(row.original.effectiveDueDate) }}
+            <span :class="inheritedDue(entry.row.original) ? 'text-muted-foreground italic' : ''">
+              {{ formatDue(entry.row.original.effectiveDueDate) }}
             </span>
           </td>
           <td class="py-1.5 text-right">
@@ -164,15 +274,15 @@ function canHaveChildren(task: TaskNode): boolean {
               v-if="editable"
               variant="ghost"
               size="sm"
-              :disabled="!canHaveChildren(row.original)"
+              :disabled="!canHaveChildren(entry.row.original)"
               :title="
-                row.original.depth >= MAX_DEPTH
+                entry.row.original.depth >= MAX_DEPTH
                   ? 'Tasks can nest five deep at most'
                   : 'Add a subtask'
               "
-              :aria-label="`Add a subtask to ${row.original.title}`"
+              :aria-label="`Add a subtask to ${entry.row.original.title}`"
               data-testid="add-subtask"
-              @click="emit('addChild', row.original)"
+              @click="emit('addChild', entry.row.original)"
             >
               Subtask
             </Button>
@@ -182,8 +292,8 @@ function canHaveChildren(task: TaskNode): boolean {
     </table>
 
     <p class="text-muted-foreground text-xs">
-      Values shown in <span class="italic">italics</span> are inherited from an ancestor. Tasks nest
-      five deep at most.
+      Grouped by activity type. Values shown in <span class="italic">italics</span> are inherited
+      from an ancestor. Tasks nest five deep at most.
     </p>
   </section>
 </template>

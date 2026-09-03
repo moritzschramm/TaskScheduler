@@ -14,15 +14,20 @@ import { invalidateWorkspace } from '@/lib/workspace';
 import type { CalendarConfiguration, CalendarSummary, CommandRequest } from '@ambitime/shared';
 
 /**
- * The configuration screen (plan M11): calendars, categories, windows and week
- * types, all of it edited through commands.
+ * The configuration screen (plan M11): the planner itself and how dates are
+ * shown, both edited through commands.
  *
  * **Every write on this page is one command, and every command re-reads.** The
  * server's response is authoritative — it applied the change, re-derived what
- * followed, and knows things the form does not, such as which fields the
- * database normalised — so the page shows what came back rather than what was
- * typed. It costs one extra request and removes the entire class of bug where
- * a refused save still looks applied.
+ * followed, and knows things the form does not — so what the rest of the
+ * application shows afterwards is what came back rather than what was typed.
+ *
+ * **The re-read is silent.** It used to raise the same `loading` flag as the
+ * first read, which replaced the whole page with "Loading the settings…" every
+ * time somebody changed a dropdown. Nothing about that was a lie, and it still
+ * read as the page reloading under them — a form that blinks after every edit
+ * is a form people stop trusting they have finished with. The flag now means
+ * only what it originally meant: there is nothing on screen yet.
  */
 
 const calendars = ref<CalendarSummary[]>([]);
@@ -40,8 +45,11 @@ function browserZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-async function load(): Promise<void> {
-  loading.value = true;
+async function load({ silent = false } = {}): Promise<void> {
+  // A refresh after a save is not a page load: there is already a correct
+  // screen up, and blanking it to fetch a newer one is the reload this page
+  // spent its whole life doing.
+  loading.value = !silent;
   error.value = null;
 
   try {
@@ -70,7 +78,7 @@ async function submit(request: CommandRequest): Promise<boolean> {
     // it as well as the configuration — otherwise the preview would update and
     // every other screen would not.
     await loadSession();
-    await load();
+    await load({ silent: true });
     // Availability, categories and week types are all read by the three
     // schedule views. Leaving their copy alone would mean a window edited here
     // and a grid still drawn from the one before it.
@@ -106,8 +114,9 @@ function message(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
 
-onMounted(load);
-watch(selectedId, load);
+onMounted(() => load());
+// A different planner is a different world, and reading it is a page load.
+watch(selectedId, () => load());
 </script>
 
 <template>
@@ -197,34 +206,51 @@ watch(selectedId, load);
       <CalendarSection :configuration="configuration" :submit="submit" />
 
       <!--
-        The two that used to be here and are not settings.
-        Categories decide whether anything can be scheduled at all (§6.2 rule
-        1), and week types are a fact about a stretch of calendar. Both now
-        live where they are acted on, and this says where that is rather than
-        leaving somebody hunting for a section that moved.
+        §4.3 has always allowed several planners — the picker above appears as
+        soon as there are two, and the read models are per-calendar throughout.
+        What was missing was any way to make the second one: the create form
+        only rendered when there were none, so the first planner closed the door
+        behind it. Folded away, because most people do need exactly one.
       -->
-      <nav class="text-muted-foreground max-w-prose space-y-2 border-t pt-6 text-sm">
-        <p>
-          <RouterLink
-            class="underline underline-offset-4"
-            to="/categories"
-            data-testid="to-categories"
+      <details class="rounded-lg border p-4" data-testid="add-planner-details">
+        <summary class="cursor-pointer text-sm font-semibold">Add another planner</summary>
+        <div class="max-w-md space-y-3 pt-3">
+          <p class="text-muted-foreground text-sm">
+            A second planner is for a life that genuinely has two — a job whose hours and holidays
+            have nothing to do with your own. Tasks, hours and special weeks are separate; activity
+            types are shared.
+          </p>
+
+          <div class="space-y-1">
+            <Label for="another-calendar-name">Name</Label>
+            <Input
+              id="another-calendar-name"
+              v-model="newCalendar.name"
+              placeholder="Work"
+              data-testid="another-calendar-name"
+            />
+          </div>
+
+          <div class="space-y-1">
+            <Label for="another-calendar-timezone">Time zone</Label>
+            <Select
+              id="another-calendar-timezone"
+              v-model="newCalendar.timezone"
+              data-testid="another-calendar-timezone"
+            >
+              <option v-for="zone in timeZones" :key="zone" :value="zone">{{ zone }}</option>
+            </Select>
+          </div>
+
+          <Button
+            :disabled="newCalendar.name.trim() === ''"
+            data-testid="create-another-calendar"
+            @click="createCalendar"
           >
-            Activity types and their hours
-          </RouterLink>
-          — what kinds of thing you do, and when. Every task needs one.
-        </p>
-        <p>
-          <RouterLink
-            class="underline underline-offset-4"
-            to="/appointments"
-            data-testid="to-week-types"
-          >
-            Week types
-          </RouterLink>
-          — holidays and special weeks that replace your usual hours.
-        </p>
-      </nav>
+            Create planner
+          </Button>
+        </div>
+      </details>
     </template>
   </div>
 </template>

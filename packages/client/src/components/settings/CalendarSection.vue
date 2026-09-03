@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Button } from '@/components/ui/button';
+import { useAutosave } from '@/lib/autosave';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
@@ -16,6 +16,9 @@ import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
  * hours, categories and tasks was the collision. The rename is only in the
  * copy; nothing in the model moved.
  *
+ * **No Save buttons.** Every field here writes itself once you stop changing
+ * it, which is what removes the state where a planner looks renamed and is not.
+ *
  * Both windows are folded away, and for the same reason: **neither is needed.**
  * The hours that actually schedule are the category's (§6.2 rule 1). The
  * working window is an optional ceiling over all of them, and absent means
@@ -30,7 +33,7 @@ const props = defineProps<{
   submit: (request: CommandRequest) => Promise<boolean>;
 }>();
 
-const busy = ref(false);
+const autosave = useAutosave();
 
 const name = ref('');
 const timezone = ref('');
@@ -39,23 +42,38 @@ const working = ref<WindowRule[]>([]);
 const shareable = ref<WindowRule[]>([]);
 
 /**
- * The form is re-seeded from the server's answer after every save.
+ * Seeded when the planner changes, not on every answer from the server.
  *
- * Configuration is source state and the response is authoritative, so the
- * fields show what was stored rather than what was typed — which is how a
- * refusal the user has not noticed stops looking like a success.
+ * It used to re-seed after each save, which was right for a form with a Save
+ * button: the response is authoritative and showing it is how a silent refusal
+ * stops looking like a success. Saving on every keystroke turns the same watch
+ * into a race — the answer to the third character arrives while the sixth is
+ * being typed — so identity is the trigger now, and a refusal is reported by
+ * the error banner instead.
  */
+/** True while the fields are being filled from the server, not by a person. */
+let seeding = false;
+
 watch(
-  () => props.configuration,
-  (configuration) => {
+  () => props.configuration.calendar.id,
+  () => {
+    seeding = true;
+    const configuration = props.configuration;
     name.value = configuration.calendar.name;
     timezone.value = configuration.calendar.timezone;
     visibilityScope.value = configuration.calendar.visibilityScope;
     working.value = windowsOfKind(configuration, 'working');
     shareable.value = windowsOfKind(configuration, 'shareable');
+    seeding = false;
   },
   { immediate: true },
 );
+
+// Sync, so the seed above is still in progress when these fire for its own
+// assignments; see the same pattern in DisplaySection.
+watch([name, timezone, visibilityScope], () => !seeding && editedCalendar(), { flush: 'sync' });
+watch(working, () => !seeding && editedWindows('working'), { flush: 'sync' });
+watch(shareable, () => !seeding && editedWindows('shareable'), { flush: 'sync' });
 
 function windowsOfKind(
   configuration: CalendarConfiguration,
@@ -74,14 +92,16 @@ const timeZones = computed(() => {
   return known.includes(timezone.value) ? known : [timezone.value, ...known];
 });
 
-async function saveCalendar(): Promise<void> {
-  busy.value = true;
-  try {
+function editedCalendar(): void {
+  autosave.save('calendar', async () => {
+    if (readOnly.value || name.value.trim() === '') return;
+
     await props.submit({
       type: 'ConfigureCalendar',
       // The lock the user actually read (§5.4): if a colleague renamed this
       // calendar since the page loaded, the save is refused rather than
-      // silently overwriting them.
+      // silently overwriting them. Read as the save runs, so the user's own
+      // previous keystroke is never mistaken for somebody else's edit.
       expectedVersion: props.configuration.calendar.version,
       params: {
         calendarId: props.configuration.calendar.id,
@@ -92,14 +112,14 @@ async function saveCalendar(): Promise<void> {
         },
       },
     });
-  } finally {
-    busy.value = false;
-  }
+  });
 }
 
-async function saveWindows(kind: 'working' | 'shareable'): Promise<void> {
-  busy.value = true;
-  try {
+function editedWindows(kind: 'working' | 'shareable'): void {
+  autosave.save(kind, async () => {
+    const windows = kind === 'working' ? working.value : shareable.value;
+    if (readOnly.value || windows.some((rule) => rule.startMin >= rule.endMin)) return;
+
     // No `expectedVersion`: the set has no version of its own, and guarding it
     // with the calendar's would refuse a window edit because somebody renamed
     // the calendar — a conflict between two things that do not conflict.
@@ -108,14 +128,10 @@ async function saveWindows(kind: 'working' | 'shareable'): Promise<void> {
       params: {
         calendarId: props.configuration.calendar.id,
         kind,
-        windows: (kind === 'working' ? working.value : shareable.value).map(
-          ({ weekday, startMin, endMin }) => ({ weekday, startMin, endMin }),
-        ),
+        windows: windows.map(({ weekday, startMin, endMin }) => ({ weekday, startMin, endMin })),
       },
     });
-  } finally {
-    busy.value = false;
-  }
+  });
 }
 </script>
 
@@ -165,10 +181,6 @@ async function saveWindows(kind: 'working' | 'shareable'): Promise<void> {
       </div>
     </div>
 
-    <Button :disabled="readOnly || busy" data-testid="save-calendar" @click="saveCalendar">
-      Save planner
-    </Button>
-
     <div class="grid gap-6 lg:grid-cols-2">
       <details class="rounded-lg border p-4" data-testid="working-window-details">
         <summary class="cursor-pointer text-sm font-semibold">Working window (optional)</summary>
@@ -184,14 +196,6 @@ async function saveWindows(kind: 'working' | 'shareable'): Promise<void> {
             :disabled="readOnly"
             data-testid="working-window"
           />
-          <Button
-            variant="outline"
-            :disabled="readOnly || busy"
-            data-testid="save-working-window"
-            @click="saveWindows('working')"
-          >
-            Save working window
-          </Button>
         </div>
       </details>
 
@@ -208,14 +212,6 @@ async function saveWindows(kind: 'working' | 'shareable'): Promise<void> {
             :disabled="readOnly"
             data-testid="shareable-window"
           />
-          <Button
-            variant="outline"
-            :disabled="readOnly || busy"
-            data-testid="save-shareable-window"
-            @click="saveWindows('shareable')"
-          >
-            Save shareable window
-          </Button>
         </div>
       </details>
     </div>

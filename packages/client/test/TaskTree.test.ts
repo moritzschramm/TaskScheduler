@@ -46,7 +46,17 @@ function node(id: string, depth: number, overrides: Partial<TaskNode> = {}): Tas
   };
 }
 
-const ladder = [1, 2, 3, 4, 5].map((depth) => node(`t${depth}`, depth));
+/**
+ * Five tasks, each the child of the one above it.
+ *
+ * The parent links are the point rather than decoration: indentation is now
+ * counted as ancestors *within the same group*, so that an activity type
+ * overridden on a subtask puts it at the left edge of the group it moved to
+ * rather than three levels in under nothing.
+ */
+const ladder = [1, 2, 3, 4, 5].map((depth) =>
+  node(`t${depth}`, depth, depth === 1 ? {} : { parentId: `t${depth - 1}` }),
+);
 
 function panel(tasks: TaskNode[], editable = true) {
   return mount(TaskListPanel, { props: { tasks, editable } });
@@ -57,8 +67,9 @@ describe('the task tree', () => {
     const rows = panel(ladder).findAll('[data-testid="task-row"]');
 
     expect(rows.map((row) => row.attributes('data-depth'))).toEqual(['1', '2', '3', '4', '5']);
-    // Indentation is a left margin off `depth`, not a second data structure:
-    // parents already precede their children in the query's own ordering.
+    // Indentation is a left margin, counted from the ancestors that share the
+    // row's group; parents already precede their children in the query's own
+    // ordering, so nothing is rebuilt here.
     const indents = rows.map((row) => row.find('td span').attributes('style')?.replace(/\s/g, ''));
     expect(indents).toEqual([
       'padding-left:0px;',
