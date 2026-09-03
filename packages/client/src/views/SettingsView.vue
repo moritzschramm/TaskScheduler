@@ -170,8 +170,8 @@ watch(selectedId, () => load());
         <h2 class="text-lg font-semibold">Create a planner</h2>
         <p class="text-muted-foreground text-sm">
           A planner is one self-contained world to schedule in: its own time zone, its own hours,
-          its own categories, its own tasks. Most people need exactly one. A second is for a life
-          that genuinely has two — a job whose hours and holidays have nothing to do with your own.
+          its own tasks. Most people need only one. Tasks, hours and special weeks are separate per
+          planner, activity types are shared.
         </p>
       </header>
 
@@ -214,7 +214,9 @@ watch(selectedId, () => load());
         soon as there are two, and the read models are per-calendar throughout.
         What was missing was any way to make the second one: the create form
         only rendered when there were none, so the first planner closed the door
-        behind it. Folded away, because most people do need exactly one.
+        behind it. Folded away, because most people do need only one — and the
+        caption says what a planner separates rather than how many you may have,
+        which is what the old one was read as promising.
       -->
       <details
         class="rounded-lg border p-4"
@@ -224,9 +226,7 @@ watch(selectedId, () => load());
         <summary class="cursor-pointer text-sm font-semibold">Add another planner</summary>
         <div v-if="addingPlanner" class="max-w-md space-y-3 pt-3">
           <p class="text-muted-foreground text-sm">
-            A second planner is for a life that genuinely has two — a job whose hours and holidays
-            have nothing to do with your own. Tasks, hours and special weeks are separate; activity
-            types are shared.
+            Tasks, hours and special weeks are separate per planner, activity types are shared.
           </p>
 
           <div class="space-y-1">
