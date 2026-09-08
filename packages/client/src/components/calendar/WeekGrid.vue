@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useI18n } from '@/i18n';
-import type { CompletedBlock, FixedBlock, ScheduledBlock } from '@ambitime/shared';
+import type { Category, CompletedBlock, FixedBlock, ScheduledBlock } from '@ambitime/shared';
 import type { CivilDate, ResolvedWindow } from '@ambitime/scheduler';
 import {
   blocksForDay,
+  categoryLanesForDay,
   clipBand,
   dragOffsetMinutes,
   movedStartMin,
@@ -42,6 +43,14 @@ const props = withDefaults(
      * would be the same blank week as one that simply had nothing to do.
      */
     windows?: readonly ResolvedWindow[];
+    /**
+     * The activity types the open hours belong to (§4.3).
+     *
+     * Supplies each lane's name and colour. Empty falls back to the single
+     * neutral band the grid drew before colours existed, which is also what a
+     * screen with no categories should show.
+     */
+    categories?: readonly Category[];
     today?: CivilDate | null;
     /** Visible span, in local minutes. Outside it there is nothing to show. */
     dayStartMin?: number;
@@ -54,6 +63,7 @@ const props = withDefaults(
   }>(),
   {
     windows: () => [],
+    categories: () => [],
     completedBlocks: () => [],
     today: null,
     dayStartMin: 6 * 60,
@@ -270,8 +280,35 @@ const columns = computed(() =>
     open: openBandsForDay(day, props.timeZone, props.windows)
       .map((band) => clipBand(band, props.dayStartMin, props.dayEndMin))
       .filter((band): band is DayBand => band !== null),
+    lanes: categoryLanesForDay(day, props.timeZone, props.windows)
+      .map((lane) => {
+        const clipped = clipBand(lane, props.dayStartMin, props.dayEndMin);
+        return clipped === null ? null : { ...lane, ...clipped };
+      })
+      .filter((lane) => lane !== null),
   })),
 );
+
+/** Name and colour for a lane, by the id the window carried. */
+const categoryById = computed(
+  () => new Map(props.categories.map((category) => [category.id, category])),
+);
+
+function nameOf(categoryId: string): string {
+  return categoryById.value.get(categoryId)?.name ?? '';
+}
+
+/**
+ * A lane's hue, or `null` for an activity type that has no slot.
+ *
+ * Resolved through `color-mix` against the surface rather than as a flat tint,
+ * so the fill stays a wash the block on top of it can be read against, while
+ * the left edge below carries the hue at the chroma it was selected at.
+ */
+function hueOf(categoryId: string): string | null {
+  const color = categoryById.value.get(categoryId)?.color ?? null;
+  return color === null ? null : `var(--category-${color})`;
+}
 
 function offsetOf(minute: number): number {
   return (minute - props.dayStartMin) * SCALE;
@@ -424,6 +461,44 @@ function classesFor(block: GridBlock): string {
             :data-end-min="band.endMin"
             aria-hidden="true"
           />
+
+          <!--
+            One lane per activity type that may be scheduled in this slice.
+            Drawn over the neutral band rather than instead of it, so a type
+            with no colour still reads as open time.
+
+            **The name is on the lane, not only the colour.** Eight hues cannot
+            all be told apart by every reader — the palette's own validator says
+            so — and the answer is not a different eight but to stop making
+            colour the thing that carries identity. The colour groups; the word
+            names. Where the lane is too narrow for the word, the title does it.
+          -->
+          <div
+            v-for="lane in column.lanes"
+            :key="`lane-${lane.categoryId}-${lane.startMin}`"
+            class="absolute overflow-hidden"
+            :class="hueOf(lane.categoryId) === null ? 'bg-muted-foreground/[0.06]' : ''"
+            :style="{
+              top: `${offsetOf(lane.startMin)}px`,
+              height: `${heightOfBand(lane)}px`,
+              left: `${lane.offset * 100}%`,
+              width: `${lane.width * 100}%`,
+              ...(hueOf(lane.categoryId) === null
+                ? {}
+                : {
+                    backgroundColor: `color-mix(in oklab, ${hueOf(lane.categoryId)} 14%, transparent)`,
+                    borderLeft: `3px solid ${hueOf(lane.categoryId)}`,
+                  }),
+            }"
+            data-testid="category-lane"
+            :data-category-id="lane.categoryId"
+            :data-start-min="lane.startMin"
+            :title="nameOf(lane.categoryId)"
+          >
+            <span class="text-muted-foreground truncate px-1 text-[0.65rem] leading-4">
+              {{ nameOf(lane.categoryId) }}
+            </span>
+          </div>
 
           <div
             v-for="mark in hourMarks"

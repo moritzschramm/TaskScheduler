@@ -1,4 +1,5 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
+import { nextCategoryColor } from '@ambitime/shared';
 import {
   availabilityWindows,
   calendars,
@@ -141,9 +142,16 @@ export async function createCategory(
   params: CreateCategoryParams,
   ctx: CommandContext,
 ): Promise<HandlerOutcome> {
+  // The next free slot when the caller named none, so the first activity types
+  // get distinct colours without anybody choosing (§4.3). Read here rather than
+  // defaulted in the schema because it depends on the other rows.
+  const taken = await ctx.tx.select({ color: categories.color }).from(categories);
+  const color = params.color ?? nextCategoryColor(taken.map((row) => row.color));
+
   const values: NewCategory = {
     tenantId: ctx.tenantId,
     name: params.name,
+    color,
     ...(params.defaultCooldownMin === undefined
       ? {}
       : { defaultCooldownMin: params.defaultCooldownMin }),
@@ -169,6 +177,8 @@ export async function editCategory(
 
   if (patch.name !== undefined) values.name = patch.name;
   if (patch.defaultCooldownMin !== undefined) values.defaultCooldownMin = patch.defaultCooldownMin;
+  // `null` is a value here, not an omission — see the patch schema.
+  if (patch.color !== undefined) values.color = patch.color;
 
   if (Object.keys(values).length === 0) return { calendarIds: [] };
 
@@ -177,7 +187,8 @@ export async function editCategory(
     `A category called "${patch.name ?? category.name}" already exists`,
   );
 
-  // Only the cooldown reaches the engine (§6.2 rule 4). Renaming a category
+  // Only the cooldown reaches the engine (§6.2 rule 4). A colour is a fact
+  // about drawing and reaches it even less; renaming a category
   // changes a label, and re-deriving every calendar that uses it to discover
   // that nothing moved would be work nobody asked for.
   return {

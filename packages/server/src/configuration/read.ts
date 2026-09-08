@@ -69,6 +69,7 @@ export async function readCalendarConfiguration(
         id: categories.id,
         name: categories.name,
         defaultCooldownMin: categories.defaultCooldownMin,
+        color: categories.color,
         version: categories.version,
       })
       .from(categories)

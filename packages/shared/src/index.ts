@@ -1,4 +1,5 @@
 export * from './health.js';
+export * from './palette.js';
 export * from './uuid.js';
 export * from './commands.js';
 export * from './api.js';

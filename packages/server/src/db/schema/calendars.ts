@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { CategoryColor } from '@ambitime/shared';
 import {
   check,
   date,
@@ -119,6 +120,14 @@ export const categories = pgTable(
     name: text('name').notNull(),
     /** Non-compressible gap reserved after each task of this category (§6.2). */
     defaultCooldownMin: integer('default_cooldown_min').notNull().default(0),
+    /**
+     * Which palette slot the grid draws this type's hours in (§4.3).
+     *
+     * A slot name rather than a hex value — one hex cannot be right on both a
+     * light and a dark surface. Null is a real state: the slots do not cycle,
+     * so a ninth activity type has none. See `@ambitime/shared`'s palette.
+     */
+    color: text('color').$type<CategoryColor>(),
     version: versionColumn(),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
@@ -127,6 +136,10 @@ export const categories = pgTable(
     unique('categories_id_tenant_key').on(table.id, table.tenantId),
     unique('categories_tenant_name_key').on(table.tenantId, table.name),
     check('categories_cooldown_non_negative', sql`${table.defaultCooldownMin} >= 0`),
+    check(
+      'categories_color_is_a_palette_slot',
+      sql`${table.color} is null or ${table.color} in ('blue', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'violet', 'red')`,
+    ),
   ],
 );
 

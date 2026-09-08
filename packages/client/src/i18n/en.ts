@@ -250,6 +250,19 @@ export const en = {
   },
 
   categories: {
+    color: 'Colour',
+    colorOf: 'Colour of {name}',
+    noColor: 'No colour',
+    hue: {
+      blue: 'Blue',
+      orange: 'Orange',
+      aqua: 'Aqua',
+      yellow: 'Yellow',
+      magenta: 'Magenta',
+      green: 'Green',
+      violet: 'Violet',
+      red: 'Red',
+    },
     title: 'Activity types',
     lead: 'An activity type is a kind of thing you do — work, exercise, errands — and the hours you are willing to do it in. Every task belongs to one, and those hours are the only times it can be scheduled.',
     emptyHint: 'Add an activity type above, then give it the hours it may be scheduled in.',

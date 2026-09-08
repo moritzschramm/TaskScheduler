@@ -317,7 +317,7 @@ function configuration(overrides: Partial<CalendarConfiguration> = {}): Calendar
       isOwner: true,
     },
     windows: [],
-    categories: [{ id: 'cat-1', name: 'Work', defaultCooldownMin: 0, version: 1 }],
+    categories: [{ id: 'cat-1', name: 'Work', defaultCooldownMin: 0, color: null, version: 1 }],
     availability: [
       {
         id: 'win-1',

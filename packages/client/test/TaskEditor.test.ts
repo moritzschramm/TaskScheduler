@@ -14,11 +14,18 @@ import type { Category, CommandRequest, TaskNode } from '@ambitime/shared';
  */
 
 const CATEGORIES: Category[] = [
-  { id: '018f0000-0000-7000-8000-0000000000c1', name: 'Work', defaultCooldownMin: 0, version: 1 },
+  {
+    id: '018f0000-0000-7000-8000-0000000000c1',
+    name: 'Work',
+    defaultCooldownMin: 0,
+    color: null,
+    version: 1,
+  },
   {
     id: '018f0000-0000-7000-8000-0000000000c2',
     name: 'Exercise',
     defaultCooldownMin: 15,
+    color: 'orange',
     version: 1,
   },
 ];

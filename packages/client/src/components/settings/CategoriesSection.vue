@@ -3,9 +3,15 @@ import { reactive, ref, watch } from 'vue';
 import { useI18n } from '@/i18n';
 import { useAutosave } from '@/lib/autosave';
 import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
+import {
+  CATEGORY_COLORS,
+  type CalendarConfiguration,
+  type CategoryColor,
+  type CommandRequest,
+} from '@ambitime/shared';
 
 const { t } = useI18n();
 
@@ -33,11 +39,13 @@ const props = defineProps<{
 interface Draft {
   name: string;
   defaultCooldownMin: number;
+  /** `''` is "no colour" — the state a ninth activity type starts in. */
+  color: CategoryColor | '';
 }
 
 const busy = ref(false);
 const drafts = reactive(new Map<string, Draft>());
-const fresh = ref<Draft>({ name: '', defaultCooldownMin: 0 });
+const fresh = ref<Draft>({ name: '', defaultCooldownMin: 0, color: '' });
 
 const autosave = useAutosave();
 
@@ -60,6 +68,7 @@ watch(
       drafts.set(category.id, {
         name: category.name,
         defaultCooldownMin: category.defaultCooldownMin,
+        color: category.color ?? '',
       });
     }
   },
@@ -74,9 +83,12 @@ async function create(): Promise<void> {
       params: {
         name: fresh.value.name,
         defaultCooldownMin: Number(fresh.value.defaultCooldownMin),
+        // Omitted rather than sent empty, so the server picks the next free
+        // slot in order — the whole point of the default.
+        ...(fresh.value.color === '' ? {} : { color: fresh.value.color }),
       },
     });
-    if (ok) fresh.value = { name: '', defaultCooldownMin: 0 };
+    if (ok) fresh.value = { name: '', defaultCooldownMin: 0, color: '' };
   } finally {
     busy.value = false;
   }
@@ -100,7 +112,12 @@ function edited(id: string): void {
       expectedVersion: category.version,
       params: {
         categoryId: id,
-        patch: { name: draft.name, defaultCooldownMin: Number(draft.defaultCooldownMin) },
+        patch: {
+          name: draft.name,
+          defaultCooldownMin: Number(draft.defaultCooldownMin),
+          // `null` is a value: it clears the colour rather than leaving it.
+          color: draft.color === '' ? null : draft.color,
+        },
       },
     });
   });
@@ -137,6 +154,7 @@ async function remove(id: string, version: number): Promise<void> {
         <tr>
           <th class="pb-2 font-medium">{{ t('common.name') }}</th>
           <th class="pb-2 font-medium">{{ t('categories.cooldown') }}</th>
+          <th class="pb-2 font-medium">{{ t('categories.color') }}</th>
           <th class="pb-2">
             <span class="sr-only">{{ t('tasks.column.actions') }}</span>
           </th>
@@ -168,6 +186,38 @@ async function remove(id: string, version: number): Promise<void> {
               data-testid="category-cooldown"
               @input="edited(category.id)"
             />
+          </td>
+          <td class="w-44 py-2 pr-3">
+            <div v-if="drafts.get(category.id)" class="flex items-center gap-2">
+              <!--
+                A swatch beside the name of the colour, never instead of it.
+                Eight hues cannot all be told apart by every reader, so the
+                select carries the word and this shows which one it means.
+              -->
+              <span
+                class="size-4 shrink-0 rounded-sm border"
+                :style="
+                  drafts.get(category.id)!.color === ''
+                    ? {}
+                    : { backgroundColor: `var(--category-${drafts.get(category.id)!.color})` }
+                "
+                data-testid="category-swatch"
+                :data-color="drafts.get(category.id)!.color"
+                aria-hidden="true"
+              />
+              <Select
+                v-model="drafts.get(category.id)!.color"
+                class="h-9"
+                :aria-label="t('categories.colorOf', { name: category.name })"
+                data-testid="category-color"
+                @update:model-value="edited(category.id)"
+              >
+                <option value="">{{ t('categories.noColor') }}</option>
+                <option v-for="hue in CATEGORY_COLORS" :key="hue" :value="hue">
+                  {{ t(`categories.hue.${hue}`) }}
+                </option>
+              </Select>
+            </div>
           </td>
           <td class="py-2">
             <div class="flex justify-end gap-2">
@@ -206,6 +256,19 @@ async function remove(id: string, version: number): Promise<void> {
               min="0"
               data-testid="new-category-cooldown"
             />
+          </td>
+          <td class="py-2 pr-3">
+            <Select
+              v-model="fresh.color"
+              class="h-9"
+              :aria-label="t('categories.color')"
+              data-testid="new-category-color"
+            >
+              <option value="">{{ t('categories.noColor') }}</option>
+              <option v-for="hue in CATEGORY_COLORS" :key="hue" :value="hue">
+                {{ t(`categories.hue.${hue}`) }}
+              </option>
+            </Select>
           </td>
           <td class="py-2 text-right">
             <Button

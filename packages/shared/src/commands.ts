@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CATEGORY_COLORS } from './palette.js';
 import { uuidv7 } from './uuid.js';
 
 /**
@@ -422,6 +423,8 @@ export const setCalendarWindowsParams = z.object({
 export const createCategoryParams = z.object({
   name: z.string().min(1),
   defaultCooldownMin: z.int().nonnegative().optional(),
+  /** Omitted takes the next free slot in order; see `nextCategoryColor`. */
+  color: z.enum(CATEGORY_COLORS).optional(),
 });
 
 /**
@@ -435,6 +438,12 @@ export const editCategoryParams = z.object({
   patch: z.object({
     name: z.string().min(1).optional(),
     defaultCooldownMin: z.int().nonnegative().optional(),
+    /**
+     * The one nullable field in this patch, and the exception the comment above
+     * describes: `null` means "no colour", which is where a ninth activity type
+     * starts and somewhere a user may deliberately go back to.
+     */
+    color: z.enum(CATEGORY_COLORS).nullable().optional(),
   }),
 });
 

@@ -267,6 +267,19 @@ export const de: Messages = {
   },
 
   categories: {
+    color: 'Farbe',
+    colorOf: 'Farbe von {name}',
+    noColor: 'Keine Farbe',
+    hue: {
+      blue: 'Blau',
+      orange: 'Orange',
+      aqua: 'Türkis',
+      yellow: 'Gelb',
+      magenta: 'Magenta',
+      green: 'Grün',
+      violet: 'Violett',
+      red: 'Rot',
+    },
     title: 'Aktivitätsarten',
     lead: 'Eine Aktivitätsart ist eine Sorte von Tätigkeit — Arbeit, Sport, Besorgungen — und die Stunden, in denen du sie tun willst. Jede Aufgabe gehört zu einer, und nur in deren Stunden lässt sie sich einplanen.',
     emptyHint:

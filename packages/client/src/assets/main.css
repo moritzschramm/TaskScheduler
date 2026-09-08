@@ -41,6 +41,21 @@
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
+  /*
+   * Activity-type colours (spec §4.3).
+   *
+   * Named slots rather than hex on the element, so the two surfaces get their
+   * own selected step and the grid is written against a role. These are the
+   * reference categorical palette's light column, unchanged.
+   */
+  --category-blue: #2a78d6;
+  --category-orange: #eb6834;
+  --category-aqua: #1baf7a;
+  --category-yellow: #eda100;
+  --category-magenta: #e87ba4;
+  --category-green: #008300;
+  --category-violet: #4a3aa7;
+  --category-red: #e34948;
 }
 
 .dark {
@@ -76,6 +91,18 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
+  /*
+   * The same eight hues stepped for the dark surface — selected as a set, not
+   * an automatic lightening of the light column.
+   */
+  --category-blue: #3987e5;
+  --category-orange: #d95926;
+  --category-aqua: #199e70;
+  --category-yellow: #c98500;
+  --category-magenta: #d55181;
+  --category-green: #008300;
+  --category-violet: #9085e9;
+  --category-red: #e66767;
 }
 
 @theme inline {

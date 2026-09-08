@@ -39,6 +39,7 @@ const {
   today,
   locale,
   configuration,
+  categories,
   editing,
   blockDialogOpen,
   openWindows,
@@ -116,6 +117,7 @@ function openDay(day: CivilDate): void {
         :blocks="[]"
         :fixed-blocks="view.fixedBlocks"
         :windows="openWindows"
+        :categories="categories"
         :day-start-min="dayStartMin"
         :day-end-min="dayEndMin"
         :today="today"

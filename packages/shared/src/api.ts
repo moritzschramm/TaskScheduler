@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CATEGORY_COLORS } from './palette.js';
 import {
   addAppointmentParams,
   addUnavailabilityParams,
@@ -271,6 +272,14 @@ export const categorySchema = z.object({
   id: uuid,
   name: z.string(),
   defaultCooldownMin: z.int().nonnegative(),
+  /**
+   * Which palette slot the grid draws this type's hours in (§4.3).
+   *
+   * Nullable, and that is a real state rather than a missing value: the ninth
+   * activity type gets none, because the eight slots do not cycle. It draws in
+   * the neutral shade every open hour used to have.
+   */
+  color: z.enum(CATEGORY_COLORS).nullable(),
   version: z.int().positive(),
 });
 

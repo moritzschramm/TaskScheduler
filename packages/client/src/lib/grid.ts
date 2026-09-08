@@ -135,6 +135,91 @@ export function openBandsForDay(
   return mergeBands(bands);
 }
 
+/** One activity type's claim on a slice of a day, and where to draw it. */
+export interface CategoryLane extends DayBand {
+  categoryId: string;
+  /** Fraction of the column width this lane starts at, 0–1. */
+  offset: number;
+  /** Fraction of the column width it occupies. */
+  width: number;
+}
+
+/**
+ * The day's open hours, split by activity type rather than merged (spec §4.3).
+ *
+ * `openBandsForDay` unions every category into one shape, which answers "could
+ * anything be scheduled here". This answers the question a person actually has
+ * — *what kind of thing* fits here — and needs the categories kept apart.
+ *
+ * **Side by side, not stacked.** Two translucent fills over one another make a
+ * third colour that is in neither palette and means nothing; the reader has to
+ * decode a blend. Splitting the width instead keeps every hue exactly as it was
+ * selected, and makes an overlap legible as what it is: two types, both
+ * available, competing for the same hour.
+ *
+ * The split is a sweep over the boundaries where the *set* of available types
+ * changes. Within one segment the set is constant, so the lanes have equal
+ * width and a stable order; across a boundary the widths change, which is the
+ * visible signal that something started or stopped being possible.
+ */
+export function categoryLanesForDay(
+  day: CivilDate,
+  timeZone: string,
+  windows: readonly ResolvedWindow[],
+): CategoryLane[] {
+  const byCategory = new Map<string, DayBand[]>();
+
+  for (const window of windows) {
+    const positioned = position(
+      day,
+      timeZone,
+      toIso(window.interval.start),
+      toIso(window.interval.end),
+    );
+    if (positioned === undefined) continue;
+
+    const bands = byCategory.get(window.categoryId) ?? [];
+    bands.push({ startMin: positioned.startMin, endMin: positioned.endMin });
+    byCategory.set(window.categoryId, bands);
+  }
+
+  // Merged within a type first: two windows of one category that touch are one
+  // stretch of availability, and a seam between them would read as a break.
+  const merged = [...byCategory.entries()]
+    .map(([categoryId, bands]) => ({ categoryId, bands: mergeBands(bands) }))
+    // Sorted so the lane order is the same on every render and every day, which
+    // is what stops a type moving sideways as you page through weeks (§6.3).
+    .sort((a, b) => a.categoryId.localeCompare(b.categoryId));
+
+  const edges = [
+    ...new Set(merged.flatMap(({ bands }) => bands.flatMap((b) => [b.startMin, b.endMin]))),
+  ].sort((a, b) => a - b);
+
+  const lanes: CategoryLane[] = [];
+
+  for (let index = 0; index + 1 < edges.length; index += 1) {
+    const startMin = edges[index]!;
+    const endMin = edges[index + 1]!;
+
+    const present = merged.filter(({ bands }) =>
+      bands.some((band) => band.startMin <= startMin && band.endMin >= endMin),
+    );
+    if (present.length === 0) continue;
+
+    present.forEach(({ categoryId }, position) => {
+      lanes.push({
+        categoryId,
+        startMin,
+        endMin,
+        offset: position / present.length,
+        width: 1 / present.length,
+      });
+    });
+  }
+
+  return lanes;
+}
+
 function mergeBands(bands: DayBand[]): DayBand[] {
   const sorted = [...bands].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
   const merged: DayBand[] = [];
