@@ -48,6 +48,7 @@ const {
   openWindows,
   dayStartMin,
   dayEndMin,
+  rowScale,
   unschedulable,
   noWindows,
   scheduledElsewhere,
@@ -257,6 +258,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         :categories="categories"
         :day-start-min="dayStartMin"
         :day-end-min="dayEndMin"
+        :scale="rowScale"
         :today="today"
         :locale="locale"
         editable

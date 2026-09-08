@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { FOCUS_LEVELS } from '@/lib/focus';
 import { formatMinuteOfDay, parseMinuteOfDay, weekdayNames } from '@/lib/time';
+import type { RuleOverlap } from '@/lib/overlaps';
 
 const { t } = useI18n();
 
@@ -41,9 +42,16 @@ const props = withDefaults(
     locale?: string;
     /** Availability windows carry a focus profile (§6.5); calendar windows do not. */
     withFocus?: boolean;
+    /**
+     * Clashes with other activity types, to mark on the ranges they belong to.
+     *
+     * Passed in rather than computed here: this editor is also used for the
+     * calendar windows of §9.1, which have no categories to clash with.
+     */
+    overlaps?: readonly RuleOverlap[];
     disabled?: boolean;
   }>(),
-  { locale: 'en-GB', withFocus: false, disabled: false },
+  { locale: 'en-GB', withFocus: false, overlaps: () => [], disabled: false },
 );
 
 const model = defineModel<WindowRule[]>({ required: true });
@@ -91,6 +99,21 @@ function setTime(index: number, edge: 'startMin' | 'endMin', value: string): voi
 
 function setFocus(index: number, value: string): void {
   update(index, { focusLevel: value === '' ? undefined : Number(value) });
+}
+
+/**
+ * The clashes on one range, matched by the range itself.
+ *
+ * By value rather than by index: the model is rebuilt on every edit, so an
+ * index would point at a different row the moment somebody added one above.
+ */
+function overlapsOn(rule: WindowRule): RuleOverlap[] {
+  return props.overlaps.filter(
+    (overlap) =>
+      overlap.weekday === rule.weekday &&
+      overlap.startMin === rule.startMin &&
+      overlap.endMin === rule.endMin,
+  );
 }
 
 /** A range the command layer would refuse, flagged before it is sent. */
@@ -168,6 +191,27 @@ function isBackwards(rule: WindowRule): boolean {
 
           <span v-if="isBackwards(entry.rule)" class="text-destructive text-xs">
             {{ t('hours.backwards') }}
+          </span>
+
+          <!--
+            Beside the range it belongs to, naming the other type and the
+            minutes actually contested — not a banner at the top saying
+            something on this screen clashes with something else.
+          -->
+          <span
+            v-for="overlap in overlapsOn(entry.rule)"
+            :key="`${overlap.otherName}-${overlap.sharedStartMin}`"
+            class="rounded-sm bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+            data-testid="range-overlap"
+            :data-other="overlap.otherName"
+          >
+            {{
+              t('hours.overlap', {
+                name: overlap.otherName,
+                from: formatMinuteOfDay(overlap.sharedStartMin),
+                until: formatMinuteOfDay(overlap.sharedEndMin),
+              })
+            }}
           </span>
         </div>
 

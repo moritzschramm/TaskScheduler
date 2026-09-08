@@ -21,7 +21,7 @@ import type {
 import { ApiError } from './api';
 import { now } from './clock';
 import { fetchConfiguration, fetchContext, fetchHistory, runCommand } from './commands';
-import { windowsForWeek } from './grid';
+import { DEFAULT_SCALE, setScale, windowsForWeek } from './grid';
 import { language, translate, type MessageKey } from '@/i18n';
 import { monthOf, shiftMonth } from './month';
 import { optimisticBlocks, schedulesAgree } from './optimistic';
@@ -190,6 +190,37 @@ function setMode(next: CalendarMode): void {
   mode.value = next;
   try {
     globalThis.localStorage?.setItem(MODE_KEY, next);
+  } catch {
+    // Same as the day range: it applies to this session either way.
+  }
+}
+
+/**
+ * How tall an hour is drawn, in pixels per minute.
+ *
+ * A preference about looking, like the day range and the calendar mode, and
+ * stored in the same place for the same reason. Held as a ref *and* pushed into
+ * `lib/grid`, because the drag arithmetic there is not reactive and must agree
+ * with what is on screen — a drop landing on a different hour from the one it
+ * looked like is the bug this pairing exists to prevent.
+ */
+const ROW_HEIGHT_KEY = 'ambitime.rowHeight';
+
+export function readStoredScale(): number {
+  try {
+    const raw = Number(globalThis.localStorage?.getItem(ROW_HEIGHT_KEY));
+    return Number.isFinite(raw) && raw > 0 ? setScale(raw) : DEFAULT_SCALE;
+  } catch {
+    return DEFAULT_SCALE;
+  }
+}
+
+const rowScale = ref(readStoredScale());
+
+function setRowScale(next: number): void {
+  rowScale.value = setScale(next);
+  try {
+    globalThis.localStorage?.setItem(ROW_HEIGHT_KEY, String(rowScale.value));
   } catch {
     // Same as the day range: it applies to this session either way.
   }
@@ -539,6 +570,8 @@ export interface Workspace {
   anchor: Ref<CivilDate | null>;
   mode: Ref<CalendarMode>;
   setMode: (next: CalendarMode) => void;
+  rowScale: Ref<number>;
+  setRowScale: (next: number) => void;
   dayStartMin: Ref<number>;
   dayEndMin: Ref<number>;
   setDayRange: (startMin: number, endMin: number) => void;
@@ -597,6 +630,8 @@ export function useWorkspace(): Workspace {
     anchor,
     mode,
     setMode,
+    rowScale,
+    setRowScale,
     dayStartMin,
     dayEndMin,
     setDayRange,

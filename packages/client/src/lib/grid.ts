@@ -64,10 +64,33 @@ export interface DayBand {
 const MINUTES_PER_DAY = 1440;
 
 /**
- * Pixels per minute. One number, shared by the layout and the drag arithmetic,
- * so what a user sees and what a drop means cannot disagree.
+ * Pixels per minute — how tall an hour is.
+ *
+ * One number, shared by the layout and the drag arithmetic, so what a user sees
+ * and what a drop means cannot disagree. That is why it is *read* through a
+ * function rather than captured at import: a component that kept its own copy
+ * would keep positioning blocks at the old height after the slider moved, and
+ * a drag would land somewhere other than where it looked.
+ *
+ * The bounds are what stays usable. Below the floor a fifteen-minute task is
+ * thinner than its own border; above the ceiling a working day no longer fits
+ * on a laptop screen and the week becomes a scroll.
  */
-export const SCALE = 1.1;
+export const MIN_SCALE = 0.5;
+export const MAX_SCALE = 3;
+export const DEFAULT_SCALE = 1.1;
+
+let scale = DEFAULT_SCALE;
+
+export function currentScale(): number {
+  return scale;
+}
+
+/** Clamped on the way in, so no caller can put the grid outside its bounds. */
+export function setScale(next: number): number {
+  scale = Math.min(Math.max(next, MIN_SCALE), MAX_SCALE);
+  return scale;
+}
 
 /**
  * The drag grid of spec §13: "UI drag grid snaps to 15-minute blocks; a text
@@ -92,7 +115,7 @@ export function snapToGrid(minutes: number): number {
  * arithmetic in a component can only be tested by mounting one.
  */
 export function dragOffsetMinutes(deltaPixels: number): number {
-  return snapToGrid(deltaPixels / SCALE);
+  return snapToGrid(deltaPixels / currentScale());
 }
 
 /**

@@ -83,6 +83,8 @@ export const en = {
     verifySent: 'Sent. Check {email} for a new link.',
   },
   common: {
+    today: 'Today',
+    display: 'Display options',
     close: 'Close',
     cancel: 'Cancel',
     save: 'Save',
@@ -192,6 +194,7 @@ export const en = {
   },
 
   calendar: {
+    rowHeight: 'Row height',
     view: 'Calendar view',
     week: 'week',
     month: 'month',
@@ -278,6 +281,9 @@ export const en = {
   },
 
   hours: {
+    overlap: 'Also {name}, {from}–{until}',
+    overlapNote:
+      'Overlap is allowed — the scheduler picks whichever task scores higher for the hour. It is flagged because the hours are edited one activity type at a time, so a clash is otherwise invisible.',
     title: 'Scheduling hours',
     lead: 'The hours the scheduler may place this kind of thing in — not simply when you are free. A special week replaces the default set for its dates rather than adding to it. Changes save themselves.',
     needCategory: 'Add an activity type first — scheduling hours belong to one.',

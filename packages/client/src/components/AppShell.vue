@@ -1,10 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuRoot,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from 'reka-ui';
+import { ChevronDown } from 'lucide-vue-next';
+import UndoRedo from '@/components/UndoRedo.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { resendVerification, session, signOut, startHeartbeat, stopHeartbeat } from '@/lib/session';
-import { resetWorkspace } from '@/lib/workspace';
+import { resetWorkspace, useWorkspace } from '@/lib/workspace';
 import { useI18n } from '@/i18n';
 
 /**
@@ -20,6 +30,7 @@ import { useI18n } from '@/i18n';
 const router = useRouter();
 
 const { t } = useI18n();
+const { history, submit } = useWorkspace();
 
 /**
  * The labels are computed, not constants.
@@ -165,25 +176,62 @@ async function confirmAgain() {
         </RouterLink>
       </nav>
 
-      <div class="flex items-center gap-3">
-        <RouterLink
-          class="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
-          to="/history"
-          data-testid="history-link"
-        >
-          {{ t('app.history') }}
-        </RouterLink>
-        <RouterLink
-          class="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
-          to="/settings"
-          data-testid="settings-link"
-        >
-          {{ t('app.settings') }}
-        </RouterLink>
-        <span class="text-muted-foreground text-xs">{{ session.user.email }}</span>
-        <Button variant="ghost" size="sm" data-testid="sign-out" @click="leave">{{
-          t('app.signOut')
-        }}</Button>
+      <div class="flex items-center gap-2">
+        <!--
+          Undo and redo belong to the application, not to the week.
+          They lived in the calendar toolbar, so the two screens that draw no
+          calendar could not reach them — while the log they read is one log
+          across every screen (§7.5). Here they are wherever you are.
+        -->
+        <UndoRedo :history="history" :submit="submit" />
+
+        <!--
+          Everything about *you* behind your own name. Three links spread along
+          the bar competed with the four that are the application; folded away,
+          the bar says what this app does and the menu says what you can do to
+          your account.
+        -->
+        <DropdownMenuRoot>
+          <DropdownMenuTrigger
+            class="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-1 rounded-md px-2 py-1 text-xs focus-visible:ring-2 focus-visible:outline-none"
+            data-testid="account-menu"
+          >
+            {{ session.user.email }}
+            <ChevronDown class="size-3" aria-hidden="true" />
+          </DropdownMenuTrigger>
+
+          <DropdownMenuPortal disabled>
+            <DropdownMenuContent
+              class="bg-popover text-popover-foreground z-50 min-w-44 rounded-md border p-1 shadow-md"
+              align="end"
+              :side-offset="6"
+              data-testid="account-menu-panel"
+            >
+              <DropdownMenuItem
+                class="hover:bg-accent focus:bg-accent w-full cursor-pointer rounded-sm px-2 py-1.5 text-sm outline-none"
+                data-testid="history-link"
+                @select="router.push('/history')"
+              >
+                {{ t('app.history') }}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                class="hover:bg-accent focus:bg-accent w-full cursor-pointer rounded-sm px-2 py-1.5 text-sm outline-none"
+                data-testid="settings-link"
+                @select="router.push('/settings')"
+              >
+                {{ t('app.settings') }}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator class="bg-border -mx-1 my-1 h-px" />
+              <DropdownMenuItem
+                class="hover:bg-accent focus:bg-accent w-full cursor-pointer rounded-sm px-2 py-1.5 text-sm outline-none"
+                data-testid="sign-out"
+                @select="leave"
+              >
+                {{ t('app.signOut') }}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
+        </DropdownMenuRoot>
       </div>
     </header>
 

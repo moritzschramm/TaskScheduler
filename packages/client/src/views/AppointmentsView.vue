@@ -45,6 +45,7 @@ const {
   openWindows,
   dayStartMin,
   dayEndMin,
+  rowScale,
   mode,
   month,
   firstDayOfWeek,
@@ -120,6 +121,7 @@ function openDay(day: CivilDate): void {
         :categories="categories"
         :day-start-min="dayStartMin"
         :day-end-min="dayEndMin"
+        :scale="rowScale"
         :today="today"
         :locale="locale"
         editable

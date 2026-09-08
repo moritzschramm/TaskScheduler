@@ -7,7 +7,10 @@ import {
   dragOffsetMinutes,
   movedStartMin,
   openBandsForDay,
-  SCALE,
+  DEFAULT_SCALE,
+  MAX_SCALE,
+  MIN_SCALE,
+  setScale,
   snapToGrid,
   windowsForWeek,
 } from '@/lib/grid';
@@ -182,11 +185,25 @@ describe('drag arithmetic', () => {
   });
 
   it('converts a pixel delta through the same scale the layout uses', () => {
-    // SCALE is exported rather than duplicated, so a change to the row height
+    // The scale is read through `lib/grid` rather than duplicated, so a change
     // cannot make a drop land somewhere other than where it was dropped.
-    expect(dragOffsetMinutes(SCALE * 60)).toBe(60);
-    expect(dragOffsetMinutes(SCALE * 8)).toBe(15);
-    expect(dragOffsetMinutes(-SCALE * 30)).toBe(-30);
+    expect(dragOffsetMinutes(DEFAULT_SCALE * 60)).toBe(60);
+    expect(dragOffsetMinutes(DEFAULT_SCALE * 8)).toBe(15);
+    expect(dragOffsetMinutes(-DEFAULT_SCALE * 30)).toBe(-30);
+  });
+
+  it('follows the row height when the user changes it', () => {
+    // The slider moves the scale; the drag arithmetic has to move with it, or a
+    // drop lands on a different hour from the one it looked like.
+    try {
+      setScale(2);
+      expect(dragOffsetMinutes(2 * 60)).toBe(60);
+      // Clamped rather than trusted: nothing may put the grid outside its bounds.
+      expect(setScale(99)).toBe(MAX_SCALE);
+      expect(setScale(0)).toBe(MIN_SCALE);
+    } finally {
+      setScale(DEFAULT_SCALE);
+    }
   });
 
   it('clamps a move to the day it was dragged on', () => {

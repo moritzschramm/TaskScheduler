@@ -2,6 +2,7 @@
 import { reactive, ref, watch } from 'vue';
 import { useI18n } from '@/i18n';
 import { useAutosave } from '@/lib/autosave';
+import { useOptimisticRemoval } from '@/lib/optimistic-removal';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -48,6 +49,7 @@ const drafts = reactive(new Map<string, Draft>());
 const fresh = ref<Draft>({ name: '', defaultCooldownMin: 0, color: '' });
 
 const autosave = useAutosave();
+const pending = useOptimisticRemoval();
 
 /**
  * Reconciles which rows exist; never overwrites one that does.
@@ -126,13 +128,15 @@ function edited(id: string): void {
 async function remove(id: string, version: number): Promise<void> {
   busy.value = true;
   try {
-    // The command refuses while tasks still use it, and says so; nothing is
-    // asked here beforehand, because a confirmation dialog would be guessing at
-    // an answer the server already knows.
-    await props.submit({
-      type: 'DeleteCategory',
-      expectedVersion: version,
-      params: { categoryId: id },
+    await pending.removing(id, async () => {
+      // The command refuses while tasks still use it, and says so; nothing is
+      // asked here beforehand, because a confirmation dialog would be guessing
+      // at an answer the server already knows — and a refusal puts the row back.
+      return props.submit({
+        type: 'DeleteCategory',
+        expectedVersion: version,
+        params: { categoryId: id },
+      });
     });
   } finally {
     busy.value = false;
@@ -162,7 +166,7 @@ async function remove(id: string, version: number): Promise<void> {
       </thead>
       <tbody>
         <tr
-          v-for="category in configuration.categories"
+          v-for="category in configuration.categories.filter((row) => !pending.isRemoved(row.id))"
           :key="category.id"
           class="border-t"
           data-testid="category-row"

@@ -5,12 +5,12 @@ import type { Category, CompletedBlock, FixedBlock, ScheduledBlock } from '@ambi
 import type { CivilDate, ResolvedWindow } from '@ambitime/scheduler';
 import {
   blocksForDay,
+  DEFAULT_SCALE,
   categoryLanesForDay,
   clipBand,
   dragOffsetMinutes,
   movedStartMin,
   openBandsForDay,
-  SCALE,
   SNAP_MINUTES,
   type DayBand,
   type GridBlock,
@@ -55,6 +55,8 @@ const props = withDefaults(
     /** Visible span, in local minutes. Outside it there is nothing to show. */
     dayStartMin?: number;
     dayEndMin?: number;
+    /** Pixels per minute; see `lib/grid`. Passed in so a change re-renders. */
+    scale?: number;
     locale?: string;
     /** M11: the grid becomes a way in to the editors, not only a picture. */
     editable?: boolean;
@@ -68,6 +70,7 @@ const props = withDefaults(
     today: null,
     dayStartMin: 6 * 60,
     dayEndMin: 22 * 60,
+    scale: DEFAULT_SCALE,
     locale: 'en-GB',
     editable: false,
     blockable: false,
@@ -96,6 +99,17 @@ const pending = ref<{ key: string; day: CivilDate; offsetMin: number } | null>(n
 /** Where the pointer went down, in pixels — the origin every delta is from. */
 let dragOriginY: number | null = null;
 
+/**
+ * Set when a drag actually moved something; cleared by the next gesture.
+ *
+ * A pointer gesture ends as `pointerup` *and then* `click`. `endDrag` runs on
+ * the first and clears `pending`, so by the time the click arrives `isMoving`
+ * is already false and the guard on the handler passes — which is why dropping
+ * a task on a new hour also opened its editor. The block cannot tell the two
+ * apart from the click alone; it has to remember what just happened.
+ */
+let draggedJustNow = false;
+
 /** Announced to assistive technology as a move progresses (WCAG 4.1.3). */
 const announcement = ref('');
 
@@ -111,6 +125,13 @@ function startMinOf(block: GridBlock): number {
 }
 
 function beginDrag(block: GridBlock, day: CivilDate, event: PointerEvent): void {
+  // Cleared at the *start* of every gesture rather than only by the click that
+  // consumes it. A drag long enough to move a block often fires no `click` at
+  // all, so a flag that waited to be consumed would survive into the next,
+  // genuine click — which is how the fix for "the editor opens after a drag"
+  // became "the editor never opens".
+  draggedJustNow = false;
+
   // Only task blocks move. An appointment is a fixed block by definition
   // (§6.2 rule 2); dragging one would be editing it, which the editor does, and
   // a completed one is a record of the past, which nothing should move.
@@ -141,6 +162,8 @@ function endDrag(block: GridBlock): void {
     emit('selectBlock', block);
     return;
   }
+
+  draggedJustNow = true;
 
   announcement.value = `${block.title} moved to ${formatMinuteOfDay(movedStartMin(block, move.offsetMin, props.dayStartMin))}.`;
   emit('moveBlock', {
@@ -197,6 +220,20 @@ function toggleGrab(block: GridBlock, day: CivilDate): void {
   }
 
   grab(block, day);
+}
+
+/**
+ * Opening the editor, unless a drag just put the block somewhere.
+ *
+ * The flag is consumed whether or not it was set, so it can never survive into
+ * a later, genuine click.
+ */
+function onClick(block: GridBlock): void {
+  const afterDrag = draggedJustNow;
+  draggedJustNow = false;
+  if (afterDrag || isMoving(block) || !props.editable) return;
+
+  emit('selectBlock', block);
 }
 
 function abandonNudge(): void {
@@ -256,7 +293,7 @@ const grid = ref<HTMLElement | null>(null);
 // `SCALE` lives in `lib/grid` beside the drag arithmetic that depends on it.
 
 const visibleMinutes = computed(() => props.dayEndMin - props.dayStartMin);
-const gridHeight = computed(() => visibleMinutes.value * SCALE);
+const gridHeight = computed(() => visibleMinutes.value * props.scale);
 
 const hourMarks = computed(() => {
   const marks: number[] = [];
@@ -311,11 +348,11 @@ function hueOf(categoryId: string): string | null {
 }
 
 function offsetOf(minute: number): number {
-  return (minute - props.dayStartMin) * SCALE;
+  return (minute - props.dayStartMin) * props.scale;
 }
 
 function heightOfBand(band: DayBand): number {
-  return (band.endMin - band.startMin) * SCALE;
+  return (band.endMin - band.startMin) * props.scale;
 }
 
 /**
@@ -325,7 +362,7 @@ function heightOfBand(band: DayBand): number {
  * shorter would render as a line the user could not tell from a border.
  */
 function heightOf(block: GridBlock): number {
-  return Math.max((block.endMin - block.startMin) * SCALE, 14);
+  return Math.max((block.endMin - block.startMin) * props.scale, 14);
 }
 
 /**
@@ -352,13 +389,25 @@ function labelFor(block: GridBlock, dayLabel: string): string {
     : `${kind}. ${when}. Press Enter to pick up and move.`;
 }
 
+/**
+ * How a block is filled.
+ *
+ * **A task is opaque and a fixed block is not.** Everything else on the column
+ * — the open band, the activity-type lanes — is a wash saying what *could*
+ * happen there, and a task is the one thing that says what *will*. It used to
+ * be a 15% tint of the same colour family, which read as one more wash; once
+ * the lanes underneath had colours of their own it stopped reading as a
+ * foreground object at all. Solid fill, inverted text and a shadow put it back
+ * on top, and the ring on the moving one still shows over it.
+ */
 function classesFor(block: GridBlock): string {
-  if (block.kind === 'task') return 'bg-primary/15 border-primary/40 text-foreground';
+  if (block.kind === 'task')
+    return 'bg-primary text-primary-foreground border-primary shadow-sm font-medium';
   // Done: drawn faintly, dashed, and struck through in the title. Three signals
   // rather than one, because colour alone would carry it (WCAG 1.4.1) and
   // because a faded block on a faded background is easy to miss entirely.
   if (block.kind === 'completed')
-    return 'border-dashed border-primary/30 bg-primary/[0.06] text-muted-foreground';
+    return 'border-dashed border-primary/40 bg-primary/20 text-foreground';
   if (block.kind === 'unavailability')
     return 'bg-muted border-muted-foreground/30 text-muted-foreground';
   return 'bg-secondary border-secondary-foreground/30 text-secondary-foreground';
@@ -534,7 +583,7 @@ function classesFor(block: GridBlock): string {
             @keydown.enter.prevent="toggleGrab(block, column.day)"
             @keydown.space.prevent="toggleGrab(block, column.day)"
             @keydown.esc.prevent="abandonNudge"
-            @click="!isMoving(block) && editable && emit('selectBlock', block)"
+            @click="onClick(block)"
           >
             <p
               class="truncate font-medium"

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
-import DayRangeSlider from '@/components/calendar/DayRangeSlider.vue';
+import DisplayOptions from '@/components/calendar/DisplayOptions.vue';
 import { formatMonth } from '@/lib/month';
-import UndoRedo from '@/components/UndoRedo.vue';
 import { useWorkspace } from '@/lib/workspace';
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next';
 
@@ -27,21 +26,25 @@ const {
   calendars,
   selectedId,
   calendar,
-  zone,
   locale,
   month,
   mode,
   setMode,
-  history,
-  submit,
+  today,
   shiftWeek,
   shiftMonths,
+  showWeekOf,
 } = useWorkspace();
 
 /** Paging means a week or a month depending on what is drawn. */
 function shift(steps: number): void {
   if (mode.value === 'month') shiftMonths(steps);
   else shiftWeek(steps);
+}
+
+/** Back to the week — or month — holding the calendar's own today (§13). */
+function showToday(): void {
+  if (today.value !== null) showWeekOf(today.value);
 }
 </script>
 
@@ -59,33 +62,19 @@ function shift(steps: number): void {
           {{ entry.name }}
         </option>
       </select>
-      <span v-if="calendar" class="text-muted-foreground text-xs" data-testid="calendar-zone">
-        {{ zone }}
-        <template v-if="zone !== calendar.timezone">
-          <!--
-            Said out loud when the two differ: the grid is in your zone, but
-            this calendar's availability windows are wall-clock rules in its
-            own (§5.1), so "09:00 Monday" means something different to the
-            scheduler than the row you are looking at.
-          -->
-          <span data-testid="zone-divergence">{{
-            t('calendar.plannerZone', { zone: calendar.timezone })
-          }}</span>
-        </template>
-      </span>
       <!--
-        Hidden in month view rather than disabled: it crops the hours a day
-        shows, and a month draws no hours at all. A control that visibly does
-        nothing is worse than one that is not there.
+        Which month, when the days on screen are not one week. The week view
+        labels its own columns with dates; a month grid shows only day numbers,
+        so without this there is nothing on the page naming the month.
       -->
-      <DayRangeSlider v-if="calendar && mode === 'week'" />
       <span
-        v-else-if="calendar"
+        v-if="calendar && mode === 'month'"
         class="text-muted-foreground text-sm tabular-nums"
         data-testid="month-label"
       >
         {{ formatMonth(month, locale) }}
       </span>
+      <DisplayOptions v-if="calendar" />
     </div>
 
     <div class="flex items-center gap-2">
@@ -112,10 +101,16 @@ function shift(steps: number): void {
         </button>
       </div>
 
-      <UndoRedo :history="history" :submit="submit" />
       <Button variant="outline" size="sm" data-testid="week-back" @click="shift(-1)">
         <ChevronLeft class="size-4" aria-hidden="true" />
         {{ t('common.previous') }}
+      </Button>
+      <!--
+        Between the two arrows, because that is where "back to the middle"
+        belongs — and paging a fortnight out is exactly when somebody wants it.
+      -->
+      <Button variant="outline" size="sm" data-testid="week-today" @click="showToday">
+        {{ t('common.today') }}
       </Button>
       <Button variant="outline" size="sm" data-testid="week-forward" @click="shift(1)">
         {{ t('common.next') }}

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useI18n } from '@/i18n';
 import { useAutosave } from '@/lib/autosave';
+import { overlappingRules } from '@/lib/overlaps';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import WeekdayWindowEditor, { type WindowRule } from './WeekdayWindowEditor.vue';
@@ -56,6 +57,17 @@ const seededAddress = ref<string | null>(null);
 const unsent = ref(false);
 
 const readOnly = computed(() => !props.configuration.calendar.isOwner);
+
+/** Where these hours meet another activity type's; see `lib/overlaps`. */
+const overlaps = computed(() =>
+  overlappingRules({
+    rules: rules.value,
+    availability: props.configuration.availability,
+    categories: props.configuration.categories,
+    categoryId: categoryId.value,
+    weekTypeOverrideId: weekTypeId.value === '' ? null : weekTypeId.value,
+  }),
+);
 
 watch(
   () => props.configuration.categories,
@@ -208,9 +220,14 @@ function edited(): void {
         v-model="rules"
         with-focus
         :time-zone="configuration.calendar.timezone"
+        :overlaps="overlaps"
         :disabled="readOnly"
         data-testid="availability-editor"
       />
+
+      <p v-if="overlaps.length > 0" class="text-muted-foreground max-w-prose text-xs">
+        {{ t('hours.overlapNote') }}
+      </p>
 
       <p v-if="rules.length === 0" class="text-muted-foreground text-xs">
         {{ t('hours.emptyMeansNever') }}

@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from '@/i18n';
 import { useAutosave } from '@/lib/autosave';
+import { useOptimisticRemoval } from '@/lib/optimistic-removal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,6 +43,7 @@ const drafts = reactive(new Map<string, Draft>());
 const fresh = ref<Draft>({ name: '', startDate: '', endDate: '' });
 
 const autosave = useAutosave();
+const pending = useOptimisticRemoval();
 
 const readOnly = computed(() => !props.configuration.calendar.isOwner);
 
@@ -118,11 +120,14 @@ function edited(id: string): void {
 async function remove(id: string, version: number): Promise<void> {
   busy.value = true;
   try {
-    await props.submit({
-      type: 'DeleteWeekTypeOverride',
-      expectedVersion: version,
-      params: { weekTypeOverrideId: id },
-    });
+    // Hidden at once and restored if the command is refused; see the helper.
+    await pending.removing(id, () =>
+      props.submit({
+        type: 'DeleteWeekTypeOverride',
+        expectedVersion: version,
+        params: { weekTypeOverrideId: id },
+      }),
+    );
   } finally {
     busy.value = false;
   }
@@ -151,7 +156,9 @@ async function remove(id: string, version: number): Promise<void> {
       </thead>
       <tbody>
         <tr
-          v-for="override in configuration.weekTypeOverrides"
+          v-for="override in configuration.weekTypeOverrides.filter(
+            (row) => !pending.isRemoved(row.id),
+          )"
           :key="override.id"
           class="border-t"
           data-testid="override-row"

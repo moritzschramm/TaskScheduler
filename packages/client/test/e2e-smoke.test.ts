@@ -1029,7 +1029,20 @@ describe('seed via the API, render the client', () => {
       const tuesdayTask = () =>
         wrapper.findAll('[data-testid="day-column"]')[1]!.find('[data-testid="block-task"]');
       expect(tuesdayTask().attributes('data-start-min')).toBe('540');
+
+      // The zone caption lives behind the display-options button now, so it has
+      // to be opened before it can be read — asserting on a closed popover
+      // would pass whatever the caption said.
+      const openDisplayOptions = async (): Promise<void> => {
+        await wrapper.find('[data-testid="display-options"]').trigger('click');
+        await flushPromises();
+      };
+
+      await openDisplayOptions();
+      expect(wrapper.find('[data-testid="calendar-zone"]').exists()).toBe(true);
       expect(wrapper.find('[data-testid="zone-divergence"]').exists()).toBe(false);
+      await wrapper.find('[data-testid="display-options"]').trigger('click');
+      await flushPromises();
 
       // Lisbon is an hour behind Berlin in March.
       await command({
@@ -1044,6 +1057,8 @@ describe('seed via the API, render the client', () => {
       // Same instant, an hour earlier on a Lisbon clock — and the calendar's
       // own zone is named, because its windows still mean Berlin time.
       expect(tuesdayTask().attributes('data-start-min')).toBe('480');
+
+      await openDisplayOptions();
       expect(wrapper.find('[data-testid="zone-divergence"]').text()).toContain('Europe/Berlin');
 
       // And nothing moved in the database. Display is display: the stored

@@ -98,6 +98,8 @@ export const de: Messages = {
     verifySent: 'Gesendet. Ein neuer Link liegt in {email}.',
   },
   common: {
+    today: 'Heute',
+    display: 'Anzeigeoptionen',
     close: 'Schließen',
     cancel: 'Abbrechen',
     save: 'Speichern',
@@ -114,8 +116,8 @@ export const de: Messages = {
     notSet: 'Nicht gesetzt',
     undo: 'Rückgängig',
     redo: 'Wiederherstellen',
-    previous: 'Zurück',
-    next: 'Weiter',
+    previous: 'Vorherige',
+    next: 'Nächste',
     unavailable: 'Nicht verfügbar',
   },
 
@@ -208,6 +210,7 @@ export const de: Messages = {
   },
 
   calendar: {
+    rowHeight: 'Zeilenhöhe',
     view: 'Kalenderansicht',
     week: 'Woche',
     month: 'Monat',
@@ -296,6 +299,9 @@ export const de: Messages = {
   },
 
   hours: {
+    overlap: 'Auch {name}, {from}–{until}',
+    overlapNote:
+      'Überschneidungen sind erlaubt — die Planung nimmt die Aufgabe, die für die Stunde besser passt. Der Hinweis steht hier, weil die Zeiten je Aktivitätsart bearbeitet werden und eine Überschneidung sonst unsichtbar bliebe.',
     title: 'Planbare Zeiten',
     lead: 'Die Stunden, in die diese Art von Tätigkeit gelegt werden darf — nicht einfach die, in denen du frei bist. Eine besondere Woche ersetzt für ihre Tage die üblichen Zeiten, statt sie zu ergänzen. Änderungen speichern sich selbst.',
     needCategory: 'Lege zuerst eine Aktivitätsart an — planbare Zeiten gehören zu einer.',
