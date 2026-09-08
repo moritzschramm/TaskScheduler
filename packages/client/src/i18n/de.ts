@@ -210,6 +210,7 @@ export const de: Messages = {
   },
 
   calendar: {
+    daysShown: 'Angezeigte Tage',
     rowHeight: 'Zeilenhöhe',
     view: 'Kalenderansicht',
     week: 'Woche',
@@ -429,6 +430,9 @@ export const de: Messages = {
   },
 
   editor: {
+    focusHint: 'Wird mit der Konzentration abgeglichen, für die ein Zeitfenster gedacht ist.',
+    cooldownHint: 'Überschreibt den Standard der Aktivitätsart.',
+    dueHint: 'Ortszeit in {zone}. Eine harte Frist wird durchgesetzt, eine weiche warnt nur.',
     focusLabel: 'Konzentrationsgrad',
     priorityLabel: 'Priorität',
     cooldownLabel: 'Pufferzeit (Minuten)',

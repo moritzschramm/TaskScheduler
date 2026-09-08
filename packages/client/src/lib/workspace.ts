@@ -1,5 +1,6 @@
 import { computed, ref, watch, type ComputedRef, type Ref, type WritableComputedRef } from 'vue';
 import {
+  daysFromCivil,
   wallClockToInstant,
   type CivilDate,
   type ResolvedWindow,
@@ -226,6 +227,52 @@ function setRowScale(next: number): void {
   }
 }
 
+/**
+ * Which weekdays the grid draws, as ISO numbers (1 = Monday).
+ *
+ * A preference about looking, like the day range and the row height — and the
+ * one that answers "I do not work weekends and do not want to look at them".
+ * Hiding a day does **not** hide it from the scheduler: it is still in the
+ * horizon and things are still placed on it, which is why the notice about
+ * work scheduled outside the week is worth having. Nothing here is a rule; it
+ * is a crop.
+ *
+ * Never empty. A grid with no columns is not a smaller calendar, it is a
+ * broken one, so the last day cannot be turned off.
+ */
+const WEEKDAYS_KEY = 'ambitime.weekdays';
+
+const ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
+
+export function readStoredWeekdays(): number[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(WEEKDAYS_KEY);
+    if (raw === null || raw === undefined) return [...ALL_WEEKDAYS];
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [...ALL_WEEKDAYS];
+
+    const days = ALL_WEEKDAYS.filter((day) => parsed.includes(day));
+    return days.length === 0 ? [...ALL_WEEKDAYS] : [...days];
+  } catch {
+    return [...ALL_WEEKDAYS];
+  }
+}
+
+const visibleWeekdays = ref<number[]>(readStoredWeekdays());
+
+function setVisibleWeekdays(next: readonly number[]): void {
+  const days = ALL_WEEKDAYS.filter((day) => next.includes(day));
+  if (days.length === 0) return;
+
+  visibleWeekdays.value = [...days];
+  try {
+    globalThis.localStorage?.setItem(WEEKDAYS_KEY, JSON.stringify(visibleWeekdays.value));
+  } catch {
+    // Same as the other view preferences: it applies to this session either way.
+  }
+}
+
 let started = false;
 
 /** Only ever reached before the first read, when nothing is drawn anyway. */
@@ -245,9 +292,27 @@ const firstDayOfWeek = computed(() => displayFirstDayOfWeek());
  */
 const zone = computed(() => displayTimeZone(calendar.value?.timezone ?? 'UTC'));
 
-const days = computed<CivilDate[]>(() =>
+/** The seven days of the week in view, whether or not they are all drawn. */
+const weekOf = computed<CivilDate[]>(() =>
   anchor.value === null ? [] : weekDays(anchor.value, firstDayOfWeek.value),
 );
+
+/**
+ * The days the grid actually draws.
+ *
+ * Filtered here rather than in the grid so that everything derived from the
+ * week — the shading, the lanes, the "scheduled outside this week" notice —
+ * agrees about which days are on screen.
+ */
+const days = computed<CivilDate[]>(() =>
+  weekOf.value.filter((day) => visibleWeekdays.value.includes(isoWeekday(day))),
+);
+
+/** ISO weekday for a civil date: 1 = Monday … 7 = Sunday. */
+function isoWeekday(date: CivilDate): number {
+  // 1970-01-01 was a Thursday, which is ISO weekday 4.
+  return ((((daysFromCivil(date) + 3) % 7) + 7) % 7) + 1;
+}
 
 const today = computed<CivilDate | null>(() =>
   calendar.value ? localDate(now().toISOString(), zone.value) : null,
@@ -392,8 +457,16 @@ function reseatEditor(): void {
   }
 }
 
-async function load(): Promise<void> {
-  loading.value = true;
+async function load({ silent = false } = {}): Promise<void> {
+  // **Only a first read is a "loading" state.** Every command re-reads, and
+  // raising this flag for that inserted `WorkspaceStatus`'s loading line above
+  // the grid for the length of the round trip — which pushed the whole calendar
+  // down 44 pixels and back. Dropping a task looked like the view jumping,
+  // and the jump was a paragraph appearing, not anything on the grid moving.
+  //
+  // There is already a correct screen up during a re-read. Saying "loading"
+  // over it is both untrue and the thing that moves it.
+  loading.value = !silent && view.value === null;
   error.value = null;
 
   try {
@@ -486,7 +559,7 @@ async function submit(request: CommandRequest): Promise<boolean> {
 
   try {
     await runCommand(request);
-    await load();
+    await load({ silent: true });
 
     // Accept the server's result, and say so if it differed from what was
     // already on screen.
@@ -495,8 +568,10 @@ async function submit(request: CommandRequest): Promise<boolean> {
     return true;
   } catch (cause) {
     // A refused command means the preview was never real. Put back what the
-    // server last told us rather than leaving a schedule nobody agreed to.
-    if (predicted !== null) await load();
+    // server last told us rather than leaving a schedule nobody agreed to —
+    // silently, for the same reason: there is a screen up, and the error
+    // message below is what should be drawing the eye, not a moving grid.
+    if (predicted !== null) await load({ silent: true });
 
     error.value =
       cause instanceof ApiError
@@ -568,6 +643,8 @@ export interface Workspace {
   taskDialogOpen: WritableComputedRef<boolean>;
   blockDialogOpen: WritableComputedRef<boolean>;
   anchor: Ref<CivilDate | null>;
+  visibleWeekdays: Ref<number[]>;
+  setVisibleWeekdays: (next: readonly number[]) => void;
   mode: Ref<CalendarMode>;
   setMode: (next: CalendarMode) => void;
   rowScale: Ref<number>;
@@ -628,6 +705,8 @@ export function useWorkspace(): Workspace {
     taskDialogOpen,
     blockDialogOpen,
     anchor,
+    visibleWeekdays,
+    setVisibleWeekdays,
     mode,
     setMode,
     rowScale,

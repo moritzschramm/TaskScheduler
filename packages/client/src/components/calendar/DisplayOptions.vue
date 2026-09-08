@@ -3,7 +3,9 @@ import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from 'reka
 import { Settings2 } from 'lucide-vue-next';
 import DayRangeSlider from '@/components/calendar/DayRangeSlider.vue';
 import RowHeightSlider from '@/components/calendar/RowHeightSlider.vue';
+import { computed } from 'vue';
 import { useI18n } from '@/i18n';
+import { weekdayNames } from '@/lib/time';
 import { useWorkspace } from '@/lib/workspace';
 
 /**
@@ -19,8 +21,32 @@ import { useWorkspace } from '@/lib/workspace';
  * menu that closes on the first interaction would make the day range impossible
  * to set.
  */
-const { calendar, zone } = useWorkspace();
+const { calendar, zone, locale, visibleWeekdays, setVisibleWeekdays } = useWorkspace();
 const { t } = useI18n();
+
+/** The seven, in ISO order with short names in the reader's language. */
+const WEEKDAYS = computed(() =>
+  weekdayNames(locale.value, 'short').map((label, index) => ({ value: index + 1, label })),
+);
+
+/**
+ * The last day standing cannot be turned off.
+ *
+ * A grid with no columns is not a smaller calendar; it is a broken one, and a
+ * checkbox that produced it would be an affordance for breaking the screen.
+ * Disabled rather than absent, so the reason is visible where the rule is.
+ */
+function onlyOneLeft(day: number): boolean {
+  return visibleWeekdays.value.length === 1 && visibleWeekdays.value.includes(day);
+}
+
+function toggle(day: number): void {
+  setVisibleWeekdays(
+    visibleWeekdays.value.includes(day)
+      ? visibleWeekdays.value.filter((entry) => entry !== day)
+      : [...visibleWeekdays.value, day],
+  );
+}
 </script>
 
 <template>
@@ -62,6 +88,33 @@ const { t } = useI18n();
 
           <DayRangeSlider />
           <RowHeightSlider />
+
+          <!--
+            Which columns to draw. A crop, not a rule: a hidden Saturday is
+            still in the horizon and still gets things placed on it, which is
+            what the "scheduled outside this week" notice is for.
+          -->
+          <fieldset class="space-y-1.5" data-testid="visible-weekdays">
+            <legend class="text-sm font-medium">{{ t('calendar.daysShown') }}</legend>
+            <div class="flex flex-wrap gap-1">
+              <label
+                v-for="day in WEEKDAYS"
+                :key="day.value"
+                class="flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+                :class="visibleWeekdays.includes(day.value) ? 'bg-secondary border-secondary' : ''"
+              >
+                <input
+                  type="checkbox"
+                  class="size-3"
+                  :checked="visibleWeekdays.includes(day.value)"
+                  :disabled="onlyOneLeft(day.value)"
+                  :data-testid="`weekday-toggle-${day.value}`"
+                  @change="toggle(day.value)"
+                />
+                {{ day.label }}
+              </label>
+            </div>
+          </fieldset>
         </div>
       </PopoverContent>
     </PopoverPortal>

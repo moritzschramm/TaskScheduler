@@ -477,7 +477,7 @@ async function complete(): Promise<void> {
         field="focus-level"
         :label="t('editor.focusLabel')"
         :inherited="inherited?.focus == null ? null : focusLabel(inherited.focus)"
-        hint="Matched against the focus a window is meant for."
+        :hint="t('editor.focusHint')"
       >
         <Select
           v-model="draft.focus.value"
@@ -509,7 +509,7 @@ async function complete(): Promise<void> {
         field="cooldown-(minutes)"
         :label="t('editor.cooldownLabel')"
         :inherited="inherited?.cooldown == null ? null : String(inherited.cooldown)"
-        hint="Overrides the activity type's default."
+        :hint="t('editor.cooldownHint')"
       >
         <Input
           v-model="draft.cooldown.value"
@@ -524,7 +524,7 @@ async function complete(): Promise<void> {
         field="due"
         :label="t('editor.dueLabel')"
         :inherited="displayDue(inherited?.due ?? null)"
-        :hint="`Local to ${timeZone}. A hard due date is enforced; a soft one warns.`"
+        :hint="t('editor.dueHint', { zone: timeZone })"
       >
         <div class="flex flex-wrap items-center gap-2">
           <input

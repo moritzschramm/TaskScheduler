@@ -194,6 +194,7 @@ export const en = {
   },
 
   calendar: {
+    daysShown: 'Days shown',
     rowHeight: 'Row height',
     view: 'Calendar view',
     week: 'week',
@@ -408,6 +409,9 @@ export const en = {
   },
 
   editor: {
+    focusHint: 'Matched against the focus a window is meant for.',
+    cooldownHint: "Overrides the activity type's default.",
+    dueHint: 'Local to {zone}. A hard due date is enforced; a soft one warns.',
     focusLabel: 'Focus level',
     priorityLabel: 'Priority',
     cooldownLabel: 'Cooldown (minutes)',
