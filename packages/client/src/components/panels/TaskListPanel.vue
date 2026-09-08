@@ -11,6 +11,7 @@ import type { Category, TaskNode } from '@ambitime/shared';
 import type { MessageKey } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-vue-next';
 
 const props = withDefaults(
   defineProps<{
@@ -174,6 +175,7 @@ const { t } = useI18n();
       <div class="flex items-center gap-3">
         <span class="text-muted-foreground text-xs">{{ tasks.length }}</span>
         <Button v-if="editable" size="sm" data-testid="add-root-task" @click="emit('addRoot')">
+          <Plus class="size-4" aria-hidden="true" />
           {{ t('tasks.newTask') }}
         </Button>
       </div>

@@ -1,4 +1,6 @@
 import { readonly, ref } from 'vue';
+import { MINIMUM_PASSWORD_LENGTH } from '@ambitime/shared';
+export { MINIMUM_PASSWORD_LENGTH } from '@ambitime/shared';
 import { api, RATE_LIMITED, rateLimitMessage } from './api';
 
 /**
@@ -190,9 +192,6 @@ function signUpMessage(code: string | undefined): string {
       return 'That account could not be created';
   }
 }
-
-/** Better Auth's own minimum, repeated here so the form can say it up front. */
-export const MINIMUM_PASSWORD_LENGTH = 8;
 
 export async function signIn(email: string, password: string): Promise<string | null> {
   const response = await authRequest('sign-in/email', { email, password });

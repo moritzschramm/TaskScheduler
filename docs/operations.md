@@ -236,3 +236,53 @@ validated at boot by `env.ts`, which refuses to start rather than running with a
 missing one. Neither is logged: the API's error mapper returns a fixed message
 for anything unrecognised, precisely so a stack trace or a connection string
 cannot leave through a response.
+
+## Security notes for a deployment
+
+Three things the application cannot enforce about its own environment, and one
+it now refuses to start without.
+
+### The server must sit behind the proxy
+
+The rate limiter identifies a caller from `X-Real-IP`, falling back to the
+rightmost `X-Forwarded-For` hop — both written by nginx, which overwrites or
+appends to whatever arrived. **Publishing the server's port directly hands
+every caller free choice of both**, and with it an unlimited number of rate-
+limit buckets on `/api/auth/*`. In `docker-compose.prod.yml` only nginx
+publishes a port; keep it that way, and if the server is ever exposed for
+debugging, close it again before the deployment is reachable.
+
+The limiter is also **per process and in memory**. Behind two replicas the
+effective limit is twice what is configured, which is a reason to put the real
+limit at the proxy rather than a reason to distrust this one.
+
+### `BETTER_AUTH_URL` must be the public HTTPS origin
+
+Better Auth derives the session cookie's `Secure` attribute from this scheme.
+Set to an `http://` origin, it issues sessions a browser will send in the clear.
+The server now **refuses to start** when `NODE_ENV=production` and this is not
+`https://`, so the misconfiguration is a failed boot rather than a quiet
+weakening. A deployment terminating TLS at a load balancer should still set the
+public origin here — that is what the cookie and the emailed links have to
+match, not the address of the internal hop.
+
+### The Content-Security-Policy assumes a same-origin deployment
+
+`docker/nginx/prod/default.conf` sends `default-src 'self'` with `script-src`
+strict. Serving the bundle from a CDN, adding analytics, or loading fonts from
+elsewhere means widening it — and widening `script-src` in particular gives up
+most of what it is for. `style-src` already allows inline because Vue writes
+`style` attributes for anything it positions.
+
+The header set is repeated inside `location /assets/`. That is not redundancy:
+nginx's `add_header` **replaces** the inherited set rather than adding to it, so
+any location that sets one header of its own loses all the others. A new
+location block needs the full set copied into it.
+
+### An accepted advisory
+
+`pnpm audit` reports a moderate advisory against `esbuild` reached through
+`drizzle-kit`. `drizzle-kit` is a **devDependency** used to generate migrations,
+the vulnerability is in esbuild's development server, and neither is present in
+the production image — which installs production dependencies only. It is worth
+re-checking whenever the dependency moves, not worth pinning around today.

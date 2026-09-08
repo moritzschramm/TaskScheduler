@@ -95,22 +95,67 @@ describe('rate limiting', () => {
     expect((await app.as(session, '/api/me')).status).toBe(200);
   });
 
+  /** A sign-in attempt from a caller the proxy reports as `ip`. */
+  const signInFrom = async (headers: Record<string, string>): Promise<number> =>
+    (
+      await app.app.request('/api/auth/sign-in/email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: JSON.stringify({ email: 'nobody@example.test', password: 'not-the-one' }),
+      })
+    ).status;
+
   it('counts each caller separately', async () => {
-    // The proxy's header is what distinguishes them (§14 puts nginx in front),
-    // so a limiter keyed on anything else would punish everybody for one.
-    const from = async (ip: string): Promise<number> =>
-      (
-        await app.app.request('/api/auth/sign-in/email', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
-          body: JSON.stringify({ email: 'nobody@example.test', password: 'not-the-one' }),
-        })
-      ).status;
+    // `x-real-ip` is what nginx assigns from the peer address, so it is what
+    // distinguishes two callers — a limiter keyed on anything shared would
+    // punish everybody for one.
+    const from = (ip: string) => signInFrom({ 'x-real-ip': ip });
 
     for (let attempt = 0; attempt < AUTH_LIMIT.limit; attempt += 1) await from('198.51.100.7');
 
     expect(await from('198.51.100.7')).toBe(429);
     expect(await from('203.0.113.9')).toBe(401);
+  });
+
+  /**
+   * The bypass this limiter shipped with.
+   *
+   * nginx *appends* to `x-forwarded-for`, so its leftmost entry is whatever the
+   * caller wrote. Keying on it meant a new bucket per request and no effective
+   * limit on the one endpoint where guessing repeatedly is the attack. The
+   * assertion is the one that was missing: a caller who changes their story
+   * every time must still run out.
+   */
+  it('cannot be escaped by rewriting x-forwarded-for', async () => {
+    const attempt = (claimed: string) =>
+      signInFrom({
+        // What nginx would hand over: the caller's claim, then the real peer.
+        'x-forwarded-for': `${claimed}, 198.51.100.7`,
+        'x-real-ip': '198.51.100.7',
+      });
+
+    for (let index = 0; index < AUTH_LIMIT.limit; index += 1) {
+      await attempt(`203.0.113.${index}`);
+    }
+
+    expect(await attempt('203.0.113.200')).toBe(429);
+  });
+
+  /**
+   * Without `x-real-ip` — a proxy that sets only the one header — the rightmost
+   * hop is the trustworthy one, for the same reason.
+   */
+  it('reads the hop the proxy appended, not the one the caller claimed', async () => {
+    const attempt = (claimed: string) =>
+      signInFrom({ 'x-forwarded-for': `${claimed}, 198.51.100.8` });
+
+    for (let index = 0; index < AUTH_LIMIT.limit; index += 1) {
+      await attempt(`203.0.113.${index}`);
+    }
+
+    expect(await attempt('203.0.113.201')).toBe(429);
+    // A genuinely different peer is still its own bucket.
+    expect(await signInFrom({ 'x-forwarded-for': '203.0.113.5, 198.51.100.9' })).toBe(401);
   });
 
   it('lets the window pass', async () => {

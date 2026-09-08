@@ -1,3 +1,4 @@
+import { MAXIMUM_PASSWORD_LENGTH, MINIMUM_PASSWORD_LENGTH } from '@ambitime/shared';
 import { sso } from '@better-auth/sso';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -118,6 +119,21 @@ export function createAuth({
     emailAndPassword: {
       enabled: true,
       requireEmailVerification,
+
+      /**
+       * Stated rather than inherited (spec §10.1).
+       *
+       * Better Auth's own default is eight, which is what the sign-up form
+       * tells people — but the form's number lived only in the client, so the
+       * two agreed by coincidence and a library upgrade could part them
+       * silently. The server is the one that decides; saying so here makes the
+       * client's copy a mirror rather than a second opinion.
+       *
+       * Both come from `@ambitime/shared`, which is the package the client
+       * reads them from too — so the form and the policy are one number.
+       */
+      minPasswordLength: MINIMUM_PASSWORD_LENGTH,
+      maxPasswordLength: MAXIMUM_PASSWORD_LENGTH,
 
       /**
        * Forgotten passwords (spec §10.1).

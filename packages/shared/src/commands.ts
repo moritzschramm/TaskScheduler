@@ -674,3 +674,18 @@ export function newCommand<D extends CommandDraft>(
     issuedAt: identity.issuedAt ?? new Date().toISOString(),
   };
 }
+
+/**
+ * The shortest password the server accepts (spec §10.1).
+ *
+ * Here rather than in either half, because both need it and neither owns it:
+ * the server configures Better Auth with it and the sign-up form states it
+ * before anyone types. It lived in both, agreeing by coincidence with the
+ * library's default — so a library upgrade, or an edit to one copy, would have
+ * moved the rule without moving what the form promised.
+ *
+ * The maximum is bcrypt's: input past 72 bytes is ignored by the algorithm, so
+ * accepting more would be accepting a passphrase that is quietly truncated.
+ */
+export const MINIMUM_PASSWORD_LENGTH = 8;
+export const MAXIMUM_PASSWORD_LENGTH = 72;

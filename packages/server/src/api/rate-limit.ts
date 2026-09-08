@@ -105,13 +105,40 @@ export function rateLimit({
 }
 
 /**
- * The client address, as the proxy reports it.
+ * The client address, as the *proxy* reports it — never as the client claims it.
  *
- * `x-forwarded-for` is trusted because §14's deployment puts nginx in front and
- * nginx sets it; a request that reached the server directly has none, and falls
- * back to a single shared bucket rather than to no limit at all.
+ * **This was a rate-limit bypass, and the auth limiter is what it bypassed.**
+ * The previous version read the leftmost entry of `x-forwarded-for`. nginx
+ * builds that header with `$proxy_add_x_forwarded_for`, which *appends* the
+ * peer address to whatever arrived — so the leftmost entry is a value the
+ * caller wrote. Sending a different one on each request produced a different
+ * bucket every time, and twenty-attempts-per-minute on `/auth/*` became
+ * unlimited: exactly the credential-stuffing case the limit exists for.
+ *
+ * Two sources, in order of how hard they are to forge:
+ *
+ *  1. **`x-real-ip`**, which nginx sets with `proxy_set_header X-Real-IP
+ *     $remote_addr` — an assignment, so anything the client sent is discarded
+ *     before the server sees it.
+ *  2. The **rightmost** `x-forwarded-for` entry, which is the one the nearest
+ *     trusted proxy appended. Everything to its left came from further out and
+ *     is only as trustworthy as the hop that wrote it.
+ *
+ * Both assume the server is reached through the proxy. A deployment that
+ * publishes the server's port directly gives every caller free choice of both
+ * headers, and no in-process limiter can help it — see `docs/operations.md`.
  */
 function defaultKey(c: Parameters<MiddlewareHandler>[0]): string {
-  const forwarded = c.req.header('x-forwarded-for');
-  return forwarded?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'unknown';
+  const real = c.req.header('x-real-ip')?.trim();
+  if (real !== undefined && real !== '') return real;
+
+  const forwarded = c.req.header('x-forwarded-for') ?? '';
+  const hops = forwarded
+    .split(',')
+    .map((hop) => hop.trim())
+    .filter((hop) => hop !== '');
+
+  // A single shared bucket rather than no limit at all, when there is nothing
+  // to key on: over-restricting an unproxied deployment beats not limiting it.
+  return hops.at(-1) ?? 'unknown';
 }

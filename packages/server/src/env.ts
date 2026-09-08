@@ -29,7 +29,15 @@ const envSchema = z.object({
    */
   BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET must be at least 32 characters'),
 
-  /** Public origin the app is reached at; cookie domain and callback URLs. */
+  /**
+   * Public origin the app is reached at; cookie domain and callback URLs.
+   *
+   * **Better Auth decides whether the session cookie is `Secure` from this
+   * scheme.** A production deployment that never set it kept the development
+   * default, and issued session cookies with no `Secure` attribute — which a
+   * browser will then send over plain HTTP, to anyone positioned to read it.
+   * The check below refuses that combination at startup rather than serving it.
+   */
   BETTER_AUTH_URL: z.url().default('http://localhost:8080'),
 
   /**
@@ -42,10 +50,35 @@ const envSchema = z.object({
   REQUIRE_EMAIL_VERIFICATION: z.stringbool().default(false),
 });
 
+/**
+ * The one cross-field rule: a production origin must be HTTPS.
+ *
+ * Kept as a refinement rather than folded into `BETTER_AUTH_URL` because the
+ * requirement is about `NODE_ENV`, and a schema that demanded HTTPS everywhere
+ * would make `docker compose up` fail on a laptop for no benefit.
+ *
+ * A deployment genuinely terminating TLS elsewhere and reaching this over plain
+ * HTTP internally should still set the **public** origin here — that is what
+ * the value means, and what the cookie and the callback links have to match.
+ */
+const productionSchema = envSchema.superRefine((env, ctx) => {
+  if (env.NODE_ENV !== 'production') return;
+  if (env.BETTER_AUTH_URL.startsWith('https://')) return;
+
+  ctx.addIssue({
+    code: 'custom',
+    path: ['BETTER_AUTH_URL'],
+    message:
+      'must be an https:// origin in production — Better Auth derives the session ' +
+      'cookie’s Secure attribute from it, and an http:// origin ships sessions ' +
+      'that browsers will send in the clear',
+  });
+});
+
 export type Env = z.infer<typeof envSchema> & { corsOrigins: string[] };
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const parsed = envSchema.safeParse(source);
+  const parsed = productionSchema.safeParse(source);
 
   if (!parsed.success) {
     const issues = parsed.error.issues
