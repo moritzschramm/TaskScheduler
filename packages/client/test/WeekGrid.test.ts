@@ -191,3 +191,78 @@ describe('the hours the calendar is open', () => {
     expect(classes).toContain('overflow-y-hidden');
   });
 });
+
+/**
+ * What the block does between the drop and the answer (plan M12a).
+ *
+ * A move is a command, a re-derive and a re-read. Until the answer arrives the
+ * grid's own data still has the task at its old hour — so releasing the drag
+ * immediately put the block *back* for those few hundred milliseconds and then
+ * jumped it forward again. The drop looked like it had been rejected and then
+ * accepted, which is a worse thing to show than a moment of nothing.
+ */
+describe('a block that has just been dropped', () => {
+  /** Editable, because a grid that cannot be dragged has nothing to settle. */
+  const editable = () =>
+    mount(WeekGrid, {
+      props: { days: WEEK, timeZone: BERLIN, blocks: [block], fixedBlocks: [], editable: true },
+    });
+
+  /**
+   * Drags the task down by `pixels` and releases.
+   *
+   * Native events rather than `trigger({ clientY })`: `clientY` is a getter on
+   * `MouseEvent`, so test-utils cannot assign it and the drag would register as
+   * a zero-pixel move — which is a click, and would have tested nothing.
+   */
+  async function drop(wrapper: ReturnType<typeof editable>, pixels: number): Promise<void> {
+    const task = wrapper.find('[data-testid="block-task"]').element;
+    const at = (type: string, clientY: number) =>
+      task.dispatchEvent(new MouseEvent(type, { clientY, bubbles: true }));
+
+    at('pointerdown', 0);
+    at('pointermove', pixels);
+    at('pointerup', pixels);
+    await wrapper.vm.$nextTick();
+  }
+
+  it('stays where it was dropped until new blocks arrive', async () => {
+    const wrapper = editable();
+    await drop(wrapper, 66);
+
+    // The command has been emitted and nothing has come back yet. The block is
+    // drawn at the dropped hour, not at the one the stale data still says.
+    expect(wrapper.emitted('moveBlock')).toHaveLength(1);
+    expect(wrapper.find('[data-testid="block-task"]').attributes('data-start-min')).toBe('600');
+  });
+
+  it('lets go the moment the answer replaces the blocks', async () => {
+    const wrapper = editable();
+    await drop(wrapper, 66);
+
+    // The server's answer — the same task, now actually at 10:00.
+    await wrapper.setProps({
+      blocks: [{ ...block, start: '2026-03-23T09:00:00Z', end: '2026-03-23T10:00:00Z' }],
+    });
+
+    const task = wrapper.find('[data-testid="block-task"]');
+    expect(task.attributes('data-start-min')).toBe('600');
+    // No longer held: the hand-off happened, so nothing is drawn by hand.
+    expect(task.attributes('data-moving')).toBeUndefined();
+  });
+
+  it('does not keep responding to the pointer after the drop', async () => {
+    const wrapper = editable();
+    await drop(wrapper, 66);
+
+    // A stray move — the pointer travelling on after release — must not drag
+    // the block further, because the command for the first move has gone.
+    wrapper
+      .find('[data-testid="block-task"]')
+      .element.dispatchEvent(new MouseEvent('pointermove', { clientY: 300, bubbles: true }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-testid="block-task"]').attributes('data-start-min')).toBe('600');
+    expect(wrapper.emitted('moveBlock')).toHaveLength(1);
+  });
+});

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from '@/i18n';
 import type { Category, CompletedBlock, FixedBlock, ScheduledBlock } from '@ambitime/shared';
 import type { CivilDate, ResolvedWindow } from '@ambitime/scheduler';
@@ -110,21 +110,55 @@ let dragOriginY: number | null = null;
  */
 let draggedJustNow = false;
 
+/**
+ * True once a drag has been committed and before the answer has come back.
+ *
+ * The block is still drawn at the dropped position — `pending` still holds the
+ * offset — but nothing may move it any further, and it is no longer "grabbed".
+ */
+const settling = ref(false);
+
+/**
+ * Releases the held block when new blocks arrive.
+ *
+ * The authoritative answer replaces `props.blocks` wholesale, so any change to
+ * it — the server's, or the optimistic solve's — is the moment the grid can
+ * stop drawing the drop by hand. Watching the data rather than timing it means
+ * the hand-off happens exactly when there is something new to hand off to, on
+ * a fast network and a slow one alike.
+ */
+watch(
+  () => props.blocks,
+  () => {
+    if (settling.value) {
+      settling.value = false;
+      pending.value = null;
+    }
+  },
+);
+
 /** Announced to assistive technology as a move progresses (WCAG 4.1.3). */
 const announcement = ref('');
 
-function isMoving(block: GridBlock): boolean {
+/** Held under the pointer: mid-drag, or dropped and waiting for the answer. */
+function isHeld(block: GridBlock): boolean {
   return pending.value?.key === block.key;
+}
+
+/** Mid-gesture — the part that shows a ring and responds to the pointer. */
+function isMoving(block: GridBlock): boolean {
+  return isHeld(block) && !settling.value;
 }
 
 /** The top a block is drawn at, including any move in progress. */
 function startMinOf(block: GridBlock): number {
-  return isMoving(block)
+  return isHeld(block)
     ? movedStartMin(block, pending.value!.offsetMin, props.dayStartMin)
     : block.startMin;
 }
 
 function beginDrag(block: GridBlock, day: CivilDate, event: PointerEvent): void {
+  settling.value = false;
   // Cleared at the *start* of every gesture rather than only by the click that
   // consumes it. A drag long enough to move a block often fires no `click` at
   // all, so a flag that waited to be consumed would survive into the next,
@@ -143,7 +177,7 @@ function beginDrag(block: GridBlock, day: CivilDate, event: PointerEvent): void 
 }
 
 function duringDrag(event: PointerEvent): void {
-  if (pending.value === null || dragOriginY === null) return;
+  if (pending.value === null || dragOriginY === null || settling.value) return;
   pending.value = {
     ...pending.value,
     offsetMin: dragOffsetMinutes(event.clientY - dragOriginY),
@@ -153,17 +187,27 @@ function duringDrag(event: PointerEvent): void {
 function endDrag(block: GridBlock): void {
   const move = pending.value;
   dragOriginY = null;
-  pending.value = null;
-  if (move === null || move.key !== block.key) return;
+  if (move === null || move.key !== block.key) {
+    pending.value = null;
+    return;
+  }
 
   // A drag that ended where it started is a click, not a move. Emitting a
   // command for it would put a floor on a task the user only wanted to look at.
   if (move.offsetMin === 0) {
+    pending.value = null;
     emit('selectBlock', block);
     return;
   }
 
   draggedJustNow = true;
+
+  // **The move is held, not released.** Clearing it here put the block back at
+  // its old hour for the few hundred milliseconds the command took, so a drop
+  // showed the block snapping home and then jumping to where it had been put.
+  // It stays under the pointer until the answer arrives; `settling` says the
+  // gesture is over, so the drag handlers stop and the ring comes off.
+  settling.value = true;
 
   announcement.value = `${block.title} moved to ${formatMinuteOfDay(movedStartMin(block, move.offsetMin, props.dayStartMin))}.`;
   emit('moveBlock', {

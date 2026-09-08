@@ -30,6 +30,15 @@ const { t } = useI18n();
  * "Use inherited" or "Clear" as appropriate, which one switch label could not.
  */
 const props = defineProps<{
+  /**
+   * Which field this is, for the test id.
+   *
+   * Separate from `label` because the label is translated: deriving the id from
+   * it made `field-priority` become `field-priorität` the moment the interface
+   * was German, so every selector that named a field was quietly
+   * language-dependent.
+   */
+  field: string;
   label: string;
   /** What an ancestor supplies, ready to display. `null` when none does. */
   inherited?: string | null;
@@ -38,8 +47,6 @@ const props = defineProps<{
 }>();
 
 const overridden = defineModel<boolean>('overridden', { required: true });
-
-const slug = computed(() => props.label.toLowerCase().replace(/\s+/g, '-'));
 
 const action = computed(() => {
   if (!overridden.value) return t('editor.setValue');
@@ -50,7 +57,7 @@ const action = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-1.5" :data-testid="`field-${slug}`">
+  <div class="space-y-1.5" :data-testid="`field-${field}`">
     <div class="flex items-center justify-between gap-3">
       <Label>{{ label }}</Label>
       <button

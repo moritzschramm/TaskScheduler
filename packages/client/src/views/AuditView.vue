@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { useI18n } from '@/i18n';
+import { useI18n, type MessageKey } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
@@ -45,8 +45,21 @@ async function load(before?: string): Promise<void> {
   }
 }
 
-/** `MoveTask` → `Move task`, as the log's own vocabulary made readable. */
+/**
+ * `MoveTask` → what a person calls it, in their language.
+ *
+ * It used to be a regular expression that split the camel case and lower-cased
+ * it, which is a fine way to make a *symbol* readable and no way at all to make
+ * it translatable — it produced English whatever the interface was set to. The
+ * catalogue names each command; the old prettifier stays as the fallback, so a
+ * command added and not yet named still reads as something rather than as a
+ * missing key.
+ */
 function readable(type: string): string {
+  const key = `history.command.${type}` as MessageKey;
+  const named = t(key);
+  if (named !== key) return named;
+
   const words = type.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }

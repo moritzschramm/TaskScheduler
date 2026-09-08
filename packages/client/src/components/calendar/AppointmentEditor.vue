@@ -298,7 +298,13 @@ async function cancelBlock(): Promise<void> {
 
     <div v-if="!isUnavailability" class="space-y-1">
       <Label for="appointment-notes">{{ t('common.notes') }}</Label>
-      <Input id="appointment-notes" v-model="notes" data-testid="appointment-notes" />
+      <textarea
+        id="appointment-notes"
+        v-model="notes"
+        rows="3"
+        class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-16 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        data-testid="appointment-notes"
+      />
     </div>
 
     <div class="grid gap-3 sm:grid-cols-2">

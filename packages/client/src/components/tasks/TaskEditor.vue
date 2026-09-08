@@ -412,7 +412,13 @@ async function complete(): Promise<void> {
 
       <div class="space-y-1 sm:col-span-2">
         <Label for="task-notes">{{ t('common.notes') }}</Label>
-        <Input id="task-notes" v-model="draft.notes" data-testid="task-notes" />
+        <textarea
+          id="task-notes"
+          v-model="draft.notes"
+          rows="3"
+          class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-16 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          data-testid="task-notes"
+        />
       </div>
 
       <div class="space-y-1">
@@ -468,7 +474,8 @@ async function complete(): Promise<void> {
 
       <InheritedField
         v-model:overridden="draft.focus.overridden"
-        label="Focus level"
+        field="focus-level"
+        :label="t('editor.focusLabel')"
         :inherited="inherited?.focus == null ? null : focusLabel(inherited.focus)"
         hint="Matched against the focus a window is meant for."
       >
@@ -485,7 +492,8 @@ async function complete(): Promise<void> {
 
       <InheritedField
         v-model:overridden="draft.priority.overridden"
-        label="Priority"
+        field="priority"
+        :label="t('editor.priorityLabel')"
         :inherited="inherited?.priority == null ? null : String(inherited.priority)"
       >
         <Input
@@ -498,7 +506,8 @@ async function complete(): Promise<void> {
 
       <InheritedField
         v-model:overridden="draft.cooldown.overridden"
-        label="Cooldown (minutes)"
+        field="cooldown-(minutes)"
+        :label="t('editor.cooldownLabel')"
         :inherited="inherited?.cooldown == null ? null : String(inherited.cooldown)"
         hint="Overrides the activity type's default."
       >
@@ -512,7 +521,8 @@ async function complete(): Promise<void> {
       </InheritedField>
       <InheritedField
         v-model:overridden="draft.due.overridden"
-        label="Due"
+        field="due"
+        :label="t('editor.dueLabel')"
         :inherited="displayDue(inherited?.due ?? null)"
         :hint="`Local to ${timeZone}. A hard due date is enforced; a soft one warns.`"
       >
@@ -541,7 +551,8 @@ async function complete(): Promise<void> {
 
       <InheritedField
         v-model:overridden="draft.preferred.overridden"
-        label="Preferred time"
+        field="preferred-time"
+        :label="t('editor.preferredLabel')"
         :inherited="
           displayRange(inherited?.preferredStart ?? null, inherited?.preferredEnd ?? null)
         "
