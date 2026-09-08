@@ -104,7 +104,7 @@ async function resend() {
             data-testid="verify-resend"
             @click="resend"
           >
-            {{ busy ? 'Sending…' : 'Send me a new link' }}
+            {{ busy ? t('auth.sending') : t('auth.sendNewLink') }}
           </Button>
 
           <Button v-if="!session" as-child variant="outline">

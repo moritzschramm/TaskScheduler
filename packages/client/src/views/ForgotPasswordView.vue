@@ -92,7 +92,7 @@ async function submit() {
           </p>
 
           <Button type="submit" :disabled="busy" data-testid="forgot-submit">
-            {{ busy ? 'Sending…' : 'Email me a link' }}
+            {{ busy ? t('auth.sending') : t('auth.emailMeALink') }}
           </Button>
 
           <p class="text-muted-foreground text-center text-sm">

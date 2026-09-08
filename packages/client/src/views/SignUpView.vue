@@ -122,7 +122,7 @@ async function submit() {
           </p>
 
           <Button type="submit" :disabled="busy || tooShort" data-testid="sign-up-submit">
-            {{ busy ? 'Creating your account…' : 'Create account' }}
+            {{ busy ? t('auth.creatingAccount') : t('auth.createAccount') }}
           </Button>
 
           <p class="text-muted-foreground text-center text-sm">

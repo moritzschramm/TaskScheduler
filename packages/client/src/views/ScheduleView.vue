@@ -18,6 +18,7 @@ import { formatCivilDate, formatDayLabel, toIso } from '@/lib/time';
 import { dayOf, useWorkspace } from '@/lib/workspace';
 import type { GridBlock } from '@/lib/grid';
 import type { ScheduledBlock } from '@ambitime/shared';
+import { Plus } from 'lucide-vue-next';
 
 const { t, plural } = useI18n();
 
@@ -159,9 +160,10 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
   <div class="flex flex-col gap-6 p-6" data-testid="calendar-view">
     <WeekToolbar :title="t('schedule.title')">
       <template #actions>
-        <Button size="sm" data-testid="new-task" @click="newTask">{{
-          t('schedule.newTask')
-        }}</Button>
+        <Button size="sm" data-testid="new-task" @click="newTask">
+          <Plus class="size-4" aria-hidden="true" />
+          {{ t('schedule.newTask') }}
+        </Button>
       </template>
     </WeekToolbar>
     <WorkspaceStatus />

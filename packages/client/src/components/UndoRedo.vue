@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useI18n } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import type { CommandRequest, HistoryView } from '@ambitime/shared';
+import { Redo2, Undo2 } from 'lucide-vue-next';
 
 /**
  * Undo and redo (spec §7.5), over the actor's own command log.
@@ -45,6 +46,7 @@ const { t } = useI18n();
       data-testid="undo"
       @click="submit({ type: 'Undo', params: {} })"
     >
+      <Undo2 class="size-4" aria-hidden="true" />
       {{ t('common.undo') }}
     </Button>
     <Button
@@ -55,6 +57,7 @@ const { t } = useI18n();
       data-testid="redo"
       @click="submit({ type: 'Redo', params: {} })"
     >
+      <Redo2 class="size-4" aria-hidden="true" />
       {{ t('common.redo') }}
     </Button>
   </div>

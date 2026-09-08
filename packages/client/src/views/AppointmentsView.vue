@@ -13,6 +13,7 @@ import { formatCivilDate } from '@/lib/time';
 import { useWorkspace } from '@/lib/workspace';
 import type { CivilDate } from '@ambitime/scheduler';
 import type { GridBlock } from '@/lib/grid';
+import { CalendarPlus } from 'lucide-vue-next';
 
 const { t } = useI18n();
 
@@ -95,9 +96,10 @@ function openDay(day: CivilDate): void {
   <div class="flex flex-col gap-6 p-6" data-testid="appointments-view">
     <WeekToolbar :title="t('appointments.title')">
       <template #actions>
-        <Button size="sm" data-testid="add-block" @click="newBlock">{{
-          t('appointments.newBlock')
-        }}</Button>
+        <Button size="sm" data-testid="add-block" @click="newBlock">
+          <CalendarPlus class="size-4" aria-hidden="true" />
+          {{ t('appointments.newBlock') }}
+        </Button>
       </template>
     </WeekToolbar>
     <WorkspaceStatus />

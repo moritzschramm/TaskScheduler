@@ -5,6 +5,7 @@ import DayRangeSlider from '@/components/calendar/DayRangeSlider.vue';
 import { formatMonth } from '@/lib/month';
 import UndoRedo from '@/components/UndoRedo.vue';
 import { useWorkspace } from '@/lib/workspace';
+import { ChevronLeft, ChevronRight } from 'lucide-vue-next';
 
 const { t } = useI18n();
 
@@ -113,10 +114,12 @@ function shift(steps: number): void {
 
       <UndoRedo :history="history" :submit="submit" />
       <Button variant="outline" size="sm" data-testid="week-back" @click="shift(-1)">
+        <ChevronLeft class="size-4" aria-hidden="true" />
         {{ t('common.previous') }}
       </Button>
       <Button variant="outline" size="sm" data-testid="week-forward" @click="shift(1)">
         {{ t('common.next') }}
+        <ChevronRight class="size-4" aria-hidden="true" />
       </Button>
     </div>
   </header>

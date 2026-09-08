@@ -85,7 +85,7 @@ async function submit() {
           </p>
 
           <Button type="submit" :disabled="busy">
-            {{ busy ? 'Signing in…' : 'Sign in' }}
+            {{ busy ? t('auth.signingIn') : t('auth.signIn') }}
           </Button>
 
           <p class="text-muted-foreground text-center text-sm">

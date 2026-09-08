@@ -41,6 +41,10 @@ export const en = {
   },
 
   auth: {
+    signingIn: 'Signing in…',
+    creatingAccount: 'Creating your account…',
+    sending: 'Sending…',
+    saving: 'Saving…',
     tagline: 'Ambitime schedules your work into the time you have.',
     email: 'Email',
     password: 'Password',

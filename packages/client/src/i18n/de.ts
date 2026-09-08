@@ -56,6 +56,10 @@ export const de: Messages = {
   },
 
   auth: {
+    signingIn: 'Anmeldung läuft …',
+    creatingAccount: 'Konto wird erstellt …',
+    sending: 'Wird gesendet …',
+    saving: 'Wird gespeichert …',
     tagline: 'Ambitime plant deine Arbeit in die Zeit, die du hast.',
     email: 'E-Mail',
     password: 'Passwort',

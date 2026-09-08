@@ -120,7 +120,7 @@ async function submit() {
           </p>
 
           <Button type="submit" :disabled="busy || tooShort" data-testid="reset-submit">
-            {{ busy ? 'Saving…' : 'Set new password' }}
+            {{ busy ? t('auth.saving') : t('auth.setNewPassword') }}
           </Button>
         </form>
       </CardContent>
