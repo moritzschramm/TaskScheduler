@@ -266,3 +266,40 @@ describe('a block that has just been dropped', () => {
     expect(wrapper.emitted('moveBlock')).toHaveLength(1);
   });
 });
+
+/**
+ * The grid is as wide as the days it draws (spec §13).
+ *
+ * `grid-cols-7` was right while the week always had seven columns. Once a
+ * reader could hide days, five columns filled five sevenths of the width and
+ * left two sevenths blank — the calendar looked broken rather than narrower.
+ */
+describe('the grid track layout', () => {
+  /** The element carrying the CSS grid, found by the style it sets. */
+  const tracks = (wrapper: ReturnType<typeof render>): string =>
+    wrapper.find('[data-testid="week-grid"] .grid').attributes('style') ?? '';
+
+  it('gives a full week seven tracks', () => {
+    expect(tracks(render())).toContain('repeat(7, minmax(0, 1fr))');
+  });
+
+  it('gives a cropped week only the tracks it draws', () => {
+    const weekdaysOnly = mount(WeekGrid, {
+      props: { days: WEEK.slice(0, 5), timeZone: BERLIN, blocks: [], fixedBlocks: [] },
+    });
+
+    expect(weekdaysOnly.findAll('[data-testid="day-column"]')).toHaveLength(5);
+    expect(tracks(weekdaysOnly)).toContain('repeat(5, minmax(0, 1fr))');
+  });
+
+  it('shrinks the minimum width with the column count', () => {
+    // Otherwise hiding the weekend leaves the grid demanding a scrollbar it no
+    // longer earns — the blank space moves rather than going away.
+    const single = mount(WeekGrid, {
+      props: { days: WEEK.slice(0, 1), timeZone: BERLIN, blocks: [], fixedBlocks: [] },
+    });
+
+    expect(tracks(render())).toContain('52.5rem');
+    expect(tracks(single)).toContain('7.5rem');
+  });
+});

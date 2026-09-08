@@ -334,7 +334,17 @@ function moveFocusByColumn(from: HTMLElement, direction: 1 | -1): void {
 
 const grid = ref<HTMLElement | null>(null);
 
-// `SCALE` lives in `lib/grid` beside the drag arithmetic that depends on it.
+// The scale lives in `lib/grid` beside the drag arithmetic that depends on it.
+
+/**
+ * The narrowest a day column may be, in rem.
+ *
+ * Below this a day heading and a block title stop fitting, so the grid scrolls
+ * sideways rather than squeezing. Seven of these is the 52rem the whole grid
+ * used to be pinned to; expressing it per column is what lets the minimum
+ * shrink when there are fewer days to draw.
+ */
+const MIN_COLUMN_REM = 7.5;
 
 const visibleMinutes = computed(() => props.dayEndMin - props.dayStartMin);
 const gridHeight = computed(() => visibleMinutes.value * props.scale);
@@ -495,7 +505,21 @@ function classesFor(block: GridBlock): string {
       </div>
     </div>
 
-    <div class="grid min-w-[52rem] flex-1 grid-cols-7 gap-px">
+    <!--
+      One track per day *drawn*, not per day in a week.
+      `grid-cols-7` was right while the grid always drew seven; with the days a
+      user can now hide, five columns filled five sevenths and left two
+      sevenths blank. The minimum width scales the same way, so hiding the
+      weekend narrows the grid rather than leaving it needing a scrollbar it no
+      longer earns.
+    -->
+    <div
+      class="grid flex-1 gap-px"
+      :style="{
+        gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, minmax(0, 1fr))`,
+        minWidth: `${Math.max(columns.length, 1) * MIN_COLUMN_REM}rem`,
+      }"
+    >
       <div
         v-for="column in columns"
         :key="`${column.day.year}-${column.day.month}-${column.day.day}`"
