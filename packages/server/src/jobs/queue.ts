@@ -4,6 +4,7 @@ import { DEFAULT_TUNING, type TuningConfig } from '@ambitime/scheduler';
 import { calendars } from '../db/schema/index.js';
 import { withSystemPrivileges } from '../db/context.js';
 import { compactJournals } from '../audit/compact.js';
+import { pruneAudit } from '../audit/read.js';
 import { toInstant } from '../schedule/instants.js';
 import { refreshCalendar } from './refresh.js';
 import { dispatchNotifications } from '../notifications/deliver.js';
@@ -76,13 +77,22 @@ export interface WorkerOptions {
    */
   deliveryCron?: string;
   /**
+   * How long the log is kept, in days (§12's "configurable retention").
+   *
+   * Undefined keeps every entry for ever, which is the default and the safe
+   * one: the same log is what undo reads, so a retention window is also a
+   * limit on how far back a mistake can be taken. A deployment that sets
+   * `AUDIT_RETENTION_DAYS` has said it wants that trade.
+   */
+  auditRetentionDays?: number;
+  /**
    * When the log is tidied.
    *
-   * Nightly, and off-peak, because none of this is urgent: the space a
-   * stripped journal gives back was already unreachable, and a day of it is a
-   * rounding error against a log measured in months. Doing it on the write
-   * path instead would put a scan of one actor's history behind every command
-   * to save a few hours of a column nobody can read.
+   * Nightly, and off-peak, because neither half of the work is urgent: the
+   * space a stripped journal gives back was already unreachable, and a day of
+   * it is a rounding error against a log measured in months. Doing it on the
+   * write path instead would put a scan of one actor's history behind every
+   * command to save a few hours of a column nobody can read.
    */
   maintenanceCron?: string;
 }
@@ -106,6 +116,7 @@ export async function startWorker({
   rolloverCron = '5 0 * * 1',
   email = loggingEmailSender(),
   deliveryCron = '* * * * *',
+  auditRetentionDays,
   maintenanceCron = '40 3 * * *',
 }: WorkerOptions): Promise<Worker> {
   const boss = new PgBoss({ connectionString: databaseUrl });
@@ -173,6 +184,10 @@ export async function startWorker({
   });
 
   /**
+   * The two halves of §12's "configurable retention", in the order that makes
+   * the second one cheaper: whatever retention deletes outright does not then
+   * need compacting.
+   *
    * On the system path, and it has to be — the log has UPDATE and DELETE
    * revoked from `ambitime_app` (§12), which is what makes it append-only for
    * the application. Maintenance is the one thing that is *not* the
@@ -180,7 +195,12 @@ export async function startWorker({
    * oversight.
    */
   const runMaintenance = async (): Promise<void> => {
-    await withSystemPrivileges(db, (tx) => compactJournals(tx));
+    await withSystemPrivileges(db, async (tx) => {
+      if (auditRetentionDays !== undefined) {
+        await pruneAudit(tx, auditRetentionDays, clock());
+      }
+      await compactJournals(tx);
+    });
   };
 
   await boss.work(MAINTENANCE_QUEUE, async () => {

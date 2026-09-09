@@ -14,6 +14,9 @@ const envSchema = z.object({
    * retention"). Unset keeps everything, which is the safe default: undo reads
    * the same log, so a retention window is also a limit on how far back a
    * mistake can be taken (see `pruneAudit`).
+   *
+   * Enforced by the nightly maintenance job, not on read: setting this deletes
+   * rows, and the audit view says so to whoever is reading it.
    */
   AUDIT_RETENTION_DAYS: z.coerce.number().int().positive().optional(),
   /** Comma-separated list of allowed origins; empty means same-origin only. */

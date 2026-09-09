@@ -50,7 +50,14 @@ const server = serve({ fetch: app.fetch, port: env.SERVER_PORT }, (info) => {
  * locking means running several copies is a scaling decision rather than a
  * design change. Splitting it out is a deployment change later, not a rewrite.
  */
-const worker = await startWorker({ db, databaseUrl: env.DATABASE_URL, email });
+const worker = await startWorker({
+  db,
+  databaseUrl: env.DATABASE_URL,
+  email,
+  ...(env.AUDIT_RETENTION_DAYS === undefined
+    ? {}
+    : { auditRetentionDays: env.AUDIT_RETENTION_DAYS }),
+});
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
