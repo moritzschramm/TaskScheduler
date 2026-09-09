@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import DisplayOptions from '@/components/calendar/DisplayOptions.vue';
 import { formatMonth } from '@/lib/month';
+import { formatCivilDate } from '@/lib/time';
 import { useWorkspace } from '@/lib/workspace';
-import { ChevronLeft, ChevronRight } from 'lucide-vue-next';
+import { CalendarOff, ChevronLeft, ChevronRight } from 'lucide-vue-next';
 
 const { t } = useI18n();
 
@@ -34,6 +36,7 @@ const {
   shiftWeek,
   shiftMonths,
   showWeekOf,
+  submit,
 } = useWorkspace();
 
 /** Paging means a week or a month depending on what is drawn. */
@@ -45,6 +48,38 @@ function shift(steps: number): void {
 /** Back to the week — or month — holding the calendar's own today (§13). */
 function showToday(): void {
   if (today.value !== null) showWeekOf(today.value);
+}
+
+/**
+ * "I'm not in today" (spec §7.2), as one button.
+ *
+ * The gesture used to be a `⊘` in every day heading and every month cell —
+ * forty of them on one screen, each one glyph wide, for something a person
+ * does when they wake up ill. One button with the word on it is the same
+ * command and a tenth of the chrome.
+ *
+ * It says *today* rather than "the day you last looked at", because a day is
+ * only ever blocked out for one reason and that reason is happening now. Other
+ * days are still closable, by the two means that were always better at it: an
+ * unavailability block on Appointments for an afternoon, a special week for a
+ * holiday.
+ */
+const blocking = ref(false);
+
+async function blockToday(): Promise<void> {
+  const day = today.value;
+  const calendarId = selectedId.value;
+  if (day === null || calendarId === null || blocking.value) return;
+
+  blocking.value = true;
+  try {
+    await submit({ type: 'BlockOutDay', params: { calendarId, date: formatCivilDate(day) } });
+    // Whatever week was on screen, the change is on today's. A command whose
+    // effect is off-screen reads as a button that did nothing.
+    showWeekOf(day);
+  } finally {
+    blocking.value = false;
+  }
 }
 </script>
 
@@ -80,6 +115,19 @@ function showToday(): void {
     <div class="flex items-center gap-2">
       <!-- Whatever this screen makes: a task, or a block of fixed time. -->
       <slot name="actions" />
+
+      <Button
+        v-if="calendar"
+        variant="outline"
+        size="sm"
+        :disabled="today === null || blocking"
+        :title="t('calendar.blockTodayHint')"
+        data-testid="block-today"
+        @click="blockToday"
+      >
+        <CalendarOff class="size-4" aria-hidden="true" />
+        {{ t('calendar.blockToday') }}
+      </Button>
 
       <!--
         Two buttons rather than a dropdown. There are exactly two, both are

@@ -14,7 +14,7 @@ import TaskEditor from '@/components/tasks/TaskEditor.vue';
 import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { formatCivilDate, formatDayLabel, toIso } from '@/lib/time';
+import { formatDayLabel, toIso } from '@/lib/time';
 import { dayOf, useWorkspace } from '@/lib/workspace';
 import type { GridBlock } from '@/lib/grid';
 import type { ScheduledBlock } from '@ambitime/shared';
@@ -63,7 +63,6 @@ const {
   openTask,
   showWeekOf,
   setMode,
-  selectedId,
 } = useWorkspace();
 
 onMounted(ensureLoaded);
@@ -125,25 +124,10 @@ async function completeBlock(block: GridBlock): Promise<void> {
   await submit({ type: 'CompleteTask', params: { taskId: block.taskId } });
 }
 
-/**
- * "I'm not in this day" (spec §7.2).
- *
- * One gesture for a sick day or for something coming up, and it says the thing
- * that is actually true — the day is not available — rather than instructing
- * the scheduler to shuffle tasks out of it. What follows is the same either
- * way, because a day with no capacity holds nothing.
- */
 /** A day clicked in the month opens that week, which is where the hours are. */
 function openDay(day: CivilDate): void {
   showWeekOf(day);
   setMode('week');
-}
-
-async function blockDay(day: CivilDate): Promise<void> {
-  await submit({
-    type: 'BlockOutDay',
-    params: { calendarId: selectedId.value!, date: formatCivilDate(day) },
-  });
 }
 
 /** The placement of the task the editor has open, if it has one. */
@@ -230,11 +214,9 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         :today="today"
         :locale="locale"
         editable
-        blockable
         @select-block="editBlock"
         @move-block="moveBlock"
         @complete-block="completeBlock"
-        @block-day="blockDay"
       />
 
       <!--
@@ -256,9 +238,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           :special-weeks="configuration?.weekTypeOverrides ?? []"
           :today="today"
           :horizon-end="horizonEnd"
-          editable
           @open-day="openDay"
-          @block-day="blockDay"
         />
         <BacklogPanel :entries="backlog" />
       </div>

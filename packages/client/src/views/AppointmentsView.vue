@@ -9,7 +9,6 @@ import OverridesSection from '@/components/settings/OverridesSection.vue';
 import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { formatCivilDate } from '@/lib/time';
 import { useWorkspace } from '@/lib/workspace';
 import type { CivilDate } from '@ambitime/scheduler';
 import type { GridBlock } from '@/lib/grid';
@@ -50,7 +49,6 @@ const {
   month,
   firstDayOfWeek,
   horizonEnd,
-  selectedId,
   ensureLoaded,
   submit,
   newBlockAt,
@@ -77,14 +75,6 @@ function editBlock(block: GridBlock): void {
     (candidate) => candidate.appointmentId === block.appointmentId,
   );
   if (found !== undefined) editing.value = { kind: 'block', block: found };
-}
-
-/** "I'm not in this day" — the same one gesture the Schedule offers (§7.2). */
-async function blockDay(day: CivilDate): Promise<void> {
-  await submit({
-    type: 'BlockOutDay',
-    params: { calendarId: selectedId.value!, date: formatCivilDate(day) },
-  });
 }
 
 /** A day clicked in the month opens that week, which is where the hours are. */
@@ -125,9 +115,7 @@ function openDay(day: CivilDate): void {
         :today="today"
         :locale="locale"
         editable
-        blockable
         @select-block="editBlock"
-        @block-day="blockDay"
       />
 
       <MonthGrid
@@ -140,9 +128,7 @@ function openDay(day: CivilDate): void {
         :special-weeks="configuration?.weekTypeOverrides ?? []"
         :today="today"
         :horizon-end="horizonEnd"
-        editable
         @open-day="openDay"
-        @block-day="blockDay"
       />
 
       <Dialog

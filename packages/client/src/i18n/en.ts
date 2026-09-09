@@ -203,8 +203,9 @@ export const en = {
     plannerZone: '(planner is {zone})',
     firstHour: 'First hour shown',
     lastHour: 'Last hour shown',
-    blockDay: 'Block out {day}',
-    blockDayHint: 'Mark the whole day unavailable — anything scheduled moves',
+    blockToday: 'Block out today',
+    blockTodayHint:
+      'Today becomes unavailable: everything scheduled on it moves, and appointments stay where they are',
     completeBlock: 'Mark {title} done',
     showWeekOf: 'Show the week of {day}',
     more: '+{count} more',

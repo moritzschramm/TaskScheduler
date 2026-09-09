@@ -45,8 +45,6 @@ const props = withDefaults(
     today?: CivilDate | null;
     /** The last day anything can be scheduled on; past it, empty means nothing. */
     horizonEnd?: CivilDate | null;
-    /** Whether a day offers "I'm not available" and opens on click. */
-    editable?: boolean;
   }>(),
   {
     locale: 'en-GB',
@@ -56,14 +54,12 @@ const props = withDefaults(
     specialWeeks: () => [],
     today: null,
     horizonEnd: null,
-    editable: false,
   },
 );
 
 const emit = defineEmits<{
   /** Jump to the week view on this day. */
   openDay: [day: CivilDate];
-  blockDay: [day: CivilDate];
 }>();
 
 /** How many titles a cell lists before it starts counting instead. */
@@ -210,7 +206,7 @@ function classesFor(kind: DayEntry['kind']): string {
           :data-name="day.specialWeek"
         />
 
-        <div class="relative flex items-start justify-between gap-1">
+        <div class="relative flex items-start gap-1">
           <button
             type="button"
             class="hover:underline"
@@ -223,18 +219,6 @@ function classesFor(kind: DayEntry['kind']): string {
             @click="emit('openDay', day.date)"
           >
             <span class="text-sm tabular-nums">{{ day.date.day }}</span>
-          </button>
-
-          <button
-            v-if="editable"
-            type="button"
-            class="text-muted-foreground hover:text-foreground px-0.5 leading-none"
-            :aria-label="t('calendar.blockDay', { day: day.label })"
-            :title="t('calendar.blockDayHint')"
-            data-testid="block-day"
-            @click="emit('blockDay', day.date)"
-          >
-            ⊘
           </button>
         </div>
 

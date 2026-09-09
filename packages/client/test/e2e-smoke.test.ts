@@ -656,19 +656,25 @@ describe('seed via the API, render the client', () => {
       expect(done.manualFloor).toBeNull();
     });
 
-    it('blocks out a day from its column', async () => {
-      await wrapper.findAll('[data-testid="block-day"]')[1]!.trigger('click');
+    it('blocks out today from the toolbar', async () => {
+      // One button, and it names the day it acts on: today is Monday here,
+      // because the whole suite runs on a clock pinned to Monday 09:00.
+      await wrapper.find('[data-testid="block-today"]').trigger('click');
       await settle();
 
       const columns = wrapper.findAll('[data-testid="day-column"]');
+      expect(columns[0]!.attributes('data-day')).toBe('2026-03-23');
+      expect(columns[0]!.find('[data-testid="block-unavailability"]').exists()).toBe(true);
 
-      // Tuesday is unavailable and holds nothing; the task left because there
-      // was nowhere in the day for it, not because it was told to.
-      expect(columns[1]!.find('[data-testid="block-unavailability"]').exists()).toBe(true);
-      expect(columns[1]!.find('[data-testid="block-task"]').exists()).toBe(false);
-
-      // Monday's appointment is untouched, because §7.2 leaves those to a person.
+      // The appointment on it is untouched, because §7.2 leaves those to a
+      // person — being out is a claim about your hours, not about what you
+      // agreed to attend.
       expect(columns[0]!.find('[data-testid="block-appointment"]').exists()).toBe(true);
+
+      // And only the day it names closes: Tuesday's task is where it was.
+      expect(columns[1]!.find('[data-testid="block-task"]').attributes('data-title')).toBe(
+        'Tuesday work',
+      );
     });
 
     it('undoes the last thing done, from the UI', async () => {

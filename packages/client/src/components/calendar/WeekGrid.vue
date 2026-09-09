@@ -60,8 +60,6 @@ const props = withDefaults(
     locale?: string;
     /** M11: the grid becomes a way in to the editors, not only a picture. */
     editable?: boolean;
-    /** Whether each day heading offers "I'm not available this day" (§7.2). */
-    blockable?: boolean;
   }>(),
   {
     windows: () => [],
@@ -73,7 +71,6 @@ const props = withDefaults(
     scale: DEFAULT_SCALE,
     locale: 'en-GB',
     editable: false,
-    blockable: false,
   },
 );
 
@@ -83,8 +80,6 @@ const emit = defineEmits<{
   completeBlock: [block: GridBlock];
   /** A task dropped, or nudged, onto a new local start (spec §7.3, §13). */
   moveBlock: [payload: { block: GridBlock; day: CivilDate; startMin: number }];
-  /** "I'm out this day" — the whole day becomes unavailable (§7.2). */
-  blockDay: [day: CivilDate];
 }>();
 
 /**
@@ -527,35 +522,21 @@ function classesFor(block: GridBlock): string {
         :data-testid="`day-column`"
         :data-day="`${column.day.year}-${String(column.day.month).padStart(2, '0')}-${String(column.day.day).padStart(2, '0')}`"
       >
+        <!--
+          The day heading says which day, and nothing else.
+
+          It used to carry a `+`, and after that a `⊘` for "I'm not available
+          this day". Both were the same mistake in different clothes: a day
+          column is four pixels of chrome, and an action hidden in it is one
+          glyph with no word beside it, repeated seven times for a gesture
+          somebody makes once. Blocking out a day is a header button now —
+          one of them, big enough to read.
+        -->
         <div
-          class="flex h-8 items-center justify-between gap-1 border-b px-2 text-xs font-medium"
+          class="flex h-8 items-center border-b px-2 text-xs font-medium"
           :class="column.isToday ? 'text-primary' : 'text-muted-foreground'"
         >
           <span>{{ column.label }}</span>
-          <!--
-            One affordance per day heading, not two. The `+` that used to sit
-            here is a header button now: a day column is four pixels of chrome,
-            and hiding "make something new" inside it made the commonest act on
-            the page the hardest one to find.
-
-            What is left says something about the *day* rather than about its
-            tasks. "Move the rest of this day's tasks into later days" was an
-            instruction to the scheduler, phrased in its vocabulary, and it
-            asked the reader to work out that this was how one says "I'm ill".
-            Blocking the day out says that directly, and the tasks move for the
-            ordinary reason that nothing fits in a day you are not there for.
-          -->
-          <button
-            v-if="editable && blockable"
-            type="button"
-            class="hover:text-foreground px-1 leading-none"
-            :aria-label="t('calendar.blockDay', { day: column.label })"
-            :title="t('calendar.blockDayHint')"
-            data-testid="block-day"
-            @click="emit('blockDay', column.day)"
-          >
-            ⊘
-          </button>
         </div>
 
         <div class="bg-muted relative border-l" :style="{ height: `${gridHeight}px` }">

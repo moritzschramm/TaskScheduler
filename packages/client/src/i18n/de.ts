@@ -219,8 +219,9 @@ export const de: Messages = {
     plannerZone: '(Planer nutzt {zone})',
     firstHour: 'Erste angezeigte Stunde',
     lastHour: 'Letzte angezeigte Stunde',
-    blockDay: '{day} freihalten',
-    blockDayHint: 'Den ganzen Tag als nicht verfügbar markieren — alles Geplante wird verschoben',
+    blockToday: 'Heute freihalten',
+    blockTodayHint:
+      'Heute wird nicht verfügbar: alles Geplante wird verschoben, Termine bleiben, wo sie sind',
     completeBlock: '{title} als erledigt markieren',
     showWeekOf: 'Woche vom {day} anzeigen',
     more: '+{count} weitere',
