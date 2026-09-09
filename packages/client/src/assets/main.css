@@ -149,6 +149,26 @@
     @apply border-border outline-ring/50;
   }
 
+  /*
+   * A hand on anything that does something when clicked.
+   *
+   * Tailwind v3's preflight put `cursor: pointer` on buttons; v4 dropped it in
+   * favour of the browser default, which is an arrow — so every task block,
+   * every day number, every group header in the app looked inert until you
+   * clicked it. Restored here rather than as a class on each one, because the
+   * rule is "clickable things say so", not a decision to make per element.
+   *
+   * Disabled controls are excluded: an arrow is exactly right for a button
+   * that will not respond.
+   */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  summary,
+  select:not(:disabled),
+  label:has(> input[type='checkbox']:not(:disabled)) {
+    cursor: pointer;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings:
