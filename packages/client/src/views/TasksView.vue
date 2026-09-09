@@ -136,16 +136,17 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           :submit="submit"
           @cancel="editing = { kind: 'none' }"
           @saved="editing = { kind: 'none' }"
-        />
-        <div v-if="editing.task && editing.task.isLeaf" class="mt-6 border-t pt-5">
-          <TaskActions
-            :task="editing.task"
-            :placement="placementOf(editing.task.id)"
-            :others="swapCandidates(editing.task.id)"
-            :time-zone="zone"
-            :submit="submit"
-          />
-        </div>
+        >
+          <div v-if="editing.task && editing.task.isLeaf" class="border-t pt-5">
+            <TaskActions
+              :task="editing.task"
+              :placement="placementOf(editing.task.id)"
+              :others="swapCandidates(editing.task.id)"
+              :time-zone="zone"
+              :submit="submit"
+            />
+          </div>
+        </TaskEditor>
       </Dialog>
     </template>
   </div>

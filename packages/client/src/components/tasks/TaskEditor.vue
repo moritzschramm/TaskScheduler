@@ -632,7 +632,39 @@ async function complete(): Promise<void> {
       </template>
     </section>
 
-    <div class="flex flex-wrap items-center gap-2">
+    <!--
+      Whatever else the modal wants under the form — §7.3's manual actions, for
+      a task that has a placement to act on. It goes here rather than after the
+      editor so that the buttons below stay the last thing in the dialog, which
+      is the whole point of them being where they are.
+    -->
+    <slot />
+
+    <!--
+      The four decisions, kept on screen while the form scrolls under them.
+
+      A task's form is long: nine properties, an override switch on most of
+      them, a recurrence rule. Saving meant scrolling past all of it to reach a
+      button, and cancelling — the thing you want most when you have opened the
+      wrong task — meant the same journey.
+
+      Sticky rather than a bar outside the scroller, because the dialog *is*
+      the scroller: this way the buttons are still the end of the form, in
+      source order, so tab order and a screen reader meet them where they
+      belong.
+
+      All three negative offsets hand back the dialog's own padding, and each
+      is load-bearing. `-mx-6` spans the bar across the full width. `-mb-6`
+      puts its resting place flush with the bottom edge, so it does not jump
+      when the scroll runs out. `-bottom-6` is the one that is easy to miss: a
+      sticky offset is measured from the scrollport *inset by the padding*, so
+      `bottom-0` pins the bar twenty-four pixels up and leaves a strip of the
+      form sliding through underneath it.
+    -->
+    <div
+      class="bg-card sticky -bottom-6 -mx-6 -mb-6 flex flex-wrap items-center gap-2 border-t px-6 py-4"
+      data-testid="task-editor-actions"
+    >
       <Button :disabled="!canSave" data-testid="save-task" @click="save">
         {{ isCreate ? t('editor.createTask') : t('editor.saveTask') }}
       </Button>
