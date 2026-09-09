@@ -506,8 +506,6 @@ export const de: Messages = {
     somethingElse: 'Erst etwas anderes',
     somethingElseHint:
       'Diese Aufgabe auf ihren nächsten möglichen Platz schieben und die nächste vorziehen',
-    newEstimate: 'Neue Schätzung (Minuten)',
-    takingLonger: 'Es dauert länger',
     swapWith: 'Tauschen mit',
     chooseTask: 'Aufgabe wählen …',
     swap: 'Tauschen',

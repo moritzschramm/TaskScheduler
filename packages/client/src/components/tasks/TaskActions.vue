@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { fromLocalInput, toLocalInput } from '@/lib/time';
@@ -38,14 +37,12 @@ const props = defineProps<{
 
 const busy = ref(false);
 const exactStart = ref('');
-const newEstimate = ref('');
 const swapWith = ref('');
 
 watch(
-  [() => props.placement, () => props.task],
-  ([placement, task]) => {
+  () => props.placement,
+  (placement) => {
     exactStart.value = placement === null ? '' : toLocalInput(placement.start, props.timeZone);
-    newEstimate.value = task.estimatedDurationMin === null ? '' : String(task.estimatedDurationMin);
   },
   { immediate: true },
 );
@@ -95,16 +92,6 @@ async function nudgeBy(minutes: number): Promise<void> {
 
 async function defer(target: 'tomorrow' | 'next_week' | 'backlog'): Promise<void> {
   await run({ type: 'DeferTask', params: { taskId: props.task.id, target } });
-}
-
-async function extend(): Promise<void> {
-  const estimate = Number(newEstimate.value);
-  if (!Number.isInteger(estimate) || estimate <= 0) return;
-  await run({
-    type: 'ExtendTask',
-    expectedVersion: props.task.version,
-    params: { taskId: props.task.id, newEstimateMin: estimate },
-  });
 }
 
 async function swap(): Promise<void> {
@@ -228,29 +215,6 @@ async function swap(): Promise<void> {
           @click="run({ type: 'SwapForward', params: { taskId: task.id } })"
         >
           {{ t('actions.somethingElse') }}
-        </Button>
-      </div>
-
-      <div class="flex flex-wrap items-end gap-2">
-        <div class="space-y-1">
-          <Label for="new-estimate">{{ t('actions.newEstimate') }}</Label>
-          <Input
-            id="new-estimate"
-            v-model="newEstimate"
-            type="number"
-            min="1"
-            class="w-32"
-            data-testid="new-estimate"
-          />
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="busy"
-          data-testid="extend-task"
-          @click="extend"
-        >
-          {{ t('actions.takingLonger') }}
         </Button>
       </div>
 

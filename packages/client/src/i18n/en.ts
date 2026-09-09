@@ -483,8 +483,6 @@ export const en = {
     backlog: 'Backlog',
     somethingElse: 'Something else first',
     somethingElseHint: 'Push this task to its next feasible slot and pull the next task forward',
-    newEstimate: 'New estimate (minutes)',
-    takingLonger: 'It is taking longer',
     swapWith: 'Swap with',
     chooseTask: 'Choose a task…',
     swap: 'Swap',

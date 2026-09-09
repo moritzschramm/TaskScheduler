@@ -633,11 +633,15 @@ describe('seed via the API, render the client', () => {
       expect((await taskNamed('Tuesday work')).manualFloor).toBe('2026-03-23T23:00:00.000Z');
     });
 
-    it('extends a task that is taking longer', async () => {
+    it('changes an estimate from the form that owns it', async () => {
       await openTuesdayTask();
 
-      await wrapper.find('[data-testid="new-estimate"]').setValue('90');
-      await wrapper.find('[data-testid="extend-task"]').trigger('click');
+      // There was a second estimate box down in the manual actions, wired to
+      // `ExtendTask`, sitting under a button that named no field. Two ways to
+      // say how long something takes is one too many; this is the one that was
+      // always in the form.
+      await wrapper.find('[data-testid="task-estimate"]').setValue('90');
+      await wrapper.find('[data-testid="save-task"]').trigger('click');
       await settle();
 
       expect((await taskNamed('Tuesday work')).estimatedDurationMin).toBe(90);
