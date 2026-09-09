@@ -190,38 +190,6 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         </Button>
       </section>
 
-      <!--
-        The horizon is two weeks and this view opens on today's, so a calendar
-        whose only free hours fall later schedules into a week nobody is
-        looking at. Without this the schedule is simply missing, and the
-        explanation — "press Next" — is unreachable by inspection.
-      -->
-      <section
-        v-if="scheduledElsewhere.length > 0"
-        class="max-w-prose space-y-2 rounded-lg border p-4"
-        role="status"
-        data-testid="scheduled-elsewhere"
-      >
-        <h2 class="text-sm font-semibold">
-          {{ plural('schedule.elsewhere', scheduledElsewhere.length) }}
-        </h2>
-        <ul class="space-y-1">
-          <li v-for="block in scheduledElsewhere" :key="block.occurrenceId" class="text-sm">
-            <button
-              type="button"
-              class="underline underline-offset-4"
-              data-testid="jump-to-week"
-              @click="showWeekOf(dayOf(block))"
-            >
-              {{ block.title }}
-            </button>
-            <span class="text-muted-foreground">
-              — {{ formatDayLabel(dayOf(block), locale) }}
-            </span>
-          </li>
-        </ul>
-      </section>
-
       <section
         v-if="unschedulable.length > 0"
         class="max-w-prose space-y-2 rounded-lg border p-4"
@@ -294,6 +262,41 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         />
         <BacklogPanel :entries="backlog" />
       </div>
+
+      <!--
+        Under the week, not over it.
+
+        This is a footnote to the calendar — "there is more of this, one page
+        along" — and reading it means having looked at the week first. Above
+        the grid it was a paragraph that appeared and vanished as tasks moved
+        in and out of the horizon, shoving the whole calendar down the page
+        mid-drag. A footnote below can grow without moving anything above it.
+      -->
+      <section
+        v-if="scheduledElsewhere.length > 0"
+        class="max-w-prose space-y-2 rounded-lg border p-4"
+        role="status"
+        data-testid="scheduled-elsewhere"
+      >
+        <h2 class="text-sm font-semibold">
+          {{ plural('schedule.elsewhere', scheduledElsewhere.length) }}
+        </h2>
+        <ul class="space-y-1">
+          <li v-for="block in scheduledElsewhere" :key="block.occurrenceId" class="text-sm">
+            <button
+              type="button"
+              class="underline underline-offset-4"
+              data-testid="jump-to-week"
+              @click="showWeekOf(dayOf(block))"
+            >
+              {{ block.title }}
+            </button>
+            <span class="text-muted-foreground">
+              — {{ formatDayLabel(dayOf(block), locale) }}
+            </span>
+          </li>
+        </ul>
+      </section>
 
       <div class="grid gap-8 lg:grid-cols-[2fr_1fr]">
         <NotificationCentre :notifications="notifications" :submit="submit" />
