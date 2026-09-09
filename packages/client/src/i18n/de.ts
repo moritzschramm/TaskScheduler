@@ -154,6 +154,7 @@ export const de: Messages = {
 
   tasks: {
     title: 'Aufgaben',
+    lead: 'Eine Aufgabe ist ein Stück Arbeit, das du erledigen willst — eine Schätzung, wie lange sie dauert, die Aktivitätsart, in deren Stunden sie geplant werden darf, und wahlweise eine Priorität und ein Fälligkeitsdatum. Was nicht in den Planungszeitraum passt, wartet im Rückstand.',
     newTask: 'Neue Aufgabe',
     empty: 'Noch keine Aufgaben.',
     subtask: 'Teilaufgabe',

@@ -139,6 +139,7 @@ export const en = {
 
   tasks: {
     title: 'Tasks',
+    lead: 'A task is a piece of work you mean to do — an estimate of how long it takes, the activity type whose hours it may be scheduled in, and optionally a priority and a date it is due by. What does not fit inside the horizon waits in the backlog.',
     newTask: 'New task',
     empty: 'No tasks yet.',
     subtask: 'Subtask',

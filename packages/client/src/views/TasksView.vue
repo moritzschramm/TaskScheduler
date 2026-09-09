@@ -56,8 +56,17 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
 
 <template>
   <div class="flex flex-col gap-6 p-6" data-testid="tasks-view">
-    <header class="flex flex-wrap items-center justify-between gap-4">
+    <header class="max-w-prose space-y-1">
       <h1 class="text-xl font-semibold tracking-tight">{{ t('tasks.title') }}</h1>
+      <!--
+        What a task is, said once where they are made — the same courtesy
+        Activity types pays. The two screens define the two halves of the
+        model, and a reader who lands on either should not have to infer the
+        other from a table of columns.
+      -->
+      <p class="text-muted-foreground text-sm">
+        {{ t('tasks.lead') }}
+      </p>
     </header>
 
     <WorkspaceStatus />
