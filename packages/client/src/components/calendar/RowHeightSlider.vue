@@ -14,7 +14,7 @@ import { useWorkspace } from '@/lib/workspace';
  * will not fit on a laptop. Cropping the day and stretching the rows are the
  * two halves of making a week legible, so they sit together.
  *
- * Shown in pixels per hour, because that is a size a person can picture. The
+ * Held in pixels per hour, because that is a size a person can picture. The
  * grid works in pixels per minute, and the conversion happens here rather than
  * in the store so there is one place that knows the unit on screen.
  */
@@ -33,12 +33,13 @@ const DEFAULT_PER_HOUR = 66;
 
 <template>
   <div class="space-y-1.5" data-testid="row-height">
-    <div class="flex items-baseline justify-between">
-      <p class="text-sm font-medium">{{ t('calendar.rowHeight') }}</p>
-      <span class="text-muted-foreground text-xs tabular-nums" data-testid="row-height-label">
-        {{ perHour[0] }}px
-      </span>
-    </div>
+    <!--
+      No number beside the label. "66px" is not a height anybody chooses on
+      purpose; the week behind this popover redraws as the thumb moves, and
+      that is the readout — in the only unit that matters. It is still
+      announced, because a screen reader has no grid to watch.
+    -->
+    <p class="text-sm font-medium">{{ t('calendar.rowHeight') }}</p>
 
     <SliderRoot
       v-model="perHour"
