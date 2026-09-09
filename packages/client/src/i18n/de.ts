@@ -67,12 +67,12 @@ export const de: Messages = {
     signInTitle: 'Anmelden',
     forgot: 'Vergessen?',
     noAccount: 'Noch kein Konto?',
-    createOne: 'Eins anlegen',
+    createOne: 'Jetzt erstellen',
     signUpTitle: 'Konto erstellen',
     name: 'Name',
     nameHint: 'Optional. So sehen dich Kolleginnen und Kollegen.',
     passwordHint: 'Mindestens {count} Zeichen.',
-    haveOne: 'Schon eins?',
+    haveOne: 'Du hast schon ein Konto?',
     createAccount: 'Konto erstellen',
     forgotTitle: 'Passwort zurücksetzen',
     forgotLead: 'Wir schicken dir einen Link, mit dem du ein neues wählen kannst.',
@@ -136,7 +136,7 @@ export const de: Messages = {
     newTask: 'Neue Aufgabe',
     noWindowsTitle: 'In dieser Woche lässt sich nichts einplanen.',
     noWindowsBody:
-      'Es fällt kein verfügbares Zeitfenster hinein, also hat die Planung keinen Platz — die ganze Woche unten ist geschlossen. Planbare Zeiten werden je Aktivitätsart festgelegt.',
+      'Es fällt kein verfügbares Zeitfenster hinein, also hat die Planung keinen Platz. Planbare Zeiten werden je Aktivitätsart festgelegt.',
     noWindowsAction: 'Planbare Zeiten einrichten',
     elsewhere: {
       one: '{count} Aufgabe liegt außerhalb dieser Woche',
@@ -154,7 +154,7 @@ export const de: Messages = {
 
   tasks: {
     title: 'Aufgaben',
-    lead: 'Eine Aufgabe ist ein Stück Arbeit, das du erledigen willst — eine Schätzung, wie lange sie dauert, die Aktivitätsart, in deren Stunden sie geplant werden darf, und wahlweise eine Priorität und ein Fälligkeitsdatum. Was nicht in den Planungszeitraum passt, wartet im Rückstand.',
+    lead: 'Eine Aufgabe ist ein Stück Arbeit, das du erledigen willst: Eine Schätzung, wie lange sie dauert, die Aktivitätsart, in deren Stunden sie geplant werden darf, und wahlweise eine Priorität und ein Fälligkeitsdatum. Was nicht in den Planungszeitraum passt, wartet im Rückstand.',
     newTask: 'Neue Aufgabe',
     empty: 'Noch keine Aufgaben.',
     subtask: 'Teilaufgabe',
@@ -304,10 +304,10 @@ export const de: Messages = {
   hours: {
     overlap: 'Auch {name}, {from}–{until}',
     overlapNote:
-      'Überschneidungen sind erlaubt — die Planung nimmt die Aufgabe, die für die Stunde besser passt. Der Hinweis steht hier, weil die Zeiten je Aktivitätsart bearbeitet werden und eine Überschneidung sonst unsichtbar bliebe.',
+      'Überschneidungen sind erlaubt: Die Planung nimmt die Aufgabe, die für die Stunde besser passt.',
     title: 'Planbare Zeiten',
-    lead: 'Die Stunden, in die diese Art von Tätigkeit gelegt werden darf — nicht einfach die, in denen du frei bist. Eine besondere Woche ersetzt für ihre Tage die üblichen Zeiten, statt sie zu ergänzen. Änderungen speichern sich selbst.',
-    needCategory: 'Lege zuerst eine Aktivitätsart an — planbare Zeiten gehören zu einer.',
+    lead: 'Die Stunden, in die diese Art von Tätigkeit gelegt werden darf. Eine besondere Woche ersetzt für ihre Tage die üblichen Zeiten, statt sie zu ergänzen.',
+    needCategory: 'Lege zuerst eine Aktivitätsart an.',
     activityType: 'Aktivitätsart',
     specialWeek: 'Besondere Woche',
     ordinaryWeeks: 'Gewöhnliche Wochen',
@@ -326,7 +326,7 @@ export const de: Messages = {
 
   specialWeeks: {
     title: 'Besondere Wochen',
-    lead: 'Ein Zeitraum, dessen Stunden die üblichen ersetzen — Urlaub, eine Konferenz, eine Woche woanders. Eine neue hat noch keine Stunden, ihre Tage sind also nicht verfügbar, bis du ihr unter Aktivitätsarten welche gibst. Das Enddatum ist der erste Tag zurück, und Änderungen speichern sich selbst.',
+    lead: 'Ein Zeitraum, dessen Stunden die üblichen ersetzen — Urlaub, eine Konferenz, eine Woche woanders. Das Enddatum ist der erste Tag zurück.',
     namePlaceholder: 'Konferenz',
     newName: 'Name der neuen besonderen Woche',
     newStart: 'Beginn der neuen besonderen Woche',

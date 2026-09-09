@@ -286,10 +286,10 @@ export const en = {
   hours: {
     overlap: 'Also {name}, {from}–{until}',
     overlapNote:
-      'Overlap is allowed — the scheduler picks whichever task scores higher for the hour. It is flagged because the hours are edited one activity type at a time, so a clash is otherwise invisible.',
+      'Overlap is allowed — the scheduler picks whichever task scores higher for the hour.',
     title: 'Scheduling hours',
-    lead: 'The hours the scheduler may place this kind of thing in — not simply when you are free. A special week replaces the default set for its dates rather than adding to it. Changes save themselves.',
-    needCategory: 'Add an activity type first — scheduling hours belong to one.',
+    lead: 'The hours the scheduler may place this kind of thing in — not simply when you are free.',
+    needCategory: 'Add an activity type first.',
     activityType: 'Activity type',
     specialWeek: 'Special week',
     ordinaryWeeks: 'Ordinary weeks',
@@ -307,7 +307,7 @@ export const en = {
 
   specialWeeks: {
     title: 'Special weeks',
-    lead: 'A stretch of dates whose hours replace your usual ones — a holiday, a conference, a week working elsewhere. A new one has no hours yet, so its dates are unavailable until you give it some on Activity types. The end date is the first day back, and changes save themselves.',
+    lead: 'A stretch of dates whose hours replace your usual ones — a holiday, a conference, a week working elsewhere. The end date is the first day back.',
     namePlaceholder: 'Conference',
     newName: 'New special week name',
     newStart: 'New special week start',
