@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       '**/coverage/**',
+      'data/**',
       'packages/server/drizzle/**',
       '**/*.d.ts',
     ],

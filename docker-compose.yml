@@ -14,9 +14,15 @@ services:
       # Exposed so tests and drizzle-kit can run from the host.
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
+      # The database lives in the checkout rather than in a Docker-managed
+      # volume, so it is somewhere a person can find: `du -sh data/` says what
+      # it costs, `rm -rf data/` is the reset, and deleting the clone takes the
+      # data with it instead of leaving an orphan volume behind. Gitignored,
+      # for the obvious reason.
+      #
       # Postgres 18+ expects a single mount at the parent directory; it
       # places version-specific data in a subdirectory for pg_upgrade.
-      - postgres-data:/var/lib/postgresql
+      - ./data/postgres:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ambitime} -d ${POSTGRES_DB:-ambitime}']
       interval: 5s
@@ -102,6 +108,3 @@ services:
         condition: service_healthy
       client:
         condition: service_healthy
-
-volumes:
-  postgres-data:

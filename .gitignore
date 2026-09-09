@@ -3,6 +3,11 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# The dev database. `docker-compose.yml` mounts data/postgres into the
+# Postgres container, so this is a live PGDATA directory — a few hundred MB of
+# binary heap files, and nothing anyone would want in a diff.
+data/
+
 .env
 .env.*
 !.env.example
