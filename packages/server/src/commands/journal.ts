@@ -140,6 +140,15 @@ export interface CommandJournal {
    * than as zero.
    */
   affectedTasks?: number;
+  /**
+   * Set once `changes` has been dropped, past the undo window (`compact.ts`).
+   *
+   * A journal with no changes is otherwise ambiguous — `Undo` and `Redo` write
+   * one, since their own writes are not journalled — and "this command wrote
+   * nothing" and "what this command wrote is no longer kept" are different
+   * enough facts that anyone reading the log deserves to be told which.
+   */
+  stripped?: true;
 }
 
 /** Per-table insert types, so call sites keep their column-name checking. */

@@ -1,11 +1,14 @@
-import { sql } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { auditResponseSchema } from '@ambitime/shared';
+import { compactJournals } from '../../src/audit/compact.js';
 import { pruneAudit } from '../../src/audit/read.js';
+import { commands, tasks } from '../../src/db/schema/index.js';
 import { withSystemPrivileges } from '../../src/db/context.js';
 import { resetDomainTables, setupTestDatabase } from '../support/database.js';
 import { createApiWorld, type ApiWorld } from '../support/api-world.js';
 import { AUTH_LIMIT, COMMAND_LIMIT, rateLimit } from '../../src/api/rate-limit.js';
+import type { CommandJournal } from '../../src/commands/journal.js';
 import type { DatabaseHandle } from '../../src/db/client.js';
 
 /**
@@ -192,6 +195,106 @@ describe('the audit view', () => {
 
     expect(pruned).toBe(before);
     expect((await audit()).entries).toEqual([]);
+  });
+
+  /**
+   * Compaction (§12), which is not retention.
+   *
+   * Retention forgets that something was done. This forgets only *how to put it
+   * back* — and only once undo has stopped being able to, which the window it
+   * reads has already decided. So the assertions that matter are the two
+   * negatives: the audit view reads identically afterwards, and everything
+   * still inside the window still reverses.
+   */
+  describe('compacting the journals past the undo window', () => {
+    const log = () =>
+      withSystemPrivileges(handle.db, (tx) =>
+        tx
+          .select({ type: commands.type, inverse: commands.inverse })
+          .from(commands)
+          .orderBy(desc(commands.seq)),
+      );
+
+    const compact = (depth?: number) =>
+      withSystemPrivileges(handle.db, (tx) =>
+        depth === undefined ? compactJournals(tx) : compactJournals(tx, depth),
+      );
+
+    const seed = (title: string) =>
+      world.run({
+        type: 'CreateTask',
+        params: {
+          calendarId: world.calendarId,
+          title,
+          categoryId: world.categoryId,
+          estimatedDurationMin: 60,
+        },
+      } as never);
+
+    it('drops the row images, and only those', async () => {
+      for (const title of ['Alpha', 'Beta', 'Gamma']) await seed(title);
+
+      // Four: the fixture's calendar, category and hours, and Alpha's create.
+      // Past a window two deep, no press of undo can reach any of them.
+      expect(await compact(2)).toBe(4);
+
+      const rows = await log();
+      const journals = rows.map((row) => row.inverse as CommandJournal);
+
+      expect(journals.slice(0, 2).every((journal) => journal.changes.length > 0)).toBe(true);
+      expect(journals.slice(2).every((journal) => journal.changes === undefined)).toBe(true);
+      expect(journals.slice(2).every((journal) => journal.stripped === true)).toBe(true);
+
+      // Nothing was deleted, and nothing about a calendar was forgotten: the
+      // entry stays, and so does everything the audit view asks it.
+      expect(rows.map((row) => row.type)).toEqual([
+        'CreateTask',
+        'CreateTask',
+        'CreateTask',
+        'SetAvailabilityWindows',
+        'CreateCategory',
+        'CreateCalendar',
+      ]);
+      // What the audit view asks of a stripped entry, still answered: Alpha's
+      // create names its calendar and still says it made one task.
+      expect(journals[2]).toMatchObject({
+        stripped: true,
+        calendarIds: [world.calendarId],
+        affectedTasks: 1,
+      });
+
+      // A second pass has nothing to do, which is what makes running this
+      // nightly for ever cost what one night's commands cost.
+      expect(await compact(2)).toBe(0);
+    });
+
+    it('leaves the audit view reading exactly as it did', async () => {
+      await seed('Alpha');
+      await seed('Beta');
+
+      const before = await audit();
+      await compact(1);
+
+      expect(await audit()).toEqual(before);
+    });
+
+    it('leaves the window itself reversible', async () => {
+      await seed('Alpha');
+      await seed('Beta');
+      await compact(1);
+
+      await world.run({ type: 'Undo', params: {} } as never);
+
+      const remaining = await withSystemPrivileges(handle.db, (tx) =>
+        tx.select({ title: tasks.title }).from(tasks),
+      );
+      expect(remaining.map((row) => row.title)).toEqual(['Alpha']);
+    });
+
+    it('does nothing while the whole log is still inside the window', async () => {
+      await seed('Alpha');
+      expect(await compact()).toBe(0);
+    });
   });
 });
 

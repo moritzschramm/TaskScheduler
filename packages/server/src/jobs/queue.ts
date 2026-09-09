@@ -3,6 +3,7 @@ import { asc } from 'drizzle-orm';
 import { DEFAULT_TUNING, type TuningConfig } from '@ambitime/scheduler';
 import { calendars } from '../db/schema/index.js';
 import { withSystemPrivileges } from '../db/context.js';
+import { compactJournals } from '../audit/compact.js';
 import { toInstant } from '../schedule/instants.js';
 import { refreshCalendar } from './refresh.js';
 import { dispatchNotifications } from '../notifications/deliver.js';
@@ -35,6 +36,9 @@ export const ROLLOVER_QUEUE = 'calendar.rollover';
 
 /** Notification delivery (§11): in-app when online, email when not. */
 export const DELIVERY_QUEUE = 'notifications.deliver';
+
+/** Keeping the command log to its promised size (§12). */
+export const MAINTENANCE_QUEUE = 'commands.maintain';
 
 export interface RefreshJob {
   tenantId: string;
@@ -71,6 +75,16 @@ export interface WorkerOptions {
    * unremarkable, and an online one already has the notification.
    */
   deliveryCron?: string;
+  /**
+   * When the log is tidied.
+   *
+   * Nightly, and off-peak, because none of this is urgent: the space a
+   * stripped journal gives back was already unreachable, and a day of it is a
+   * rounding error against a log measured in months. Doing it on the write
+   * path instead would put a scan of one actor's history behind every command
+   * to save a few hours of a column nobody can read.
+   */
+  maintenanceCron?: string;
 }
 
 export interface Worker {
@@ -79,6 +93,8 @@ export interface Worker {
   runRollover: () => Promise<void>;
   /** Sends whatever is waiting. Exposed for tests and for ops. */
   runDelivery: () => Promise<void>;
+  /** Prunes and compacts the log. Exposed for tests and for ops. */
+  runMaintenance: () => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -90,6 +106,7 @@ export async function startWorker({
   rolloverCron = '5 0 * * 1',
   email = loggingEmailSender(),
   deliveryCron = '* * * * *',
+  maintenanceCron = '40 3 * * *',
 }: WorkerOptions): Promise<Worker> {
   const boss = new PgBoss({ connectionString: databaseUrl });
 
@@ -103,6 +120,7 @@ export async function startWorker({
   await boss.createQueue(REFRESH_QUEUE);
   await boss.createQueue(ROLLOVER_QUEUE);
   await boss.createQueue(DELIVERY_QUEUE);
+  await boss.createQueue(MAINTENANCE_QUEUE);
 
   const runRollover = async (): Promise<void> => {
     // Read on the system path: a scheduled job acts for everyone, so there is
@@ -154,13 +172,30 @@ export async function startWorker({
     await runDelivery();
   });
 
+  /**
+   * On the system path, and it has to be — the log has UPDATE and DELETE
+   * revoked from `ambitime_app` (§12), which is what makes it append-only for
+   * the application. Maintenance is the one thing that is *not* the
+   * application, and it runs as the owner for that reason rather than by
+   * oversight.
+   */
+  const runMaintenance = async (): Promise<void> => {
+    await withSystemPrivileges(db, (tx) => compactJournals(tx));
+  };
+
+  await boss.work(MAINTENANCE_QUEUE, async () => {
+    await runMaintenance();
+  });
+
   await boss.schedule(ROLLOVER_QUEUE, rolloverCron);
   await boss.schedule(DELIVERY_QUEUE, deliveryCron);
+  await boss.schedule(MAINTENANCE_QUEUE, maintenanceCron);
 
   return {
     boss,
     runRollover,
     runDelivery,
+    runMaintenance,
     // `stop` waits for in-flight handlers rather than cutting them off: a
     // refresh interrupted mid-transaction would roll back and be redelivered,
     // which is safe but wasteful, and a deploy should not cost a re-solve of
