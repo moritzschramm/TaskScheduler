@@ -16,6 +16,7 @@ import {
   type GridBlock,
 } from '@/lib/grid';
 import { formatDayLabel, formatMinuteOfDay, sameCivilDate } from '@/lib/time';
+import { Check } from 'lucide-vue-next';
 
 const { t } = useI18n();
 
@@ -461,6 +462,20 @@ function classesFor(block: GridBlock): string {
     return 'bg-muted border-muted-foreground/30 text-muted-foreground';
   return 'bg-secondary border-secondary-foreground/30 text-secondary-foreground';
 }
+
+/** Which blocks carry a done control: a placed task, on a grid that edits. */
+function completable(block: GridBlock): boolean {
+  return props.editable && block.kind === 'task';
+}
+
+/**
+ * The done control's width, and how far its right edge sits from the column's.
+ *
+ * Read by the block as well as by the strip: what the strip covers is what the
+ * title gives up, so the two cannot end up overlapping as the column narrows.
+ */
+const DONE_WIDTH = 24;
+const DONE_INSET = 6;
 </script>
 
 <template>
@@ -614,7 +629,11 @@ function classesFor(block: GridBlock): string {
             data-grid-block
             class="focus-visible:ring-ring absolute inset-x-1 touch-none overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
             :class="[classesFor(block), isMoving(block) ? 'ring-primary z-10 ring-2' : '']"
-            :style="{ top: `${offsetOf(startMinOf(block))}px`, height: `${heightOf(block)}px` }"
+            :style="{
+              top: `${offsetOf(startMinOf(block))}px`,
+              height: `${heightOf(block)}px`,
+              ...(completable(block) ? { paddingRight: `${DONE_WIDTH + DONE_INSET}px` } : {}),
+            }"
             :data-testid="`block-${block.kind}`"
             :data-title="block.title"
             :data-start-min="startMinOf(block)"
@@ -652,20 +671,34 @@ function classesFor(block: GridBlock): string {
             and completing is the one of the four you cannot take back by
             putting it down again. Sibling rather than child: a button inside a
             button is invalid, and the block is a button when editable.
+
+            **A strip down the block's edge, not a glyph on top of it.** It was
+            a bare ✓ with no fill of its own, which meant it inherited the
+            column's ink and drew it over a solid block — the mark was there
+            and nobody could see it — on eleven pixels of hit target. Full
+            height is what makes the target grow with the block instead of
+            hanging off a short one, and the tint is the block's own foreground
+            so the strip reads as part of the thing it finishes rather than as
+            another colour on the week.
           -->
           <button
-            v-for="block in column.blocks.filter((entry) => editable && entry.kind === 'task')"
+            v-for="block in column.blocks.filter(completable)"
             :key="`done-${block.key}`"
             type="button"
-            class="hover:bg-primary/20 focus-visible:ring-ring absolute z-10 rounded-sm px-1 text-[11px] leading-none focus-visible:ring-2 focus-visible:outline-none"
-            :style="{ top: `${offsetOf(startMinOf(block)) + 2}px`, right: '6px' }"
-            :aria-label="`Complete ${block.title}`"
-            :title="`Complete ${block.title}`"
+            class="text-primary-foreground bg-primary-foreground/20 hover:bg-primary-foreground/35 focus-visible:ring-ring absolute z-10 flex items-center justify-center overflow-hidden rounded-sm focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
+            :style="{
+              top: `${offsetOf(startMinOf(block))}px`,
+              height: `${heightOf(block)}px`,
+              right: `${DONE_INSET}px`,
+              width: `${DONE_WIDTH}px`,
+            }"
+            :aria-label="t('calendar.completeBlock', { title: block.title })"
+            :title="t('calendar.completeBlock', { title: block.title })"
             data-testid="complete-block"
             :data-task-id="block.taskId"
             @click.stop="emit('completeBlock', block)"
           >
-            ✓
+            <Check class="size-4 shrink-0" aria-hidden="true" />
           </button>
         </div>
       </div>
