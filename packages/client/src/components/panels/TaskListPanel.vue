@@ -217,8 +217,14 @@ function canHaveChildren(task: TaskNode): boolean {
  */
 interface QuickDraft {
   title: string;
-  estimate: string;
-  priority: string;
+  /**
+   * `string | number`, and both really happen: `v-model` on a `type="number"`
+   * input hands back a **number** once it parses and the empty string while it
+   * does not, so a draft field that claimed to be a string was a `.trim()`
+   * waiting to throw. Read through `numberIn` rather than cast.
+   */
+  estimate: string | number;
+  priority: string | number;
   due: string;
 }
 
@@ -227,6 +233,13 @@ const adding = ref<string | null>(null);
 
 function emptyDraft(): QuickDraft {
   return { title: '', estimate: '', priority: '', due: '' };
+}
+
+/** The whole number a numeric field holds, or `null` when it holds nothing. */
+function numberIn(value: string | number): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value.trim());
+  if (value === '' || !Number.isInteger(parsed)) return null;
+  return parsed;
 }
 
 // Seeded from the groups rather than created on demand in the template: a
@@ -253,8 +266,8 @@ function ready(key: string): boolean {
   const draft = drafts.get(key);
   if (draft === undefined) return false;
 
-  const estimate = Number(draft.estimate);
-  return draft.title.trim() !== '' && Number.isInteger(estimate) && estimate > 0;
+  const estimate = numberIn(draft.estimate);
+  return draft.title.trim() !== '' && estimate !== null && estimate > 0;
 }
 
 async function add(key: string): Promise<void> {
@@ -265,12 +278,11 @@ async function add(key: string): Promise<void> {
 
   adding.value = key;
   try {
-    const priority = Number(draft.priority);
     const landed = await props.quickAdd({
       categoryId: key === NO_CATEGORY ? null : key,
       title: draft.title.trim(),
-      estimatedDurationMin: Number(draft.estimate),
-      priority: draft.priority.trim() === '' || !Number.isInteger(priority) ? null : priority,
+      estimatedDurationMin: numberIn(draft.estimate)!,
+      priority: numberIn(draft.priority),
       dueDate: draft.due === '' ? null : draft.due,
     });
 

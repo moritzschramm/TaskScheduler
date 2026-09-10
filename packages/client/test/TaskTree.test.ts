@@ -189,6 +189,23 @@ describe('the quick-add row', () => {
     });
   });
 
+  it('reads a priority typed into a number field', async () => {
+    // `v-model` on a `type="number"` input hands back a number, not a string —
+    // which a draft that assumed strings met as `.trim is not a function`,
+    // silently, on the one field none of these tests used to fill in.
+    const quickAdd = vi.fn().mockResolvedValue(true);
+    const wrapper = panelWith(quickAdd);
+
+    await wrapper.find('[data-testid="quick-add-title"]').setValue('Invoices');
+    await wrapper.find('[data-testid="quick-add-estimate"]').setValue('30');
+    await wrapper.find('[data-testid="quick-add-priority"]').setValue('2');
+    await wrapper.find('[data-testid="quick-add-save"]').trigger('click');
+
+    expect(quickAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ priority: 2, estimatedDurationMin: 30 }),
+    );
+  });
+
   it('will not send without a title and an estimate', async () => {
     const quickAdd = vi.fn().mockResolvedValue(true);
     const wrapper = panelWith(quickAdd);

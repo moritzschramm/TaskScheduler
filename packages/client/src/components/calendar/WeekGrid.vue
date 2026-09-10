@@ -785,13 +785,19 @@ const DONE_INSET = 6;
             aria-hidden="true"
           />
 
+          <!--
+            `flex-col` is not decoration: a `button` centres its content
+            vertically, so a six-hour appointment drew its title halfway down
+            the block with three hours of empty box above it. Every other block
+            was too short for anyone to notice.
+          -->
           <component
             :is="editable ? 'button' : 'article'"
             v-for="block in column.blocks"
             :key="block.key"
             :type="editable ? 'button' : undefined"
             data-grid-block
-            class="focus-visible:ring-ring absolute touch-none overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
+            class="focus-visible:ring-ring absolute flex touch-none flex-col items-stretch justify-start overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
             :class="[
               classesFor(block),
               isMoving(block) ? 'ring-primary z-10 ring-2' : '',
