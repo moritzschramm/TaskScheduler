@@ -13,6 +13,7 @@ import type {
   CapacityCell,
   Category,
   CommandRequest,
+  CommandResult,
   FixedBlock,
   HistoryView,
   Notification,
@@ -57,7 +58,18 @@ import { addDays, localDate, toIso, weekDays } from './time';
  */
 export type Editing =
   | { kind: 'none' }
-  | { kind: 'task'; task: TaskNode | null; parent: TaskNode | null }
+  | {
+      kind: 'task';
+      task: TaskNode | null;
+      parent: TaskNode | null;
+      /**
+       * The hour a new task was started from, when it was started by clicking
+       * one (§7.3). Two separate things come of it: the form opens with that
+       * time as the preferred range, and `submit` follows the create with a
+       * `MoveTask` onto that day — see `pinToSlot`.
+       */
+      slot?: { day: CivilDate; startMin: number };
+    }
   | { kind: 'block'; block: FixedBlock | null; defaultStart?: string };
 
 const calendars = ref<CalendarSummary[]>([]);
@@ -540,6 +552,45 @@ function predict(request: CommandRequest): ScheduledBlock[] | null {
   return blocks;
 }
 
+/** The hour a new task was started from, if it was started from one. */
+function pendingSlot(): { day: CivilDate; startMin: number } | null {
+  const open = editing.value;
+  return open.kind === 'task' && open.task === null ? (open.slot ?? null) : null;
+}
+
+/**
+ * Puts a task created from a slot on the day it was created from (spec §7.3).
+ *
+ * **A preferred range cannot say this.** §4.4's range is minutes of a day with
+ * no date in it, deliberately: a task is flexible about *which* Thursday, and
+ * that flexibility is most of what the scheduler is for. So "at this hour, on
+ * this day" is the same statement a drag makes, and it is made the same way —
+ * `MoveTask`, which sets a soft not-before floor and a bias for the datetime
+ * (§7.3). Soft, so the task can still move if the day fills up; a hard pin
+ * would be a different promise, and one nobody made by clicking a Tuesday.
+ *
+ * Sent as a second command rather than folded into `CreateTask`, because they
+ * are two different facts about the task and the log is read by people. The
+ * shared `groupId` is what makes them one thing to undo.
+ */
+async function pinToSlot(
+  result: CommandResult,
+  slot: { day: CivilDate; startMin: number },
+  groupId: string,
+): Promise<void> {
+  const taskId = result.created.find((entity) => entity.entity === 'task')?.id;
+  if (taskId === undefined) return;
+
+  await runCommand({
+    type: 'MoveTask',
+    groupId,
+    params: {
+      taskId,
+      datetime: toIso(wallClockToInstant(slot.day, slot.startMin, zone.value)),
+    },
+  });
+}
+
 /**
  * Draw the answer, then ask for it (plan M12).
  *
@@ -557,8 +608,14 @@ async function submit(request: CommandRequest): Promise<boolean> {
   error.value = null;
   const predicted = predict(request);
 
+  // A create started from an hour becomes two commands, tied into one unit of
+  // history so undo takes back the whole gesture (§7.5).
+  const slot = request.type === 'CreateTask' ? pendingSlot() : null;
+  const sent = slot === null ? request : { ...request, groupId: crypto.randomUUID() };
+
   try {
-    await runCommand(request);
+    const result = await runCommand(sent);
+    if (slot !== null) await pinToSlot(result, slot, sent.groupId!);
     await load({ silent: true });
 
     // Accept the server's result, and say so if it differed from what was
@@ -606,6 +663,17 @@ function showWeekOf(date: CivilDate): void {
 function openTask(taskId: string): void {
   const task = tasks.value.find((candidate) => candidate.id === taskId);
   if (task !== undefined) editing.value = { kind: 'task', task, parent: parentOf(task) };
+}
+
+/**
+ * A new task, started from an hour on the grid (§7.3, §4.4).
+ *
+ * The slot travels with the editor rather than being turned into command
+ * parameters here, because a task is not created until somebody fills the form
+ * in — and what they type may make the hour irrelevant.
+ */
+function newTaskAt(day: CivilDate, startMin: number): void {
+  editing.value = { kind: 'task', task: null, parent: null, slot: { day, startMin } };
 }
 
 function newBlockAt(day: CivilDate, minuteOfDay = 9 * 60): void {
@@ -674,6 +742,7 @@ export interface Workspace {
   showWeekOf: (date: CivilDate) => void;
   parentOf: (task: TaskNode) => TaskNode | null;
   openTask: (taskId: string) => void;
+  newTaskAt: (day: CivilDate, startMin: number) => void;
   newBlockAt: (day: CivilDate, minuteOfDay?: number) => void;
 }
 
@@ -734,6 +803,7 @@ export function useWorkspace(): Workspace {
     showWeekOf,
     parentOf,
     openTask,
+    newTaskAt,
     newBlockAt,
   };
 }

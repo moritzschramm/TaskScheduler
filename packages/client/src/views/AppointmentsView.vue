@@ -117,6 +117,7 @@ function openDay(day: CivilDate): void {
         :locale="locale"
         editable
         @select-block="editBlock"
+        @select-slot="({ day, startMin }) => newBlockAt(day, startMin)"
       />
 
       <MonthGrid

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useI18n } from '@/i18n';
 import { wallClockToInstant, type CivilDate } from '@ambitime/scheduler';
 import AppointmentEditor from '@/components/calendar/AppointmentEditor.vue';
@@ -63,6 +63,7 @@ const {
   openTask,
   showWeekOf,
   setMode,
+  newTaskAt,
 } = useWorkspace();
 
 onMounted(ensureLoaded);
@@ -129,6 +130,21 @@ function openDay(day: CivilDate): void {
   showWeekOf(day);
   setMode('week');
 }
+
+/**
+ * The hour a new task was started from, as a preferred range (§4.4, §6.5).
+ *
+ * An hour long, because an estimate is exactly what the form has not been
+ * given yet — and a range as narrow as the task would refuse to place it the
+ * moment somebody typed ninety minutes into the box above.
+ */
+const slotRange = computed(() => {
+  const open = editing.value;
+  if (open.kind !== 'task' || open.slot === undefined) return undefined;
+
+  const startMin = open.slot.startMin;
+  return { startMin, endMin: Math.min(startMin + 60, 1440) };
+});
 
 /** The placement of the task the editor has open, if it has one. */
 function placementOf(taskId: string): ScheduledBlock | null {
@@ -218,6 +234,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         @select-block="editBlock"
         @move-block="moveBlock"
         @complete-block="completeBlock"
+        @select-slot="({ day, startMin }) => newTaskAt(day, startMin)"
       />
 
       <!--
@@ -303,6 +320,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           :calendar-id="calendar.id"
           :categories="categories"
           :time-zone="zone"
+          :default-preferred="slotRange"
           :submit="submit"
           @cancel="editing = { kind: 'none' }"
           @saved="editing = { kind: 'none' }"

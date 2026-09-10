@@ -36,6 +36,14 @@ const props = defineProps<{
   calendarId: string;
   categories: Category[];
   timeZone: string;
+  /**
+   * The hour a new task was started from, as §4.4's preferred range.
+   *
+   * Only ever seeds a *new* task: an existing one's range is its own, and a
+   * form that overwrote it with wherever the user happened to click would be
+   * editing a field nobody touched.
+   */
+  defaultPreferred?: { startMin: number; endMin: number } | undefined;
   submit: (request: CommandRequest) => Promise<boolean>;
 }>();
 
@@ -91,7 +99,13 @@ function emptyDraft(): Draft {
     category: props.parent?.effectiveCategoryId == null ? (props.categories[0]?.id ?? '') : '',
     priority: { overridden: false, value: '' },
     due: { overridden: false, value: '', kind: 'soft' },
-    preferred: { overridden: false, start: '09:00', end: '17:00' },
+    // Overridden when it came from a click on the grid: the user pointed at an
+    // hour, which is a statement about this task rather than an inheritance.
+    preferred: {
+      overridden: props.defaultPreferred !== undefined,
+      start: formatMinuteOfDay(props.defaultPreferred?.startMin ?? 9 * 60),
+      end: formatMinuteOfDay(props.defaultPreferred?.endMin ?? 17 * 60),
+    },
     focus: { overridden: false, value: '3' },
     cooldown: { overridden: false, value: '0' },
     recurrence: { on: false, period: 'week', count: '1', missedPolicy: 'rollover' },

@@ -347,6 +347,26 @@ export function clipBand(band: DayBand, dayStartMin: number, dayEndMin: number):
 }
 
 /**
+ * The slot a click at `offsetPixels` down a column landed in.
+ *
+ * **Floored to the slot, not rounded to the nearest boundary.** A click at
+ * 14:07 is a click *inside* two o'clock, and rounding it to 14:15 would open a
+ * form on a quarter of an hour the user had not reached yet. Dragging rounds,
+ * because there the reference point is where the block started rather than
+ * where the pointer is.
+ */
+export function slotAtOffset(
+  offsetPixels: number,
+  dayStartMin: number,
+  dayEndMin: number,
+  scale = currentScale(),
+): number {
+  const minute = dayStartMin + offsetPixels / scale;
+  const floored = Math.floor(minute / SNAP_MINUTES) * SNAP_MINUTES;
+  return Math.min(Math.max(floored, dayStartMin), Math.max(dayEndMin - SNAP_MINUTES, dayStartMin));
+}
+
+/**
  * Where a block would start after being moved by `offsetMinutes`, clamped to
  * the day it is drawn on.
  *

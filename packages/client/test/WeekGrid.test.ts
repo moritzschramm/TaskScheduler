@@ -482,3 +482,45 @@ describe('a block too short to read', () => {
     expect(heightOf(wrapper, '[data-testid="complete-block"]')).toContain('height: 36px');
   });
 });
+
+describe('clicking an hour with nothing in it', () => {
+  function clickAt(editable: boolean) {
+    const wrapper = mount(WeekGrid, {
+      props: { days: WEEK, timeZone: BERLIN, blocks: [], fixedBlocks: [standup], editable },
+    });
+
+    return { wrapper, columns: wrapper.findAll('[data-testid="day-body"]') };
+  }
+
+  it('reports the day and the hour', async () => {
+    const { wrapper, columns } = clickAt(true);
+    await columns[2]!.trigger('click', { clientY: 0 });
+
+    // jsdom lays nothing out, so the offset is zero and the slot is the top of
+    // the visible span. The arithmetic itself is `slotAtOffset`'s, and tested
+    // there; what is under test here is that the right column reports it.
+    const emitted = wrapper.emitted('selectSlot')?.[0]?.[0] as {
+      day: { day: number };
+      startMin: number;
+    };
+    expect(emitted.day.day).toBe(25);
+    expect(emitted.startMin).toBe(6 * 60);
+  });
+
+  it('says nothing on a grid that does not edit', async () => {
+    const { wrapper, columns } = clickAt(false);
+    await columns[0]!.trigger('click', { clientY: 0 });
+
+    expect(wrapper.emitted('selectSlot')).toBeUndefined();
+  });
+
+  it('is not fired by a click on a block', async () => {
+    const { wrapper } = clickAt(true);
+    await wrapper.find('[data-testid="block-appointment"]').trigger('click');
+
+    // The block has its own answer — open it — and a click that did both would
+    // open an editor and then a second one over the top of it.
+    expect(wrapper.emitted('selectSlot')).toBeUndefined();
+    expect(wrapper.emitted('selectBlock')).toHaveLength(1);
+  });
+});

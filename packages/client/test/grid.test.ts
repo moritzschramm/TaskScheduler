@@ -12,6 +12,7 @@ import {
   MAX_SCALE,
   MIN_SCALE,
   setScale,
+  slotAtOffset,
   snapToGrid,
   windowsForWeek,
   type GridBlock,
@@ -554,5 +555,27 @@ describe('blocks that occupy the same minutes', () => {
     ]);
 
     expect(placed.map((entry) => entry.lanes)).toEqual([2, 2, 1]);
+  });
+});
+
+describe('the slot a click landed in', () => {
+  it('floors to the quarter hour the pointer was inside', () => {
+    // 14:07 is a click inside two o'clock. Rounding it to 14:15 would open a
+    // form on a quarter of an hour the user had not reached yet.
+    expect(slotAtOffset(7, 14 * 60, 22 * 60, 1)).toBe(14 * 60);
+    expect(slotAtOffset(16, 14 * 60, 22 * 60, 1)).toBe(14 * 60 + 15);
+  });
+
+  it('reads the offset through the scale', () => {
+    // The same pixel is a different minute at a different row height, which is
+    // the whole reason the scale is passed in rather than assumed.
+    expect(slotAtOffset(60, 6 * 60, 22 * 60, 2)).toBe(6 * 60 + 30);
+    expect(slotAtOffset(60, 6 * 60, 22 * 60, 0.5)).toBe(8 * 60);
+  });
+
+  it('cannot land outside the visible span', () => {
+    expect(slotAtOffset(-40, 6 * 60, 22 * 60, 1)).toBe(6 * 60);
+    // A slot at the very bottom would be a block with no room to be drawn in.
+    expect(slotAtOffset(10_000, 6 * 60, 22 * 60, 1)).toBe(22 * 60 - 15);
   });
 });

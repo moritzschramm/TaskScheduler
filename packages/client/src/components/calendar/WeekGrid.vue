@@ -18,6 +18,7 @@ import {
   dragOffsetMinutes,
   movedStartMin,
   openBandsForDay,
+  slotAtOffset,
   SNAP_MINUTES,
   type DayBand,
   type GridBlock,
@@ -99,6 +100,17 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   selectBlock: [block: GridBlock];
+  /**
+   * An empty stretch of a day, clicked (spec §7.3, §7.4).
+   *
+   * The grid is where a person is already looking when they decide something
+   * should happen on Thursday afternoon, and until now the answer was to press
+   * a button at the top of the page and then type Thursday afternoon into a
+   * form. What the screen means by the gesture differs — Schedule makes a task
+   * that prefers the hour, Appointments makes a block that occupies it — so the
+   * grid reports the slot and says nothing about what to do with it.
+   */
+  selectSlot: [payload: { day: CivilDate; startMin: number }];
   /** Marks a scheduled task done without leaving the week (§7.3). */
   completeBlock: [block: GridBlock];
   /** A task dropped, or nudged, onto a new local start (spec §7.3, §13). */
@@ -296,6 +308,26 @@ function onClick(block: GridBlock): void {
   if (afterDrag || isMoving(block) || !props.editable) return;
 
   emit('selectBlock', block);
+}
+
+/**
+ * A click on the part of a column with nothing in it.
+ *
+ * Measured from the column's own box rather than from `offsetY`, because the
+ * click may land on an availability band or an activity-type lane — both
+ * absolutely positioned children — and `offsetY` would then be measured from
+ * whichever one of those happened to be under the pointer.
+ *
+ * Blocks stop their own clicks, so this only ever hears about empty time.
+ */
+function clickSlot(day: CivilDate, event: MouseEvent): void {
+  if (!props.editable) return;
+
+  const top = (event.currentTarget as HTMLElement).getBoundingClientRect().top;
+  emit('selectSlot', {
+    day,
+    startMin: slotAtOffset(event.clientY - top, props.dayStartMin, props.dayEndMin, props.scale),
+  });
 }
 
 function abandonNudge(): void {
@@ -673,7 +705,20 @@ const DONE_INSET = 6;
           </span>
         </div>
 
-        <div class="bg-muted relative border-l" :style="{ height: `${gridHeight}px` }">
+        <!--
+          `editable` is what makes the column clickable, and there is no `role`
+          on it: the same act has a button of its own in the toolbar, so this is
+          an accelerator over a keyboard path that already exists rather than
+          the only way to reach it. A `role="button"` on a sixteen-hour box
+          would announce the whole day as one control.
+        -->
+        <div
+          class="bg-muted relative border-l"
+          :class="editable ? 'cursor-copy' : ''"
+          :style="{ height: `${gridHeight}px` }"
+          data-testid="day-body"
+          @click="clickSlot(column.day, $event)"
+        >
           <!--
             The hours something may actually be placed in (§4.3, §9.1).
 
@@ -782,7 +827,7 @@ const DONE_INSET = 6;
             @keydown.enter.prevent="toggleGrab(block, column.day)"
             @keydown.space.prevent="toggleGrab(block, column.day)"
             @keydown.esc.prevent="abandonNudge"
-            @click="onClick(block)"
+            @click.stop="onClick(block)"
           >
             <p
               class="truncate font-medium"

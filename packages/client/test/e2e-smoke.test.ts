@@ -472,6 +472,31 @@ describe('seed via the API, render the client', () => {
     );
   });
 
+  it('starts a block on the hour that was clicked', async () => {
+    const email = `slot-${Date.now()}@example.test`;
+    await seed(email);
+
+    await signIn(email, PASSWORD);
+    await loadSession();
+
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/appointments');
+    await router.isReady();
+
+    const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
+    await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
+
+    await wrapper.findAll('[data-testid="day-body"]')[2]!.trigger('click', { clientY: 0 });
+    await flushPromises();
+
+    // Wednesday at the top of the visible span, in the calendar's own zone,
+    // with the hour that follows already in the second field.
+    const start = wrapper.find('[data-testid="appointment-start"]').element as HTMLInputElement;
+    const end = wrapper.find('[data-testid="appointment-end"]').element as HTMLInputElement;
+    expect(start.value).toBe('2026-03-25T06:00');
+    expect(end.value).toBe('2026-03-25T07:00');
+  });
+
   it('takes a block that overlaps another, and draws them side by side', async () => {
     const email = `overlap-${Date.now()}@example.test`;
     await seed(email);
@@ -549,6 +574,44 @@ describe('seed via the API, render the client', () => {
         .trigger('click');
       await settle();
     };
+
+    it('starts a task from an empty hour, on that hour and that day', async () => {
+      // Wednesday, and the top of the visible span: jsdom lays nothing out, so
+      // the click's offset is zero and the slot is 06:00 (§13's day range).
+      await wrapper.findAll('[data-testid="day-body"]')[2]!.trigger('click', { clientY: 0 });
+      await settle();
+
+      await wrapper.find('[data-testid="task-title"]').setValue('Swim');
+      await wrapper.find('[data-testid="task-estimate"]').setValue('45');
+      await wrapper.find('[data-testid="save-task"]').trigger('click');
+      await settle();
+
+      const swim = await taskNamed('Swim');
+      // The hour, as §4.4's preferred range — an hour wide, because the
+      // estimate is exactly what the form had not been given when it opened.
+      expect(swim.ownPreferredStartMin).toBe(6 * 60);
+      expect(swim.ownPreferredEndMin).toBe(7 * 60);
+      // And the *day*, which a preferred range cannot say: a second command
+      // in the same group, setting the soft floor a drag would have set.
+      expect(swim.manualFloor).toBe('2026-03-25T05:00:00.000Z');
+    });
+
+    it('takes the whole gesture back in one undo', async () => {
+      await wrapper.findAll('[data-testid="day-body"]')[2]!.trigger('click', { clientY: 0 });
+      await settle();
+      await wrapper.find('[data-testid="task-title"]').setValue('Swim');
+      await wrapper.find('[data-testid="task-estimate"]').setValue('45');
+      await wrapper.find('[data-testid="save-task"]').trigger('click');
+      await settle();
+
+      await wrapper.find('[data-testid="undo"]').trigger('click');
+      await settle();
+
+      // One press, not two: the create and the move share a `groupId`, so
+      // history holds them as one unit (§7.5). Undoing half of this would
+      // leave a task nobody asked for sitting at an hour nobody chose.
+      expect((await readTasks(calendarId)).some((task) => task.title === 'Swim')).toBe(false);
+    });
 
     it('nudges a block with the keyboard and persists the drop', async () => {
       // §14 requires a keyboard equivalent for every drag gesture, and M16b
