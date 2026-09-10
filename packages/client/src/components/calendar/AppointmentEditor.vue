@@ -14,11 +14,12 @@ const { t } = useI18n();
  * Fixed blocks — spec §7.4's `AddAppointment` and `AddUnavailability`.
  *
  * Both are the same insert; the difference is whether the block has content.
- * An unavailability is content-free *by definition* — "unavailable 14:00–16:00"
- * — so its title field is not merely optional here, it is absent, and the
- * command carries none. Putting words in a user's calendar that they never
- * wrote is the failure mode that matters: a shared view or an export would show
- * them as if they had.
+ * An unavailability's title is **optional** where an appointment's is required:
+ * the block means "this time is gone" whether or not anything is written on it,
+ * and a week of unlabelled grey rectangles cannot answer the one question a
+ * person asks it a fortnight later. Left empty it still stores nothing, and the
+ * grid supplies its own word in its own language — which is the part that was
+ * always right, and is why nothing is filled in on the user's behalf.
  *
  * Times are wall clock in the **calendar's** zone (§13), like everywhere else.
  */
@@ -105,6 +106,32 @@ const canSave = computed(
     !busy.value && interval.value !== null && (isUnavailability.value || title.value.trim() !== ''),
 );
 
+/**
+ * An hour, from wherever the start was just moved to.
+ *
+ * A start is almost always chosen before an end, and until it was the end sat
+ * an hour after whatever the form opened on — usually before the new start, so
+ * the commonest way to fill this in produced a block that ran backwards and a
+ * red line saying so. Following the start with a default duration is what makes
+ * the second field optional again rather than mandatory-in-practice.
+ *
+ * Read from the event rather than from `start`, so it can only be the user's
+ * own typing that moves the end: the seed below sets both, and a watcher on the
+ * ref would overwrite an existing block's real duration on the way in.
+ */
+const DEFAULT_DURATION_MIN = 60;
+
+function startChanged(event: Event): void {
+  const typed = (event.target as HTMLInputElement).value;
+  const from = fromLocalInput(typed, props.timeZone);
+  if (from === null) return;
+
+  end.value = toLocalInput(
+    new Date(Date.parse(from) + DEFAULT_DURATION_MIN * 60_000).toISOString(),
+    props.timeZone,
+  );
+}
+
 async function save(): Promise<void> {
   const times = interval.value;
   if (times === null) return;
@@ -136,6 +163,9 @@ function createRequest(times: { start: string; end: string }): CommandRequest {
       type: 'AddUnavailability',
       params: {
         calendarId: props.calendarId,
+        // Omitted when blank, never sent as `''`: an absent title is what tells
+        // every reader to label the block itself (§7.4).
+        ...(title.value.trim() === '' ? {} : { title: title.value.trim() }),
         start: times.start,
         end: times.end,
         ...(repeats.value ? { recurrence: { rule: ruleText(), timeZone: props.timeZone } } : {}),
@@ -220,7 +250,9 @@ function editRequest(times: { start: string; end: string }): CommandRequest {
         ? { scope: scope.value, occurrenceStart: props.block!.occurrenceStart }
         : {}),
       patch: {
-        ...(isUnavailability.value ? {} : { title: title.value }),
+        // `null` clears it, which only an untitled unavailability can reach —
+        // an appointment cannot be saved without one.
+        title: title.value.trim() === '' ? null : title.value.trim(),
         notes: notes.value === '' ? null : notes.value,
         interval: times,
       },
@@ -288,13 +320,24 @@ async function cancelBlock(): Promise<void> {
       </label>
     </fieldset>
 
-    <div v-if="!isUnavailability" class="space-y-1">
-      <Label for="appointment-title">{{ t('common.title') }}</Label>
-      <Input id="appointment-title" v-model="title" data-testid="appointment-title" />
+    <div class="space-y-1">
+      <Label for="appointment-title">
+        {{ isUnavailability ? t('appointments.titleOptional') : t('common.title') }}
+      </Label>
+      <Input
+        id="appointment-title"
+        v-model="title"
+        :placeholder="isUnavailability ? t('common.unavailable') : ''"
+        data-testid="appointment-title"
+      />
+      <p
+        v-if="isUnavailability"
+        class="text-muted-foreground text-xs"
+        data-testid="unavailability-note"
+      >
+        {{ t('appointments.untitledNote') }}
+      </p>
     </div>
-    <p v-else class="text-muted-foreground text-sm" data-testid="unavailability-note">
-      {{ t('appointments.untitledNote') }}
-    </p>
 
     <div v-if="!isUnavailability" class="space-y-1">
       <Label for="appointment-notes">{{ t('common.notes') }}</Label>
@@ -316,10 +359,12 @@ async function cancelBlock(): Promise<void> {
           type="datetime-local"
           class="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
           data-testid="appointment-start"
+          @input="startChanged"
         />
       </div>
       <div class="space-y-1">
         <Label for="appointment-end">{{ t('appointments.ends') }}</Label>
+        <!-- Follows the start by an hour; see `startChanged`. Still editable. -->
         <input
           id="appointment-end"
           v-model="end"

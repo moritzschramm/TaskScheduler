@@ -363,6 +363,7 @@ const columns = computed(() =>
       props.blocks,
       props.fixedBlocks,
       props.completedBlocks,
+      t('common.unavailable'),
     ),
     open: openBandsForDay(day, props.timeZone, props.windows)
       .map((band) => clipBand(band, props.dayStartMin, props.dayEndMin))
@@ -425,7 +426,9 @@ function heightOf(block: GridBlock): number {
  */
 function labelFor(block: GridBlock, dayLabel: string): string {
   const when = `${dayLabel}, ${formatMinuteOfDay(block.startMin)} to ${formatMinuteOfDay(block.endMin)}`;
-  const kind = block.kind === 'unavailability' ? t('common.unavailable') : block.title;
+  // Titled or not, the block's own title is already the right words: an
+  // untitled unavailability was given this same label when it was positioned.
+  const kind = block.title;
 
   // Said, not only shown: the strike-through and the fade are invisible to a
   // screen reader, and "done" is the whole of what distinguishes this block.

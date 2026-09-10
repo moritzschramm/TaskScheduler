@@ -247,8 +247,8 @@ export const de: Messages = {
     kindLegend: 'Art des Blocks',
     kindAppointment: 'Termin',
     kindUnavailability: 'Nicht verfügbar',
-    untitledNote:
-      'Ein Nicht-verfügbar-Block trägt keinen Titel — er sagt nur, dass die Zeit belegt ist.',
+    titleOptional: 'Titel (optional)',
+    untitledNote: 'Bleibt er leer, sagt der Block nur, dass die Zeit belegt ist.',
     starts: 'Beginnt',
     ends: 'Endet',
     repeats: 'Wiederholt sich',

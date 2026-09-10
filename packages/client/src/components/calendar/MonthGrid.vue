@@ -101,7 +101,7 @@ const byDay = computed(() => {
   for (const block of props.fixedBlocks) {
     add(block.start, {
       key: `f-${block.appointmentId}-${block.start}`,
-      title: block.isUnavailability ? t('common.unavailable') : block.title,
+      title: block.isUnavailability && block.title === '' ? t('common.unavailable') : block.title,
       kind: block.isUnavailability ? 'unavailability' : 'appointment',
     });
   }

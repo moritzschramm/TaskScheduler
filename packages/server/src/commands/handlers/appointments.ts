@@ -51,14 +51,15 @@ export async function addAppointment(
 }
 
 /**
- * `AddUnavailability(calendar, [start, end))` — a content-free hard block
- * (spec §7.4).
+ * `AddUnavailability(calendar, [start, end))` — a hard block with no content of
+ * its own to speak of (spec §7.4).
  *
- * The title is stored empty rather than filled with something like
- * "Unavailable". The column cannot be null, but inventing text would put words
- * in the user's calendar that they never wrote, and a later export or a shared
- * view would show them as if they had. `is_unavailability` carries the meaning;
- * a UI that renders one supplies its own label, in its own language.
+ * The title is whatever the user gave it, and **empty when they gave none** —
+ * never filled in with something like "Unavailable" on their behalf. The column
+ * cannot be null, but inventing text would put words in a calendar that nobody
+ * wrote, and a later export or a shared view would show them as if somebody
+ * had. `is_unavailability` carries the meaning either way; a UI that renders an
+ * untitled one supplies its own label, in its own language.
  */
 export async function addUnavailability(
   params: AddUnavailabilityParams,
@@ -70,7 +71,7 @@ export async function addUnavailability(
     tenantId: ctx.tenantId,
     calendarId: params.calendarId,
     ownerId: ctx.actorId,
-    title: '',
+    title: params.title ?? '',
     during: interval(params.start, params.end),
     isUnavailability: true,
     // Expanded by the same code that expands an appointment's (§8.1). "Every
@@ -274,7 +275,8 @@ function patchValues(params: EditAppointmentParams): Partial<NewAppointment> {
   const { patch } = params;
   const values: Partial<NewAppointment> = {};
 
-  if (patch.title !== undefined) values.title = patch.title;
+  // `null` is "take the title away", which the column spells as empty (§7.4).
+  if (patch.title !== undefined) values.title = patch.title ?? '';
   if (patch.notes !== undefined) values.notes = patch.notes;
   if (patch.status !== undefined) values.status = patch.status;
   if (patch.interval !== undefined) {

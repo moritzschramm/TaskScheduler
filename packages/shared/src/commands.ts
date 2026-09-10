@@ -193,7 +193,14 @@ export const editAppointmentParams = z.object({
   /** The unmodified start of the instance being edited. */
   occurrenceStart: instant.optional(),
   patch: z.object({
-    title: z.string().min(1).optional(),
+    /**
+     * `null` takes the title away again, which only an unavailability can want:
+     * an appointment's title is required at creation and stays so, while a
+     * block that was labelled "Dentist" and is now simply time that is gone has
+     * to be able to say so. Stored as the empty string, since the column cannot
+     * be null and empty is already what "no title" has always meant (§7.4).
+     */
+    title: z.string().min(1).nullable().optional(),
     notes: z.string().nullable().optional(),
     interval: z
       .object({ start: instant, end: instant })
@@ -304,14 +311,21 @@ export const moveToBacklogParams = z.object({ taskId: uuid });
 /**
  * Spec §7.4 — "unavailable 14:00–16:00".
  *
- * No title and no notes: the block is *content-free* by definition, and a
- * command that accepted a title would be `AddAppointment` wearing a flag. The
- * stored row carries `is_unavailability`, which is what tells a UI to label it
- * itself rather than render an invented title back at the user.
+ * The title is **optional, and the user's**. The command refused one at first,
+ * on the grounds that a content-free block is content-free by definition and
+ * anything with words in it is `AddAppointment` wearing a flag. That held for
+ * the row and not for the person: a week with four grey blocks in it says only
+ * that four things are in the way, and "why is Thursday afternoon gone" is a
+ * question the calendar should be able to answer.
+ *
+ * Absent is still the ordinary case and still stores nothing, so a UI goes on
+ * labelling those itself, in its own language (§7.4). What changed is that
+ * refusing the words was refusing them *on the user's behalf*.
  */
 export const addUnavailabilityParams = z
   .object({
     calendarId: uuid,
+    title: z.string().min(1).optional(),
     start: instant,
     end: instant,
     /**

@@ -368,6 +368,12 @@ export function movedStartMin(block: GridBlock, offsetMinutes: number, dayStartM
  * flagged, rather than being assigned to whichever day it started on. A
  * calendar that dropped the second half of an overnight block would be lying
  * about the morning.
+ *
+ * `unavailableLabel` is what an *untitled* unavailability is called (§7.4). It
+ * is a parameter rather than a constant because the word belongs to whoever is
+ * reading the calendar: the server stores nothing for these on purpose, so the
+ * language has to come from the component, which is the only layer that knows
+ * one. The English default keeps the arithmetic testable without an i18n setup.
  */
 export function blocksForDay(
   day: CivilDate,
@@ -375,6 +381,7 @@ export function blocksForDay(
   scheduled: readonly ScheduledBlock[],
   fixed: readonly FixedBlock[],
   completed: readonly CompletedBlock[] = [],
+  unavailableLabel = 'Unavailable',
 ): GridBlock[] {
   const blocks: GridBlock[] = [];
 
@@ -399,9 +406,9 @@ export function blocksForDay(
 
     blocks.push({
       key: `appointment-${block.appointmentId}`,
-      // §7.4: an unavailability is content-free and the server stores no title,
-      // so the label is the client's to supply rather than the database's.
-      title: block.isUnavailability ? 'Unavailable' : block.title,
+      // §7.4: an unavailability may carry a title and usually does not, so the
+      // label is the client's to supply exactly when the user supplied none.
+      title: block.isUnavailability && block.title === '' ? unavailableLabel : block.title,
       ...positioned,
       cooldownMin: 0,
       kind: block.isUnavailability ? 'unavailability' : 'appointment',
