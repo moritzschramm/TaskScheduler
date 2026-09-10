@@ -109,6 +109,7 @@ function openDay(day: CivilDate): void {
         :fixed-blocks="view.fixedBlocks"
         :windows="openWindows"
         :categories="categories"
+        :special-weeks="configuration?.weekTypeOverrides ?? []"
         :day-start-min="dayStartMin"
         :day-end-min="dayEndMin"
         :scale="rowScale"

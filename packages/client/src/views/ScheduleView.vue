@@ -208,6 +208,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         :completed-blocks="view.completedBlocks"
         :windows="openWindows"
         :categories="categories"
+        :special-weeks="configuration?.weekTypeOverrides ?? []"
         :day-start-min="dayStartMin"
         :day-end-min="dayEndMin"
         :scale="rowScale"

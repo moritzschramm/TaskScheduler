@@ -367,3 +367,48 @@ describe('two blocks in the same hour', () => {
     expect(done.attributes('style')).toContain('right: calc(50% + 6px)');
   });
 });
+
+describe('a day inside a special week', () => {
+  const holiday = {
+    id: 'wk-1',
+    name: 'Easter break',
+    startDate: '2026-03-23',
+    endDate: '2026-03-26',
+    version: 1,
+  };
+
+  function withHoliday() {
+    return mount(WeekGrid, {
+      props: {
+        days: WEEK,
+        timeZone: BERLIN,
+        blocks: [],
+        fixedBlocks: [],
+        specialWeeks: [holiday],
+      },
+    });
+  }
+
+  it('names it in the heading of every day it covers', () => {
+    const named = withHoliday()
+      .findAll('[data-testid="special-week-day"]')
+      .map((entry) => entry.attributes('data-name'));
+
+    // Monday to Wednesday: the end date is exclusive, like every other
+    // interval here, so the 26th is the first day back.
+    expect(named).toEqual(['Easter break', 'Easter break', 'Easter break']);
+  });
+
+  it('says nothing on an ordinary day', () => {
+    const columns = withHoliday().findAll('[data-testid="day-column"]');
+
+    expect(columns[3]?.find('[data-testid="special-week-day"]').exists()).toBe(false);
+    expect(columns[0]?.find('[data-testid="special-week-day"]').text()).toBe('Easter break');
+  });
+
+  it('carries the whole name on the title, since the column truncates', () => {
+    const first = withHoliday().find('[data-testid="special-week-day"]');
+
+    expect(first.attributes('title')).toBe('Easter break');
+  });
+});

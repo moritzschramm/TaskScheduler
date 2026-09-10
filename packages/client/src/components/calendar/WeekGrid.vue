@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useI18n } from '@/i18n';
-import type { Category, CompletedBlock, FixedBlock, ScheduledBlock } from '@ambitime/shared';
+import type {
+  Category,
+  CompletedBlock,
+  FixedBlock,
+  ScheduledBlock,
+  WeekTypeOverrideEntry,
+} from '@ambitime/shared';
 import type { CivilDate, ResolvedWindow } from '@ambitime/scheduler';
 import {
   assignLanes,
@@ -18,6 +24,7 @@ import {
   type PlacedBlock,
 } from '@/lib/grid';
 import { formatDayLabel, formatMinuteOfDay, sameCivilDate } from '@/lib/time';
+import { specialWeekOn } from '@/lib/month';
 import { Check } from 'lucide-vue-next';
 
 const { t } = useI18n();
@@ -54,6 +61,18 @@ const props = withDefaults(
      * screen with no categories should show.
      */
     categories?: readonly Category[];
+    /**
+     * The date ranges whose rules replace the default set (§4.3).
+     *
+     * Named on the day rather than only felt through it. A special week's whole
+     * effect on this screen is that the open hours are different — often
+     * absent — so a holiday and a calendar nobody has configured yet look
+     * exactly alike, and the difference is the difference between "nothing can
+     * be scheduled here" and "you decided nothing would be". The month view has
+     * said which is which since it learned to shade them; this is the same fact
+     * on the screen where the hours are.
+     */
+    specialWeeks?: readonly WeekTypeOverrideEntry[];
     today?: CivilDate | null;
     /** Visible span, in local minutes. Outside it there is nothing to show. */
     dayStartMin?: number;
@@ -68,6 +87,7 @@ const props = withDefaults(
     windows: () => [],
     categories: () => [],
     completedBlocks: () => [],
+    specialWeeks: () => [],
     today: null,
     dayStartMin: 6 * 60,
     dayEndMin: 22 * 60,
@@ -359,6 +379,7 @@ const columns = computed(() =>
     day,
     label: formatDayLabel(day, props.locale),
     isToday: props.today !== null && sameCivilDate(day, props.today),
+    specialWeek: specialWeekOn(day, props.specialWeeks)?.name ?? null,
     blocks: assignLanes(
       blocksForDay(
         day,
@@ -579,10 +600,26 @@ const DONE_INSET = 6;
           one of them, big enough to read.
         -->
         <div
-          class="flex h-8 items-center border-b px-2 text-xs font-medium"
+          class="flex h-8 items-center gap-1.5 overflow-hidden border-b px-2 text-xs font-medium"
           :class="column.isToday ? 'text-primary' : 'text-muted-foreground'"
         >
-          <span>{{ column.label }}</span>
+          <span class="shrink-0">{{ column.label }}</span>
+          <!--
+            The name of the special week this day belongs to, in the amber the
+            month view shades them with — one vocabulary for one fact, across
+            two screens. Truncated with the full name on the title, because a
+            column is seven and a half rem wide at its narrowest and "Christmas
+            and New Year" is not.
+          -->
+          <span
+            v-if="column.specialWeek !== null"
+            class="truncate font-normal text-amber-700 dark:text-amber-300"
+            :title="column.specialWeek"
+            data-testid="special-week-day"
+            :data-name="column.specialWeek"
+          >
+            {{ column.specialWeek }}
+          </span>
         </div>
 
         <div class="bg-muted relative border-l" :style="{ height: `${gridHeight}px` }">
