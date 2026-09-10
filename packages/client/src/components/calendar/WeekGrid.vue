@@ -442,6 +442,57 @@ function heightOf(block: GridBlock): number {
 }
 
 /**
+ * What the two lines of a block need: a title and a time range.
+ *
+ * Two lines of `text-xs leading-tight` at 16 pixels each, plus the two-pixel
+ * padding either side. Below this the box clips its own second line, which is
+ * the one that says when the thing is.
+ */
+const FULL_HEIGHT = 36;
+
+/** The block under the pointer, or the one with the keyboard's attention. */
+const attended = ref<string | null>(null);
+
+/**
+ * True for a block too short to show what it says.
+ *
+ * At the default scale that is anything under about half an hour, and at the
+ * smallest scale a whole hour — which is the case that makes this worth doing:
+ * the slider is how a week gets small enough to read at a glance, and it is
+ * exactly then that every block stops saying anything.
+ */
+function cramped(block: GridBlock): boolean {
+  return heightOf(block) < FULL_HEIGHT;
+}
+
+/**
+ * Reading a cramped block by pointing at it.
+ *
+ * Height only. Widening a block that is sharing its column would cover the
+ * thing it is sharing with, which trades one unreadable block for two — and
+ * the title is truncated horizontally with an ellipsis, which at least says
+ * that there is more, where a clipped second line says nothing at all.
+ *
+ * Not while it is being dragged: a block that grew under the pointer mid-move
+ * would change the very geometry the drop is being aimed at.
+ */
+function expanded(block: GridBlock): boolean {
+  return attended.value === block.key && cramped(block) && !isMoving(block);
+}
+
+function drawnHeight(block: GridBlock): number {
+  return expanded(block) ? FULL_HEIGHT : heightOf(block);
+}
+
+function attend(block: GridBlock): void {
+  attended.value = block.key;
+}
+
+function release(block: GridBlock): void {
+  if (attended.value === block.key) attended.value = null;
+}
+
+/**
  * What a screen reader says about a block (WCAG 4.1.2).
  *
  * The visible text is a title and a time range, which read as two unrelated
@@ -696,10 +747,14 @@ const DONE_INSET = 6;
             :type="editable ? 'button' : undefined"
             data-grid-block
             class="focus-visible:ring-ring absolute touch-none overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
-            :class="[classesFor(block), isMoving(block) ? 'ring-primary z-10 ring-2' : '']"
+            :class="[
+              classesFor(block),
+              isMoving(block) ? 'ring-primary z-10 ring-2' : '',
+              expanded(block) ? 'z-10 shadow-md' : '',
+            ]"
             :style="{
               top: `${offsetOf(startMinOf(block))}px`,
-              height: `${heightOf(block)}px`,
+              height: `${drawnHeight(block)}px`,
               left: leftOf(block),
               width: widthOf(block),
               ...(completable(block) ? { paddingRight: `${DONE_WIDTH + DONE_INSET}px` } : {}),
@@ -710,11 +765,16 @@ const DONE_INSET = 6;
             :data-start-min="startMinOf(block)"
             :data-end-min="block.endMin"
             :data-moving="isMoving(block) ? 'true' : undefined"
+            :data-expanded="expanded(block) ? 'true' : undefined"
             :aria-label="labelFor(block, column.label)"
             :aria-grabbed="editable && block.kind === 'task' ? isMoving(block) : undefined"
             @pointerdown="beginDrag(block, column.day, $event)"
             @pointermove="duringDrag"
             @pointerup="endDrag(block)"
+            @pointerenter="attend(block)"
+            @pointerleave="release(block)"
+            @focus="attend(block)"
+            @blur="release(block)"
             @keydown.up.prevent="onArrow(block, column.day, -1, $event)"
             @keydown.down.prevent="onArrow(block, column.day, 1, $event)"
             @keydown.left.prevent="onHorizontal($event, -1)"
@@ -759,7 +819,7 @@ const DONE_INSET = 6;
             class="text-primary-foreground bg-primary-foreground/20 hover:bg-primary-foreground/35 focus-visible:ring-ring absolute z-10 flex items-center justify-center overflow-hidden rounded-sm focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
             :style="{
               top: `${offsetOf(startMinOf(block))}px`,
-              height: `${heightOf(block)}px`,
+              height: `${drawnHeight(block)}px`,
               right: `calc(${rightOf(block)}% + ${DONE_INSET}px)`,
               width: `${DONE_WIDTH}px`,
             }"
@@ -768,7 +828,17 @@ const DONE_INSET = 6;
             data-testid="complete-block"
             :data-task-id="block.taskId"
             @click.stop="emit('completeBlock', block)"
+            @pointerenter="attend(block)"
+            @pointerleave="release(block)"
+            @focus="attend(block)"
+            @blur="release(block)"
           >
+            <!--
+              The strip joins in the block's attention rather than interrupting
+              it: it covers the block's own right edge, so crossing onto it
+              fires the block's `pointerleave`, and a control that collapsed
+              the thing it belongs to is a control that moves as you reach it.
+            -->
             <Check class="size-4 shrink-0" aria-hidden="true" />
           </button>
         </div>

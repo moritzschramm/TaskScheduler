@@ -412,3 +412,73 @@ describe('a day inside a special week', () => {
     expect(first.attributes('title')).toBe('Easter break');
   });
 });
+
+describe('a block too short to read', () => {
+  /** Fifteen minutes: seventeen pixels at the default scale, two lines of text. */
+  const quarterHour: ScheduledBlock = {
+    ...block,
+    start: '2026-03-23T08:00:00.000Z',
+    end: '2026-03-23T08:15:00.000Z',
+  };
+
+  function heightOf(wrapper: ReturnType<typeof mount>, selector: string): string {
+    return wrapper.find(selector).attributes('style') ?? '';
+  }
+
+  it('grows to fit its own two lines while the pointer is on it', async () => {
+    const wrapper = mount(WeekGrid, {
+      props: { days: WEEK, timeZone: BERLIN, blocks: [quarterHour], fixedBlocks: [] },
+    });
+
+    expect(heightOf(wrapper, '[data-testid="block-task"]')).toContain('height: 16.5px');
+
+    await wrapper.find('[data-testid="block-task"]').trigger('pointerenter');
+    expect(heightOf(wrapper, '[data-testid="block-task"]')).toContain('height: 36px');
+    expect(wrapper.find('[data-testid="block-task"]').attributes('data-expanded')).toBe('true');
+
+    await wrapper.find('[data-testid="block-task"]').trigger('pointerleave');
+    expect(heightOf(wrapper, '[data-testid="block-task"]')).toContain('height: 16.5px');
+  });
+
+  it('leaves a block that already fits exactly as it was', async () => {
+    const wrapper = mount(WeekGrid, {
+      props: { days: WEEK, timeZone: BERLIN, blocks: [block], fixedBlocks: [] },
+    });
+
+    const before = heightOf(wrapper, '[data-testid="block-task"]');
+    await wrapper.find('[data-testid="block-task"]').trigger('pointerenter');
+
+    expect(heightOf(wrapper, '[data-testid="block-task"]')).toBe(before);
+    expect(wrapper.find('[data-testid="block-task"]').attributes('data-expanded')).toBeUndefined();
+  });
+
+  it('grows for the keyboard too, on focus', async () => {
+    const wrapper = mount(WeekGrid, {
+      props: {
+        days: WEEK,
+        timeZone: BERLIN,
+        blocks: [quarterHour],
+        fixedBlocks: [],
+        editable: true,
+      },
+    });
+
+    await wrapper.find('[data-testid="block-task"]').trigger('focus');
+    expect(heightOf(wrapper, '[data-testid="block-task"]')).toContain('height: 36px');
+  });
+
+  it('takes the done control with it, so the tick keeps its whole target', async () => {
+    const wrapper = mount(WeekGrid, {
+      props: {
+        days: WEEK,
+        timeZone: BERLIN,
+        blocks: [quarterHour],
+        fixedBlocks: [],
+        editable: true,
+      },
+    });
+
+    await wrapper.find('[data-testid="block-task"]').trigger('pointerenter');
+    expect(heightOf(wrapper, '[data-testid="complete-block"]')).toContain('height: 36px');
+  });
+});
