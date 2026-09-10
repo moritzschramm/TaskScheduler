@@ -112,6 +112,38 @@ describe('when the start moves', () => {
     expect((sent(submit).params as { end: string }).end).toBe('2026-03-23T16:00:00.000Z');
   });
 
+  it('keeps the length of a block that already has one', async () => {
+    // A two-hour block moved to the afternoon is still two hours. Resetting it
+    // to an hour would shorten a meeting nobody asked to shorten.
+    const { wrapper } = editor({ block: unavailability });
+    await wrapper.find('[data-testid="appointment-start"]').setValue('2026-03-23T18:00');
+
+    const end = wrapper.find('[data-testid="appointment-end"]').element as HTMLInputElement;
+    expect(end.value).toBe('2026-03-23T20:00');
+  });
+
+  it('keeps a length the user has just set on a new block', async () => {
+    const { wrapper } = editor();
+    await wrapper.find('[data-testid="appointment-end"]').setValue('2026-03-23T17:00');
+    await wrapper.find('[data-testid="appointment-start"]').setValue('2026-03-23T10:00');
+
+    // The seed is an hour and stays an hour until somebody says otherwise; the
+    // eight hours typed above are what "otherwise" looks like.
+    const end = wrapper.find('[data-testid="appointment-end"]').element as HTMLInputElement;
+    expect(end.value).toBe('2026-03-23T18:00');
+  });
+
+  it('falls back to an hour when the length on screen is not one', async () => {
+    const { wrapper } = editor();
+    // An end before the start describes no span at all, so there is nothing to
+    // preserve and the default takes over.
+    await wrapper.find('[data-testid="appointment-end"]').setValue('2026-03-23T05:00');
+    await wrapper.find('[data-testid="appointment-start"]').setValue('2026-03-23T14:00');
+
+    const end = wrapper.find('[data-testid="appointment-end"]').element as HTMLInputElement;
+    expect(end.value).toBe('2026-03-23T15:00');
+  });
+
   it('never leaves the form showing a block that runs backwards', async () => {
     const { wrapper } = editor({ defaultStart: '2026-03-23T08:00:00.000Z' });
     await wrapper.find('[data-testid="appointment-title"]').setValue('Late thing');

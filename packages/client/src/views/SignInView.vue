@@ -55,21 +55,7 @@ async function submit() {
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <div class="flex items-baseline justify-between gap-2">
-              <label class="text-sm font-medium" for="password">{{ t('auth.password') }}</label>
-              <!--
-                Beside the field it is about, and visible before the attempt
-                fails. Somebody who has forgotten a password does not learn it
-                by being told the pair did not match.
-              -->
-              <RouterLink
-                class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
-                to="/forgot-password"
-                data-testid="to-forgot-password"
-              >
-                {{ t('auth.forgot') }}
-              </RouterLink>
-            </div>
+            <label class="text-sm font-medium" for="password">{{ t('auth.password') }}</label>
             <input
               id="password"
               v-model="password"
@@ -78,6 +64,25 @@ async function submit() {
               required
               class="border-input bg-background rounded-md border px-3 py-2 text-sm"
             />
+            <!--
+              **Under the field, not beside its label.** It was beside it, which
+              put a link between the email box and the password box: one Tab out
+              of the email landed on "Forgotten your password?" rather than on
+              the thing every visitor types next. Tab order is DOM order, and
+              the fix is to put it where it belongs in the sequence rather than
+              to paper over the order with `tabindex`.
+
+              Still visible before the attempt fails, which was the point of
+              having it here at all: somebody who has forgotten a password does
+              not learn it by being told the pair did not match.
+            -->
+            <RouterLink
+              class="text-muted-foreground hover:text-foreground self-end text-xs underline underline-offset-4"
+              to="/forgot-password"
+              data-testid="to-forgot-password"
+            >
+              {{ t('auth.forgot') }}
+            </RouterLink>
           </div>
 
           <p v-if="error" class="text-destructive text-sm" data-testid="sign-in-error">

@@ -62,6 +62,16 @@ const untilDate = ref('');
 /** Which occurrences an edit applies to (spec §8.1). */
 const scope = ref<'series' | 'occurrence' | 'this_and_future'>('occurrence');
 
+/**
+ * How long the block is, and the hour a new one starts out being.
+ *
+ * Declared above the seeding watch below, which runs during setup and sets it:
+ * a `const` read before its own line is a temporal-dead-zone error, not an
+ * undefined.
+ */
+const DEFAULT_DURATION_MIN = 60;
+const gapMin = ref(DEFAULT_DURATION_MIN);
+
 const isCreate = computed(() => props.block === null);
 const isUnavailability = computed(() =>
   props.block === null ? kind.value === 'unavailability' : props.block.isUnavailability,
@@ -77,9 +87,10 @@ watch(
       cooldown.value = '0';
       start.value = toLocalInput(from, props.timeZone);
       end.value = toLocalInput(
-        new Date(Date.parse(from) + 60 * 60_000).toISOString(),
+        new Date(Date.parse(from) + DEFAULT_DURATION_MIN * 60_000).toISOString(),
         props.timeZone,
       );
+      gapMin.value = DEFAULT_DURATION_MIN;
       return;
     }
 
@@ -88,6 +99,8 @@ watch(
     cooldown.value = String(block.cooldownMin);
     start.value = toLocalInput(block.start, props.timeZone);
     end.value = toLocalInput(block.end, props.timeZone);
+    // What this block *is*: moving it keeps its length rather than resetting it.
+    gapMin.value = minutesBetween(start.value, end.value) ?? DEFAULT_DURATION_MIN;
     repeats.value = false;
     // "This occurrence only" is the safe default: it changes the least, and a
     // user who meant the whole series will say so, while one who did not
@@ -110,19 +123,32 @@ const canSave = computed(
 );
 
 /**
- * An hour, from wherever the start was just moved to.
+ * **The end keeps its distance from the start.**
  *
- * A start is almost always chosen before an end, and until it was the end sat
- * an hour after whatever the form opened on — usually before the new start, so
- * the commonest way to fill this in produced a block that ran backwards and a
- * red line saying so. Following the start with a default duration is what makes
- * the second field optional again rather than mandatory-in-practice.
+ * A start is almost always chosen before an end, and the end used to sit where
+ * the form opened it — usually before the new start, so the commonest way to
+ * fill this in produced a block that ran backwards and a red line saying so.
  *
- * Read from the event rather than from `start`, so it can only be the user's
- * own typing that moves the end: the seed below sets both, and a watcher on the
- * ref would overwrite an existing block's real duration on the way in.
+ * The distance is whatever the form currently describes: an hour on a new
+ * block, because that is what it opens with, and two hours on a two-hour
+ * meeting whose time somebody is moving. So the hour is a *default* rather than
+ * a rule — it stops being the answer the moment anyone sets an end — and moving
+ * an existing block no longer silently shortens it.
+ *
+ * Held in a ref rather than measured inside the handler, so it cannot depend on
+ * which of `v-model` and `@input` the browser calls first: both handlers are on
+ * the same event, and reading `start` inside one of them would be reading
+ * either the old value or the new one depending on the order.
  */
-const DEFAULT_DURATION_MIN = 60;
+/** Minutes from one local input value to another, or `null` if that is not a span. */
+function minutesBetween(fromLocal: string, toLocal: string): number | null {
+  const from = fromLocalInput(fromLocal, props.timeZone);
+  const to = fromLocalInput(toLocal, props.timeZone);
+  if (from === null || to === null) return null;
+
+  const minutes = (Date.parse(to) - Date.parse(from)) / 60_000;
+  return minutes > 0 ? minutes : null;
+}
 
 function startChanged(event: Event): void {
   const typed = (event.target as HTMLInputElement).value;
@@ -130,9 +156,15 @@ function startChanged(event: Event): void {
   if (from === null) return;
 
   end.value = toLocalInput(
-    new Date(Date.parse(from) + DEFAULT_DURATION_MIN * 60_000).toISOString(),
+    new Date(Date.parse(from) + gapMin.value * 60_000).toISOString(),
     props.timeZone,
   );
+}
+
+/** Setting an end is how the distance is changed; a backwards one is ignored. */
+function endChanged(event: Event): void {
+  const typed = (event.target as HTMLInputElement).value;
+  gapMin.value = minutesBetween(start.value, typed) ?? gapMin.value;
 }
 
 async function save(): Promise<void> {
@@ -382,13 +414,14 @@ async function cancelBlock(): Promise<void> {
       </div>
       <div class="space-y-1">
         <Label for="appointment-end">{{ t('appointments.ends') }}</Label>
-        <!-- Follows the start by an hour; see `startChanged`. Still editable. -->
+        <!-- Follows the start, keeping this gap; see `startChanged`. -->
         <input
           id="appointment-end"
           v-model="end"
           type="datetime-local"
           class="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
           data-testid="appointment-end"
+          @input="endChanged"
         />
       </div>
     </div>

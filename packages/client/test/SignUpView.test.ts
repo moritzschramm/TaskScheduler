@@ -172,3 +172,37 @@ describe('creating an account', () => {
     wrapper.unmount();
   });
 });
+
+describe('the order the sign-in form is filled in', () => {
+  async function signInView() {
+    const router = routerFor('/sign-in');
+    await router.isReady();
+    return mount(SignInView, { global: { plugins: [router] }, attachTo: document.body });
+  }
+
+  it('goes email, password, and only then the way out', async () => {
+    const wrapper = await signInView();
+
+    // Tab order is DOM order, so DOM order is what this asserts. The link used
+    // to sit beside the password *label*, which put it between the two boxes:
+    // one Tab out of the email landed on "forgotten your password" rather than
+    // on the thing every visitor types next.
+    const stops = [...wrapper.element.querySelectorAll('input, a, button')].map(
+      (element) =>
+        element.getAttribute('data-testid') ?? element.getAttribute('id') ?? element.tagName,
+    );
+
+    expect(stops).toEqual(['email', 'password', 'to-forgot-password', 'BUTTON', 'to-sign-up']);
+    wrapper.unmount();
+  });
+
+  it('has no axe violations', async () => {
+    const wrapper = await signInView();
+    const results = await axe.run(wrapper.element, {
+      rules: { 'color-contrast': { enabled: false } },
+    });
+
+    expect(results.violations).toEqual([]);
+    wrapper.unmount();
+  });
+});
