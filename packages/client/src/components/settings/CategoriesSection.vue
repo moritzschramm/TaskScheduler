@@ -40,7 +40,17 @@ const props = defineProps<{
 interface Draft {
   name: string;
   defaultCooldownMin: number;
-  /** `''` is "no colour" — the state a ninth activity type starts in. */
+  /**
+   * On the new-type row, `''` means "choose one for me" — the server takes the
+   * next free slot, which is what makes the first three types legible without
+   * anybody opening the picker (§4.3).
+   *
+   * On an existing row it is only ever a *legacy* value: a type created before
+   * the palette started reusing slots, or one whose colour an undo restored to
+   * null. The picker offers it as the current state and refuses to go back to
+   * it, because a type with no colour draws as a grey lane and grey already
+   * means "unavailable" everywhere else on the grid.
+   */
   color: CategoryColor | '';
 }
 
@@ -117,8 +127,9 @@ function edited(id: string): void {
         patch: {
           name: draft.name,
           defaultCooldownMin: Number(draft.defaultCooldownMin),
-          // `null` is a value: it clears the colour rather than leaving it.
-          color: draft.color === '' ? null : draft.color,
+          // Absent, never null: a legacy colourless type keeps its state until
+          // somebody picks a hue, and nothing here can put one back.
+          ...(draft.color === '' ? {} : { color: draft.color }),
         },
       },
     });
@@ -216,7 +227,14 @@ async function remove(id: string, version: number): Promise<void> {
                 data-testid="category-color"
                 @update:model-value="edited(category.id)"
               >
-                <option value="">{{ t('categories.noColor') }}</option>
+                <!--
+                  Present only when it is already the answer, and disabled, so
+                  the select can show the state of a type made before every one
+                  of them had a colour without offering to put another there.
+                -->
+                <option v-if="drafts.get(category.id)!.color === ''" value="" disabled>
+                  {{ t('categories.noColor') }}
+                </option>
                 <option v-for="hue in CATEGORY_COLORS" :key="hue" :value="hue">
                   {{ t(`categories.hue.${hue}`) }}
                 </option>
@@ -268,7 +286,12 @@ async function remove(id: string, version: number): Promise<void> {
               :aria-label="t('categories.color')"
               data-testid="new-category-color"
             >
-              <option value="">{{ t('categories.noColor') }}</option>
+              <!--
+                The default, and it does not mean "none": the server takes the
+                next free slot, which is how the first three activity types end
+                up in the three hues that separate for every reader.
+              -->
+              <option value="">{{ t('categories.autoColor') }}</option>
               <option v-for="hue in CATEGORY_COLORS" :key="hue" :value="hue">
                 {{ t(`categories.hue.${hue}`) }}
               </option>

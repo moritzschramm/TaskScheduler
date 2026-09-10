@@ -9,9 +9,16 @@
  *
  * The eight hues and their two steps are taken unchanged from the reference
  * categorical palette, in its documented order. Slots are assigned in that
- * order as activity types are created and never cycled: a ninth type starts
- * with no colour rather than quietly reusing the first, because two things the
- * same colour is a statement that they are related.
+ * order as activity types are created, and once all eight are spoken for the
+ * assignment starts round again on the least-used one.
+ *
+ * **That reuse was refused at first, and the refusal was worse.** Two things
+ * the same colour is a statement that they are related, so a ninth type used to
+ * start with no colour at all — which is also a statement, and a stranger one:
+ * that this type is not the kind of thing that has a colour. What it produced
+ * on screen was a lane the eye reads as unavailable time. Given that nothing
+ * here uses colour as the identity channel (see below), a shared hue costs a
+ * grouping cue and an absent one costs the reader a false signal.
  *
  * **What the validator says, plainly.** Run over all eight at once against
  * every pair, this palette fails: the worst pair (orange against red) is ΔE 7.1
@@ -61,13 +68,27 @@ export const CATEGORY_COLOR_STEPS: Readonly<Record<CategoryColor, ColorSteps>> =
 /**
  * The slot a newly created activity type takes.
  *
- * Fixed order over the colours already spoken for, so the first three types get
- * the three that separate for every reader. Returns `null` past the eighth
- * rather than starting again — see the note above about what reuse would claim.
+ * The **first least-used** slot, which while any is free is exactly "the first
+ * free one in palette order" — so the first three types still get the three
+ * that separate for every reader, and a gap left by a recolouring is still
+ * filled rather than counted past. Past the eighth it spreads the reuse evenly
+ * instead of piling every later type onto blue.
+ *
+ * Always answers. Every activity type has a colour; see the note above for why
+ * "none" turned out to be the worse of the two things a ninth type could say.
  */
-export function nextCategoryColor(taken: readonly (string | null)[]): CategoryColor | null {
-  const used = new Set(taken);
-  return CATEGORY_COLORS.find((color) => !used.has(color)) ?? null;
+export function nextCategoryColor(taken: readonly (string | null)[]): CategoryColor {
+  const used = new Map<CategoryColor, number>(CATEGORY_COLORS.map((color) => [color, 0]));
+  for (const value of taken) {
+    if (isCategoryColor(value)) used.set(value, (used.get(value) ?? 0) + 1);
+  }
+
+  let fewest: CategoryColor = CATEGORY_COLORS[0];
+  for (const color of CATEGORY_COLORS) {
+    if ((used.get(color) ?? 0) < (used.get(fewest) ?? 0)) fewest = color;
+  }
+
+  return fewest;
 }
 
 /** Whether a stored value is still one of the slots. */

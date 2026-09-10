@@ -261,7 +261,8 @@ export const en = {
   categories: {
     color: 'Colour',
     colorOf: 'Colour of {name}',
-    noColor: 'No colour',
+    noColor: 'No colour (older type)',
+    autoColor: 'Choose one for me',
     hue: {
       blue: 'Blue',
       orange: 'Orange',
@@ -295,6 +296,10 @@ export const en = {
     needCategory: 'Add an activity type first.',
     activityType: 'Activity type',
     specialWeek: 'Special week',
+    ordinaryNote:
+      'These are the hours for ordinary weeks. A special week replaces them entirely for its dates.',
+    specialNote:
+      'These hours replace the ordinary ones during {name}. Left empty, nothing is scheduled that week.',
     ordinaryWeeks: 'Ordinary weeks',
     emptyMeansNever: 'An empty week means this activity type is never scheduled here.',
     localTo: 'Times are local to {zone}.',

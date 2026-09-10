@@ -113,10 +113,16 @@ describe('assigning a colour', () => {
     expect(nextCategoryColor(['blue', 'aqua'])).toBe('orange');
   });
 
-  it('runs out rather than cycling', () => {
-    // Two types the same colour is a statement that they are related, and the
-    // ninth is not related to the first.
-    expect(nextCategoryColor([...CATEGORY_COLORS])).toBeNull();
+  it('starts round again once every slot is spoken for', () => {
+    // A ninth type shares a hue with the first. The alternative was no colour
+    // at all, which draws as a grey lane — and grey means "unavailable"
+    // everywhere else on the grid, which is a worse thing to say by accident.
+    expect(nextCategoryColor([...CATEGORY_COLORS])).toBe('blue');
+  });
+
+  it('spreads the reuse rather than piling it on the first slot', () => {
+    expect(nextCategoryColor([...CATEGORY_COLORS, 'blue'])).toBe('orange');
+    expect(nextCategoryColor([...CATEGORY_COLORS, 'blue', 'orange'])).toBe('aqua');
   });
 
   it('ignores types that have no colour', () => {

@@ -277,7 +277,8 @@ export const de: Messages = {
   categories: {
     color: 'Farbe',
     colorOf: 'Farbe von {name}',
-    noColor: 'Keine Farbe',
+    noColor: 'Keine Farbe (ältere Art)',
+    autoColor: 'Automatisch wählen',
     hue: {
       blue: 'Blau',
       orange: 'Orange',
@@ -312,6 +313,10 @@ export const de: Messages = {
     needCategory: 'Lege zuerst eine Aktivitätsart an.',
     activityType: 'Aktivitätsart',
     specialWeek: 'Besondere Woche',
+    ordinaryNote:
+      'Das sind die Zeiten für gewöhnliche Wochen. Eine besondere Woche ersetzt sie an ihren Tagen vollständig.',
+    specialNote:
+      'Diese Zeiten ersetzen die gewöhnlichen während {name}. Bleiben sie leer, wird in dieser Woche nichts geplant.',
     ordinaryWeeks: 'Gewöhnliche Wochen',
     emptyMeansNever:
       'Eine leere Woche bedeutet, dass diese Aktivitätsart hier nie eingeplant wird.',

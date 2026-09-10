@@ -73,16 +73,22 @@ describe('activity type colours', () => {
     expect(await colourOf(await create('Errands'))).toBe('blue');
   });
 
-  it('runs out rather than cycling', async () => {
-    // Two types the same colour claims a relationship that is not there.
+  it('starts round again rather than running out', async () => {
+    // A ninth type shares blue with the first. The alternative was no colour,
+    // which puts that type's hours on the grid as a grey lane — and grey is
+    // what unavailable time looks like everywhere else (§4.3).
     for (let index = 0; index < CATEGORY_COLORS.length; index += 1) {
       await create(`Type ${index}`);
     }
 
-    expect(await colourOf(await create('One too many'))).toBeNull();
+    expect(await colourOf(await create('One too many'))).toBe('blue');
+    expect(await colourOf(await create('And another'))).toBe('orange');
   });
 
-  it('lets a colour be cleared, which is not the same as leaving it alone', async () => {
+  it('still lets a colour be cleared, for an undo to be able to put one back', async () => {
+    // Nothing in the UI asks for this any more (migration 0018). The command
+    // keeps it because §12's undo restores row images, and an image written
+    // before every type had a colour can carry a null.
     const id = await create('Exercise');
     await world.run({
       type: 'EditCategory',

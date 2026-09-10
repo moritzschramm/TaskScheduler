@@ -58,6 +58,13 @@ const unsent = ref(false);
 
 const readOnly = computed(() => !props.configuration.calendar.isOwner);
 
+/** The special week being edited, for the sentence that explains the selector. */
+const selectedWeekName = computed(
+  () =>
+    props.configuration.weekTypeOverrides.find((override) => override.id === weekTypeId.value)
+      ?.name ?? '',
+);
+
 /** Where these hours meet another activity type's; see `lib/overlaps`. */
 const overlaps = computed(() =>
   overlappingRules({
@@ -215,6 +222,23 @@ function edited(): void {
           </Select>
         </div>
       </div>
+
+      <!--
+        What the second selector is *for*, said on the screen it is on.
+
+        It reads as a filter — "show me the holiday hours" — and it is an
+        address: a window belongs either to the default set or to one special
+        week's replacement set, and this says which set is being edited. The
+        difference matters most in the direction people do not expect, so the
+        sentence for a special week says what an empty set means there.
+      -->
+      <p class="text-muted-foreground max-w-prose text-sm" data-testid="week-type-note">
+        {{
+          weekTypeId === ''
+            ? t('hours.ordinaryNote')
+            : t('hours.specialNote', { name: selectedWeekName })
+        }}
+      </p>
 
       <WeekdayWindowEditor
         v-model="rules"
