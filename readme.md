@@ -1,4 +1,4 @@
-# Ambitime (name is WIP)
+# TaskScheduler
 
 A mix between a todo and calendar app. Creates tasks from todos by inserting them into the calendar
 while avoiding conflicts with existing entries. A task is scheduled in a predefined timespan.
