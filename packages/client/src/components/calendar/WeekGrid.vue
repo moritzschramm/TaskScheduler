@@ -4,6 +4,7 @@ import { useI18n } from '@/i18n';
 import type { Category, CompletedBlock, FixedBlock, ScheduledBlock } from '@ambitime/shared';
 import type { CivilDate, ResolvedWindow } from '@ambitime/scheduler';
 import {
+  assignLanes,
   blocksForDay,
   DEFAULT_SCALE,
   categoryLanesForDay,
@@ -14,6 +15,7 @@ import {
   SNAP_MINUTES,
   type DayBand,
   type GridBlock,
+  type PlacedBlock,
 } from '@/lib/grid';
 import { formatDayLabel, formatMinuteOfDay, sameCivilDate } from '@/lib/time';
 import { Check } from 'lucide-vue-next';
@@ -357,13 +359,15 @@ const columns = computed(() =>
     day,
     label: formatDayLabel(day, props.locale),
     isToday: props.today !== null && sameCivilDate(day, props.today),
-    blocks: blocksForDay(
-      day,
-      props.timeZone,
-      props.blocks,
-      props.fixedBlocks,
-      props.completedBlocks,
-      t('common.unavailable'),
+    blocks: assignLanes(
+      blocksForDay(
+        day,
+        props.timeZone,
+        props.blocks,
+        props.fixedBlocks,
+        props.completedBlocks,
+        t('common.unavailable'),
+      ),
     ),
     open: openBandsForDay(day, props.timeZone, props.windows)
       .map((band) => clipBand(band, props.dayStartMin, props.dayEndMin))
@@ -469,6 +473,30 @@ function classesFor(block: GridBlock): string {
 /** Which blocks carry a done control: a placed task, on a grid that edits. */
 function completable(block: GridBlock): boolean {
   return props.editable && block.kind === 'task';
+}
+
+/**
+ * The horizontal box a block occupies, as its share of the column.
+ *
+ * Expressed in `calc` rather than in pixels because the share is a fraction of
+ * a column whose width is the grid's business — it changes with the window, and
+ * with how many days are being drawn. `EDGE` is the gap either side that the
+ * old `inset-x-1` gave every block; it is subtracted from the width so two
+ * neighbours have eight pixels between them rather than none.
+ */
+const EDGE = 4;
+
+function leftOf(block: PlacedBlock): string {
+  return `calc(${(block.lane / block.lanes) * 100}% + ${EDGE}px)`;
+}
+
+function widthOf(block: PlacedBlock): string {
+  return `calc(${(1 / block.lanes) * 100}% - ${EDGE * 2}px)`;
+}
+
+/** How far a block's right edge sits from the column's, for the done strip. */
+function rightOf(block: PlacedBlock): number {
+  return (1 - (block.lane + 1) / block.lanes) * 100;
 }
 
 /**
@@ -630,13 +658,16 @@ const DONE_INSET = 6;
             :key="block.key"
             :type="editable ? 'button' : undefined"
             data-grid-block
-            class="focus-visible:ring-ring absolute inset-x-1 touch-none overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
+            class="focus-visible:ring-ring absolute touch-none overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs leading-tight focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
             :class="[classesFor(block), isMoving(block) ? 'ring-primary z-10 ring-2' : '']"
             :style="{
               top: `${offsetOf(startMinOf(block))}px`,
               height: `${heightOf(block)}px`,
+              left: leftOf(block),
+              width: widthOf(block),
               ...(completable(block) ? { paddingRight: `${DONE_WIDTH + DONE_INSET}px` } : {}),
             }"
+            :data-lane="block.lanes > 1 ? `${block.lane}/${block.lanes}` : undefined"
             :data-testid="`block-${block.kind}`"
             :data-title="block.title"
             :data-start-min="startMinOf(block)"
@@ -692,7 +723,7 @@ const DONE_INSET = 6;
             :style="{
               top: `${offsetOf(startMinOf(block))}px`,
               height: `${heightOf(block)}px`,
-              right: `${DONE_INSET}px`,
+              right: `calc(${rightOf(block)}% + ${DONE_INSET}px)`,
               width: `${DONE_WIDTH}px`,
             }"
             :aria-label="t('calendar.completeBlock', { title: block.title })"

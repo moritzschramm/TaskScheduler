@@ -303,3 +303,67 @@ describe('the grid track layout', () => {
     expect(tracks(single)).toContain('7.5rem');
   });
 });
+
+describe('two blocks in the same hour', () => {
+  const conference: FixedBlock = {
+    ...standup,
+    appointmentId: 'appt-conf',
+    title: 'Conference',
+    start: '2026-03-23T08:00:00.000Z',
+    end: '2026-03-23T16:00:00.000Z',
+  };
+
+  const keynote: FixedBlock = {
+    ...standup,
+    appointmentId: 'appt-key',
+    title: 'Keynote',
+    start: '2026-03-23T09:00:00.000Z',
+    end: '2026-03-23T10:00:00.000Z',
+  };
+
+  it('draws them side by side rather than one over the other', () => {
+    const monday = mount(WeekGrid, {
+      props: { days: WEEK, timeZone: BERLIN, blocks: [], fixedBlocks: [conference, keynote] },
+    }).findAll('[data-testid="day-column"]')[0];
+
+    const blocks = monday?.findAll('[data-testid="block-appointment"]') ?? [];
+    expect(blocks.map((entry) => entry.attributes('data-lane'))).toEqual(['0/2', '1/2']);
+
+    // Half of the column each, four pixels of gap either side of both.
+    expect(blocks[0]?.attributes('style')).toContain('left: calc(0% + 4px)');
+    expect(blocks[1]?.attributes('style')).toContain('left: calc(50% + 4px)');
+    expect(blocks[0]?.attributes('style')).toContain('width: calc(50% - 8px)');
+  });
+
+  it('leaves a day with nothing overlapping at full width', () => {
+    const monday = mount(WeekGrid, {
+      props: { days: WEEK, timeZone: BERLIN, blocks: [], fixedBlocks: [standup] },
+    }).findAll('[data-testid="day-column"]')[0];
+
+    const only = monday?.find('[data-testid="block-appointment"]');
+    // No lane attribute at all: sharing is the exception, and the attribute is
+    // there to be looked at when something is in fact shared.
+    expect(only?.attributes('data-lane')).toBeUndefined();
+    expect(only?.attributes('style')).toContain('width: calc(100% - 8px)');
+  });
+
+  it('keeps the done control on its own block edge', () => {
+    // The strip is a sibling of the block, positioned from the column's right
+    // edge — so a task sharing its hour needs the lane's edge, not the
+    // column's, or the control would sit on top of its neighbour.
+    const wrapper = mount(WeekGrid, {
+      props: {
+        days: WEEK,
+        timeZone: BERLIN,
+        blocks: [{ ...block, start: '2026-03-23T08:00:00.000Z', end: '2026-03-23T09:00:00.000Z' }],
+        fixedBlocks: [
+          { ...standup, start: '2026-03-23T08:30:00.000Z', end: '2026-03-23T09:30:00.000Z' },
+        ],
+        editable: true,
+      },
+    });
+
+    const done = wrapper.find('[data-testid="complete-block"]');
+    expect(done.attributes('style')).toContain('right: calc(50% + 6px)');
+  });
+});

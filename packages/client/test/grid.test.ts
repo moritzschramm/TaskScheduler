@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CalendarConfiguration, FixedBlock, ScheduledBlock } from '@ambitime/shared';
 import type { ResolvedWindow } from '@ambitime/scheduler';
 import {
+  assignLanes,
   blocksForDay,
   clipBand,
   dragOffsetMinutes,
@@ -13,6 +14,7 @@ import {
   setScale,
   snapToGrid,
   windowsForWeek,
+  type GridBlock,
 } from '@/lib/grid';
 import { minuteOfDay, parseCivilDate, toInstant, weekDays } from '@/lib/time';
 
@@ -464,5 +466,93 @@ describe('blocks that are already finished', () => {
 
   it('is absent from a day it does not touch', () => {
     expect(blocksForDay(parseCivilDate('2026-03-24'), BERLIN, [], [], [done])).toEqual([]);
+  });
+});
+
+describe('blocks that occupy the same minutes', () => {
+  function block(overrides: Partial<GridBlock> = {}): GridBlock {
+    return {
+      key: 'k',
+      title: 'Block',
+      startMin: 540,
+      endMin: 600,
+      cooldownMin: 0,
+      kind: 'appointment',
+      label: '09:00–10:00',
+      continuesBefore: false,
+      continuesAfter: false,
+      ...overrides,
+    };
+  }
+
+  it('gives a block on its own the whole column', () => {
+    expect(assignLanes([block()])).toMatchObject([{ lane: 0, lanes: 1 }]);
+  });
+
+  it('splits the column between two that overlap', () => {
+    const placed = assignLanes([
+      block({ key: 'a', startMin: 540, endMin: 660 }),
+      block({ key: 'b', startMin: 600, endMin: 720 }),
+    ]);
+
+    expect(placed).toMatchObject([
+      { key: 'a', lane: 0, lanes: 2 },
+      { key: 'b', lane: 1, lanes: 2 },
+    ]);
+  });
+
+  it('leaves two that merely touch at full width', () => {
+    // Half-open again: 09:00–10:00 and 10:00–11:00 are one after the other,
+    // and halving the column would say they were happening at once.
+    const placed = assignLanes([
+      block({ key: 'a', startMin: 540, endMin: 600 }),
+      block({ key: 'b', startMin: 600, endMin: 660 }),
+    ]);
+
+    expect(placed).toMatchObject([
+      { lane: 0, lanes: 1 },
+      { lane: 0, lanes: 1 },
+    ]);
+  });
+
+  it('reuses a lane once its occupant has ended', () => {
+    // A long block beside two short ones in sequence: two lanes, not three.
+    // The width comes from the busiest instant, not from the count.
+    const placed = assignLanes([
+      block({ key: 'all-day', startMin: 540, endMin: 1020 }),
+      block({ key: 'first', startMin: 600, endMin: 660 }),
+      block({ key: 'second', startMin: 720, endMin: 780 }),
+    ]);
+
+    expect(placed).toMatchObject([
+      { key: 'all-day', lane: 0, lanes: 2 },
+      { key: 'first', lane: 1, lanes: 2 },
+      { key: 'second', lane: 1, lanes: 2 },
+    ]);
+  });
+
+  it('holds one width across a chain, even where the ends do not meet', () => {
+    // A overlaps B and B overlaps C while A and C are an hour apart. All three
+    // share one width regardless — two widths in a cluster would not add up to
+    // a column — and C takes the lane A has finished with, so the column is
+    // halved rather than cut in three.
+    const placed = assignLanes([
+      block({ key: 'a', startMin: 540, endMin: 660 }),
+      block({ key: 'b', startMin: 600, endMin: 780 }),
+      block({ key: 'c', startMin: 720, endMin: 840 }),
+    ]);
+
+    expect(placed.map((entry) => entry.lanes)).toEqual([2, 2, 2]);
+    expect(placed.map((entry) => entry.lane)).toEqual([0, 1, 0]);
+  });
+
+  it('lays out two independent clusters independently', () => {
+    const placed = assignLanes([
+      block({ key: 'morning-a', startMin: 540, endMin: 600 }),
+      block({ key: 'morning-b', startMin: 550, endMin: 610 }),
+      block({ key: 'afternoon', startMin: 840, endMin: 900 }),
+    ]);
+
+    expect(placed.map((entry) => entry.lanes)).toEqual([2, 2, 1]);
   });
 });

@@ -472,7 +472,7 @@ describe('seed via the API, render the client', () => {
     );
   });
 
-  it('surfaces the overlap refusal as a sentence', async () => {
+  it('takes a block that overlaps another, and draws them side by side', async () => {
     const email = `overlap-${Date.now()}@example.test`;
     await seed(email);
 
@@ -491,13 +491,21 @@ describe('seed via the API, render the client', () => {
     await flushPromises();
     await wrapper.find('[data-testid="appointment-start"]').setValue('2026-03-23T09:00');
     await wrapper.find('[data-testid="appointment-end"]').setValue('2026-03-23T09:30');
-    await wrapper.find('[data-testid="appointment-title"]').setValue('Clash');
+    await wrapper.find('[data-testid="appointment-title"]').setValue('Sprint review');
     await wrapper.find('[data-testid="save-appointment"]').trigger('click');
     await settle();
 
-    // The exclusion constraint is the authority (§5.3); what reaches the user
-    // is the sentence the command layer wrote about it.
-    expect(wrapper.find('[data-testid="calendar-error"]').text()).toContain('overlaps');
+    // Accepted, where it used to come back as a sentence about a uuid
+    // (migration 0016) — and then drawn as two, each with half the column.
+    expect(wrapper.find('[data-testid="calendar-error"]').exists()).toBe(false);
+
+    const monday = wrapper.findAll('[data-testid="day-column"]')[0]!;
+    const blocks = monday.findAll('[data-testid="block-appointment"]');
+    expect(blocks.map((entry) => entry.attributes('data-title')).sort()).toEqual([
+      'Sprint review',
+      'Standup',
+    ]);
+    expect(blocks.map((entry) => entry.attributes('data-lane'))).toEqual(['0/2', '1/2']);
   });
 
   /**

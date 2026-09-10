@@ -441,6 +441,83 @@ export function blocksForDay(
 }
 
 /**
+ * A block, and the share of the column's width it was given.
+ *
+ * `lane` counts from the left edge; `lanes` is how many the block is sharing
+ * with. One block on its own is lane 0 of 1, which is the whole width — the
+ * ordinary case, and the one the grid drew before any of this existed.
+ */
+export interface PlacedBlock extends GridBlock {
+  lane: number;
+  lanes: number;
+}
+
+/**
+ * Side by side, for blocks that occupy the same minutes (spec §7.4).
+ *
+ * Appointments may overlap since migration 0016, so the column has to be able
+ * to draw two of them at once. Stacked, the later one hides the earlier
+ * entirely — a conference laid over its own keynote is a calendar showing one
+ * thing and containing two — and a translucent fill would only turn the pair
+ * into a third colour that means nothing.
+ *
+ * **Clusters, then lanes within a cluster.** A cluster is a run of blocks
+ * connected by overlap: A meets B and B meets C puts all three in one, even
+ * where A and C are hours apart, because A and C must still agree about how
+ * wide the column's share is or the widths would not add up. Within a cluster
+ * each block takes the first lane whose previous occupant has already ended,
+ * which is the greedy interval-graph colouring — it uses exactly as many lanes
+ * as the busiest instant needs, and no more.
+ *
+ * The order is the one `blocksForDay` fixed: by start, then title, then key. So
+ * the lane a block lands in is the same on every render (§6.3), and paging
+ * away and back cannot shuffle a morning sideways.
+ */
+export function assignLanes(blocks: readonly GridBlock[]): PlacedBlock[] {
+  const placed: PlacedBlock[] = [];
+
+  for (const cluster of clustersOf(blocks)) {
+    // The end of the block currently occupying each lane. A block goes in the
+    // first lane that has finished with its last one.
+    const lastEnd: number[] = [];
+    const assigned = cluster.map((block) => {
+      const lane = lastEnd.findIndex((end) => end <= block.startMin);
+      const index = lane === -1 ? lastEnd.length : lane;
+      lastEnd[index] = block.endMin;
+      return { block, lane: index };
+    });
+
+    for (const { block, lane } of assigned) {
+      placed.push({ ...block, lane, lanes: lastEnd.length });
+    }
+  }
+
+  return placed;
+}
+
+/** Runs of blocks connected by overlap; each is laid out independently. */
+function clustersOf(blocks: readonly GridBlock[]): GridBlock[][] {
+  const clusters: GridBlock[][] = [];
+  let current: GridBlock[] = [];
+  let reach = -1;
+
+  for (const block of blocks) {
+    // Touching is not overlapping: 09:00–10:00 and 10:00–11:00 are one after
+    // the other, and splitting the column between them would say otherwise.
+    if (current.length > 0 && block.startMin >= reach) {
+      clusters.push(current);
+      current = [];
+    }
+
+    current.push(block);
+    reach = Math.max(reach, block.endMin);
+  }
+
+  if (current.length > 0) clusters.push(current);
+  return clusters;
+}
+
+/**
  * Where a `[start, end)` interval sits on `day`, or `undefined` if it misses.
  *
  * The comparison is done on local *dates*, not by converting the day to a UTC
