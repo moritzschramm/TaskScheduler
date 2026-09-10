@@ -274,6 +274,7 @@ async function loadFixedBlocks(
       id: appointments.id,
       startAt: isoText(sql`lower(${appointments.during})`),
       endAt: isoText(sql`upper(${appointments.during})`),
+      cooldownMin: appointments.cooldownMin,
       status: appointments.status,
       recurrenceRule: appointments.recurrenceRule,
       recurrenceTimezone: appointments.recurrenceTimezone,
@@ -314,9 +315,14 @@ async function loadFixedBlocks(
     // Outward: a fixed block never shrinks because of sub-minute endpoints.
     const interval = { start: toInstant(row.startAt), end: toInstantCeil(row.endAt) };
 
+    // Absent rather than zero under `exactOptionalPropertyTypes`, and because
+    // the engine's own default is "no cooldown": a block that reserves nothing
+    // should look to the solver exactly as it did before blocks could.
+    const cooldown = row.cooldownMin === 0 ? {} : { cooldownMin: row.cooldownMin };
+
     if (row.recurrenceRule === null) {
       if (interval.end > horizon.start && interval.start < horizon.end) {
-        blocks.push({ id: row.id, calendarId, interval });
+        blocks.push({ id: row.id, calendarId, interval, ...cooldown });
       }
       continue;
     }
@@ -344,6 +350,10 @@ async function loadFixedBlocks(
         id: `${row.id}:${occurrence.originalStart}`,
         calendarId,
         interval: occurrence.interval,
+        // Every instance of a series reserves what the template reserves: the
+        // twenty minutes after the Tuesday standup are the same twenty minutes
+        // every Tuesday.
+        ...cooldown,
       });
     }
   }

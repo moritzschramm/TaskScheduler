@@ -405,6 +405,7 @@ async function readFixedBlocks(
       start: isoText(sql`lower(${appointments.during})`),
       end: isoText(sql`upper(${appointments.during})`),
       version: appointments.version,
+      cooldownMin: appointments.cooldownMin,
       isUnavailability: appointments.isUnavailability,
       isInternal: appointments.isInternal,
       status: appointments.status,

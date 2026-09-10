@@ -41,6 +41,7 @@ const unavailability: FixedBlock = {
   occurrenceStart: null,
   isRecurring: false,
   isUnavailability: true,
+  cooldownMin: 0,
   isInternal: false,
   status: 'confirmed',
 };
@@ -119,5 +120,51 @@ describe('when the start moves', () => {
     await wrapper.find('[data-testid="appointment-start"]').setValue('2026-03-23T20:00');
 
     expect(wrapper.find('[data-testid="interval-invalid"]').exists()).toBe(false);
+  });
+});
+
+describe('the gap a block leaves after itself', () => {
+  it('is sent only when there is one', async () => {
+    const { wrapper, submit } = editor();
+    await wrapper.find('[data-testid="appointment-title"]').setValue('Offsite');
+    await wrapper.find('[data-testid="save-appointment"]').trigger('click');
+
+    // Zero is the column's default, so an omitted value and a typed zero mean
+    // the same thing and the log carries neither.
+    expect(sent(submit).params).not.toHaveProperty('cooldownMin');
+  });
+
+  it('travels with a new appointment', async () => {
+    const { wrapper, submit } = editor();
+    await wrapper.find('[data-testid="appointment-title"]').setValue('Offsite');
+    await wrapper.find('[data-testid="appointment-cooldown"]').setValue('20');
+    await wrapper.find('[data-testid="save-appointment"]').trigger('click');
+
+    expect(sent(submit).params).toMatchObject({ cooldownMin: 20 });
+  });
+
+  it('travels with an unavailability too', async () => {
+    const { wrapper, submit } = editor();
+    await wrapper.find('[data-testid="kind-unavailability"]').setValue(true);
+    await wrapper.find('[data-testid="appointment-cooldown"]').setValue('45');
+    await wrapper.find('[data-testid="save-appointment"]').trigger('click');
+
+    // The engine draws no distinction between the two (§7.4), and neither
+    // should the form: recovering from a hospital appointment is the case.
+    expect(sent(submit).type).toBe('AddUnavailability');
+    expect(sent(submit).params).toMatchObject({ cooldownMin: 45 });
+  });
+
+  it('can be taken back down to zero on an edit', async () => {
+    const { wrapper, submit } = editor({ block: { ...unavailability, cooldownMin: 30 } });
+    const field = wrapper.find('[data-testid="appointment-cooldown"]').element;
+    expect((field as HTMLInputElement).value).toBe('30');
+
+    await wrapper.find('[data-testid="appointment-cooldown"]').setValue('0');
+    await wrapper.find('[data-testid="save-appointment"]').trigger('click');
+
+    // Always sent on an edit, zero included: this is the only place the value
+    // can be reduced, so an omission here would make it a one-way door.
+    expect(sent(submit).params).toMatchObject({ patch: { cooldownMin: 0 } });
   });
 });

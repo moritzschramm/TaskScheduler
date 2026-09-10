@@ -64,6 +64,20 @@ export interface FixedBlock {
   id: string;
   calendarId: string;
   interval: Interval;
+  /**
+   * Non-compressible time reserved *after* the block, like a task's (rule 3).
+   *
+   * The same idea §4.3 gives a category and §4.4 a task, for the same reason: a
+   * meeting you need twenty minutes to come back from occupies more of the
+   * afternoon than the meeting. Absent is zero, so a caller that has never
+   * heard of it gets exactly the old behaviour.
+   *
+   * Part of the footprint for overlap purposes only. It may run past the end of
+   * a window, and it is not itself a block — nothing forbids *another* fixed
+   * block from starting inside it, since two things a person says are happening
+   * are their business (migration 0016).
+   */
+  cooldownMin?: number;
 }
 
 /** A recurring per-weekday availability rule, before expansion. */

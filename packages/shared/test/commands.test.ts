@@ -209,19 +209,23 @@ describe('params the schema refuses to represent', () => {
     expect(parse('ExtendTask', { taskId: TASK, newEstimateMin: 90 }).success).toBe(true);
   });
 
-  it('will not take a title on an unavailability, which is content-free (§7.4)', () => {
+  it('takes an optional title on an unavailability, and an empty one never (§7.4)', () => {
     const params = {
       calendarId: TENANT,
       start: '2026-03-23T13:00:00Z',
       end: '2026-03-23T15:00:00Z',
     };
 
+    // Absent is the ordinary case and still stores nothing, which is what
+    // leaves a reader free to label the block in its own language.
     expect(parse('AddUnavailability', params).success).toBe(true);
-    // Zod strips it rather than failing, which is the point: there is nowhere
-    // for a title to go, so a caller cannot smuggle one into the block.
-    expect(parse('AddUnavailability', { ...params, title: 'Dentist' }).data?.params).toEqual(
-      params,
-    );
+    expect(parse('AddUnavailability', { ...params, title: 'Dentist' }).data?.params).toEqual({
+      ...params,
+      title: 'Dentist',
+    });
+    // `''` is not a title, it is the absence of one said badly: the column
+    // already spells that, and two ways to say it is one too many.
+    expect(parse('AddUnavailability', { ...params, title: '' }).success).toBe(false);
   });
 
   it('distinguishes clearing a field from leaving it alone', () => {

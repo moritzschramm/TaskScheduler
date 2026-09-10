@@ -430,7 +430,7 @@ export function blocksForDay(
       // label is the client's to supply exactly when the user supplied none.
       title: block.isUnavailability && block.title === '' ? unavailableLabel : block.title,
       ...positioned,
-      cooldownMin: 0,
+      cooldownMin: block.cooldownMin,
       kind: block.isUnavailability ? 'unavailability' : 'appointment',
       label: `${formatMinuteOfDay(positioned.startMin)}–${formatMinuteOfDay(positioned.endMin)}`,
       appointmentId: block.appointmentId,

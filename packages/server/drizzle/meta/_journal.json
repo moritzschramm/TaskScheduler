@@ -120,6 +120,13 @@
       "when": 1789560000000,
       "tag": "0016_appointments_may_overlap",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789570000000,
+      "tag": "0017_appointment_cooldown",
+      "breakpoints": true
     }
   ]
 }

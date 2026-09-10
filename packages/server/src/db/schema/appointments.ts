@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  integer,
   foreignKey,
   index,
   pgTable,
@@ -78,6 +79,17 @@ export const appointments = pgTable(
      */
     isUnavailability: boolean('is_unavailability').notNull().default(false),
 
+    /**
+     * Non-compressible time reserved after the block (§6.2 rule 3).
+     *
+     * The same thing a category's default and a task's override express, for
+     * the case they never covered: the twenty minutes it takes to get back from
+     * a meeting across town. Part of the footprint the solver keeps clear, and
+     * not part of the block — the block still ends when it ends, which is what
+     * anyone reading the calendar is told.
+     */
+    cooldownMin: integer('cooldown_min').notNull().default(0),
+
     /** RFC 5545 RRULE (§8.1). */
     recurrenceRule: text('recurrence_rule'),
     /** IANA zone the rule's wall-clock times are expressed in. */
@@ -115,6 +127,7 @@ export const appointments = pgTable(
     index('appointments_calendar_idx').on(table.calendarId),
     index('appointments_recurrence_parent_idx').on(table.recurrenceParentId),
 
+    check('appointments_cooldown_non_negative', sql`${table.cooldownMin} >= 0`),
     check(
       'appointments_recurrence_needs_timezone',
       sql`(${table.recurrenceRule} is null) = (${table.recurrenceTimezone} is null)`,

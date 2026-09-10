@@ -235,6 +235,8 @@ export const en = {
     untitledNote: 'Left empty, the block just says the time is taken.',
     starts: 'Starts',
     ends: 'Ends',
+    cooldown: 'Cooldown (minutes)',
+    cooldownNote: 'Time kept clear after this block. Nothing is scheduled into it.',
     repeats: 'Repeats',
     howOften: 'How often',
     daily: 'every day',

@@ -156,7 +156,7 @@ A manual edit modifies source constraints; it does **not** freeze an assignment.
 
 ### 4.5 Appointment properties
 
-Fixed `[start, end)`; `recurrence` as RRULE (§8.1); `is_internal` (all participants are app users) vs external; participants (§4.3); status. Internal appointments participate in cross-user change notification (§7.2); external appointments are the user's responsibility to renegotiate.
+Fixed `[start, end)`; `recurrence` as RRULE (§8.1); `is_internal` (all participants are app users) vs external; participants (§4.3); status; optional `cooldown_min` (§6.2 rule 3). Internal appointments participate in cross-user change notification (§7.2); external appointments are the user's responsibility to renegotiate.
 
 ---
 
@@ -204,6 +204,10 @@ Every mutable entity carries `version` (integer) and `updated_at`. Commands carr
 1. A task is placed within an availability window of its category (respecting week-type overrides).
 2. No overlap between any two placements the user views as unified (task–task, task–appointment). Appointments are fixed.
 3. The task's cooldown (non-compressible) is reserved after it; treated as part of its footprint for overlap.
+   Extended after v1 design: a **fixed block** may carry one too (migration 0017), reserved the same way and for
+   the same reason — the twenty minutes it takes to get back from a meeting across town are minutes nothing else
+   can have. A block's cooldown constrains placements only; it does not stop another fixed block starting inside
+   it, since two things a person says are happening are their business (§5.3).
 4. `hard` due date: placement end ≤ due date.
 5. Sequence contiguity: members of an uninterruptible sequence are placed contiguously within a single window, in order if ordered, with no foreign task interleaved.
 6. Manual floor: a manually repositioned task is not placed before its `manual_floor`.

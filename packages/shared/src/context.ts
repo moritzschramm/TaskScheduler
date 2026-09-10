@@ -72,6 +72,8 @@ export const engineFixedBlockSchema = z.object({
   id: z.string().min(1),
   calendarId: uuid,
   interval,
+  /** Reserved after the block; part of its footprint (§6.2 rule 3). */
+  cooldownMin: z.int().nonnegative().optional(),
 });
 
 export const resolvedWindowSchema = z.object({

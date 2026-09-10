@@ -55,6 +55,7 @@ function appointment(overrides: Partial<FixedBlock> = {}): FixedBlock {
     occurrenceStart: null,
     isRecurring: false,
     isUnavailability: false,
+    cooldownMin: 0,
     isInternal: false,
     status: 'confirmed',
     ...overrides,

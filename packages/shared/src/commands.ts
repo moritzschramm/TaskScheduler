@@ -158,6 +158,15 @@ export const addAppointmentParams = z
     /** True when every participant is an app user, enabling §7.2 negotiation. */
     isInternal: z.boolean().optional(),
     /**
+     * Non-compressible minutes reserved after the block (§6.2 rule 3).
+     *
+     * A property of *this* block rather than of a category, because a fixed
+     * block has no category: what a meeting costs afterwards is a fact about
+     * that meeting — the one across town and the one on a call are the same
+     * hour and not the same afternoon.
+     */
+    cooldownMin: z.int().nonnegative().optional(),
+    /**
      * An RFC 5545 rule and the zone its wall-clock times mean (spec §8.1, §5.1).
      *
      * The zone travels with the rule and is not optional, because "every
@@ -208,6 +217,7 @@ export const editAppointmentParams = z.object({
         message: 'An appointment must end after it starts',
       })
       .optional(),
+    cooldownMin: z.int().nonnegative().optional(),
     status: z.enum(['confirmed', 'tentative', 'cancelled']).optional(),
   }),
 });
@@ -328,6 +338,8 @@ export const addUnavailabilityParams = z
     title: z.string().min(1).optional(),
     start: instant,
     end: instant,
+    /** As an appointment's (§6.2 rule 3) — the engine draws no distinction. */
+    cooldownMin: z.int().nonnegative().optional(),
     /**
      * The same rule an appointment takes (§8.1).
      *

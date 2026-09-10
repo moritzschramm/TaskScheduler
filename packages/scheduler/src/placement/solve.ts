@@ -2,7 +2,7 @@ import { byId, byInt, chain, descending, sorted } from '../ordering.js';
 import { DEFAULT_TUNING, type TuningConfig } from '../config.js';
 import { computeHardHorizon } from '../horizon.js';
 import { eligibleWindows } from '../windows.js';
-import { freeSpans, maxSpanMinutes } from '../spans.js';
+import { footprint, freeSpans, maxSpanMinutes } from '../spans.js';
 import { buildPlacementUnits, expandUnit, type PlacementUnit } from '../sequences.js';
 import { defaultScoringPolicy } from '../scoring/default-policy.js';
 import {
@@ -106,8 +106,10 @@ export function solve(context: ScheduleContext, options: SolveOptions = {}): Sol
     ),
   );
 
+  // A fixed block's cooldown is reserved against placements exactly as a task's
+  // is (rule 3): what the solver must keep clear is the footprint, not the hour.
   const occupied: OccupiedFootprint[] = context.fixedBlocks.map((block) => ({
-    interval: block.interval,
+    interval: footprint(block),
   }));
   const placements: Placement[] = [];
   const unplaced: UnplacedUnit[] = [];

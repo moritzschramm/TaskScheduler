@@ -251,6 +251,8 @@ export const de: Messages = {
     untitledNote: 'Bleibt er leer, sagt der Block nur, dass die Zeit belegt ist.',
     starts: 'Beginnt',
     ends: 'Endet',
+    cooldown: 'Abklingzeit (Minuten)',
+    cooldownNote: 'Zeit, die nach diesem Block frei bleibt. Es wird nichts hineingeplant.',
     repeats: 'Wiederholt sich',
     howOften: 'Wie oft',
     daily: 'täglich',

@@ -37,6 +37,7 @@ const standup: FixedBlock = {
   occurrenceStart: null,
   isRecurring: false,
   isUnavailability: false,
+  cooldownMin: 0,
   isInternal: true,
   status: 'confirmed',
 };

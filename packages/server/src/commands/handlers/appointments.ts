@@ -44,6 +44,7 @@ export async function addAppointment(
     title: params.title,
     notes: params.notes,
     during: interval(params.start, params.end),
+    cooldownMin: params.cooldownMin,
     isInternal: params.isInternal,
     recurrenceRule: params.recurrence?.rule,
     recurrenceTimezone: params.recurrence?.timeZone,
@@ -76,6 +77,7 @@ export async function addUnavailability(
     ownerId: ctx.actorId,
     title: params.title ?? '',
     during: interval(params.start, params.end),
+    cooldownMin: params.cooldownMin,
     isUnavailability: true,
     // Expanded by the same code that expands an appointment's (§8.1). "Every
     // weekday, unavailable" is an ordinary thing to say and was being stored as
@@ -203,9 +205,12 @@ async function detachOccurrence(
     tenantId: ctx.tenantId,
     calendarId: template.calendarId,
     ownerId: ctx.actorId,
-    title: patch.title ?? template.title,
+    // Three states, as everywhere else a patch appears: absent keeps the
+    // template's, `null` takes the title away, a value replaces it.
+    title: patch.title === undefined ? template.title : (patch.title ?? ''),
     notes: patch.notes === undefined ? template.notes : patch.notes,
     during: interval(start, end),
+    cooldownMin: patch.cooldownMin ?? template.cooldownMin,
     isInternal: template.isInternal,
     isUnavailability: template.isUnavailability,
     recurrenceParentId: template.id,
@@ -254,9 +259,10 @@ async function splitSeries(
     tenantId: ctx.tenantId,
     calendarId: template.calendarId,
     ownerId: ctx.actorId,
-    title: patch.title ?? template.title,
+    title: patch.title === undefined ? template.title : (patch.title ?? ''),
     notes: patch.notes === undefined ? template.notes : patch.notes,
     during: interval(start, end),
+    cooldownMin: patch.cooldownMin ?? template.cooldownMin,
     isInternal: template.isInternal,
     isUnavailability: template.isUnavailability,
     // The same rule, minus any `UNTIL` the old one just acquired: the new
@@ -278,6 +284,7 @@ function patchValues(params: EditAppointmentParams): Partial<NewAppointment> {
   // `null` is "take the title away", which the column spells as empty (§7.4).
   if (patch.title !== undefined) values.title = patch.title ?? '';
   if (patch.notes !== undefined) values.notes = patch.notes;
+  if (patch.cooldownMin !== undefined) values.cooldownMin = patch.cooldownMin;
   if (patch.status !== undefined) values.status = patch.status;
   if (patch.interval !== undefined) {
     values.during = interval(patch.interval.start, patch.interval.end);

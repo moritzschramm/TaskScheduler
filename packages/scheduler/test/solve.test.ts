@@ -81,6 +81,21 @@ describe('greedy placement', () => {
     expect(validateSchedule(ctx, result.placements).valid).toBe(true);
   });
 
+  it('schedules past a fixed block’s cooldown, not merely past the block', () => {
+    // §6.2 rule 3, from the block's side: a meeting you need twenty minutes to
+    // come back from occupies more of the afternoon than the meeting does.
+    const task = schedulable({ occurrenceId: 'a', durationMin: 60 });
+    const ctx = context({
+      schedulables: [task],
+      fixedBlocks: [fixedBlock('dentist', '2026-03-23T08:00:00Z', '2026-03-23T09:00:00Z', 20)],
+    });
+
+    const result = solve(ctx);
+
+    expect(placementOf(result, 'a')?.interval.start).toBe(at('2026-03-23T09:20:00Z'));
+    expect(validateSchedule(ctx, result.placements).valid).toBe(true);
+  });
+
   it('never places a task before its manual floor', () => {
     // Spec §7.3: delayed, not fixed — later is fine, earlier is not.
     const task = schedulable({

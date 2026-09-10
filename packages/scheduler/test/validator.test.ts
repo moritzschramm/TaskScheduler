@@ -193,6 +193,39 @@ describe('hard-constraint validator (spec §6.2)', () => {
       expect(result.violations[0]?.relatedBlockId).toBe('call');
     });
 
+    it('rejects a placement starting inside a fixed block’s own cooldown', () => {
+      // The other direction of rule 3: twenty minutes to come back from a
+      // meeting is time the meeting occupies, exactly as a task's is.
+      const a = schedulable({ occurrenceId: 'a' });
+
+      const result = validateSchedule(
+        context({
+          schedulables: [a],
+          fixedBlocks: [fixedBlock('offsite', '2026-03-23T09:00:00Z', '2026-03-23T10:00:00Z', 30)],
+        }),
+        [placement('a', '2026-03-23T10:15:00Z', 30)],
+      );
+
+      const violation = result.violations[0];
+      expect(violation?.code).toBe('cooldown_overlap');
+      expect(violation?.relatedBlockId).toBe('offsite');
+      expect(violation?.limit).toBe(at('2026-03-23T10:30:00Z'));
+    });
+
+    it('accepts a placement starting exactly when a block’s cooldown ends', () => {
+      const a = schedulable({ occurrenceId: 'a' });
+
+      const result = validateSchedule(
+        context({
+          schedulables: [a],
+          fixedBlocks: [fixedBlock('offsite', '2026-03-23T09:00:00Z', '2026-03-23T10:00:00Z', 30)],
+        }),
+        [placement('a', '2026-03-23T10:30:00Z', 30)],
+      );
+
+      expect(result.valid).toBe(true);
+    });
+
     it('distinguishes a cooldown clash from a direct overlap', () => {
       // Different fixes: a cooldown clash means "start later", a direct overlap
       // means "this slot is taken".

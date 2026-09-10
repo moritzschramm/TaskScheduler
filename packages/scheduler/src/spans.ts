@@ -10,6 +10,21 @@ import type { Interval } from './time.js';
  * hold a sequence in one piece (§6.7). Both must agree, so both use this.
  */
 
+/**
+ * The span something occupies, including any cooldown reserved after it.
+ *
+ * Structural rather than typed to `FixedBlock` or `Placement`, because both
+ * have the shape and both mean the same thing by it (spec §6.2 rule 3) — and
+ * an interval module that imported the domain types would be the wrong way
+ * round.
+ */
+export function footprint(subject: { interval: Interval; cooldownMin?: number }): Interval {
+  return {
+    start: subject.interval.start,
+    end: subject.interval.end + (subject.cooldownMin ?? 0),
+  };
+}
+
 /** Merges overlapping or touching intervals, so minutes are never counted twice. */
 export function mergeIntervals(intervals: readonly Interval[]): Interval[] {
   const ordered = sorted(

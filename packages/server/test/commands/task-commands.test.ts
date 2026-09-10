@@ -307,6 +307,36 @@ describe('appointments as hard blocks (spec §7.4)', () => {
     expect(await validatePersistedSchedule(world)).toEqual({ valid: true, violations: [] });
   });
 
+  it('keeps the cooldown after an appointment clear as well', async () => {
+    // §6.2 rule 3 from the block's side: the twenty minutes it takes to get
+    // back from a meeting are not minutes anything else can have.
+    await world.run({
+      type: 'CreateTask',
+      params: {
+        calendarId: world.calendarId,
+        title: 'Deep work',
+        categoryId: world.categoryId,
+        estimatedDurationMin: 120,
+      },
+    });
+
+    const outcome = await world.run({
+      type: 'AddAppointment',
+      params: {
+        calendarId: world.calendarId,
+        title: 'Across town',
+        start: '2026-03-23T08:00:00Z',
+        end: '2026-03-23T09:00:00Z',
+        cooldownMin: 20,
+      },
+    });
+
+    expect(outcome.schedules[0]!.placements[0]!.interval.start).toBe(
+      toInstant('2026-03-23T09:20:00Z'),
+    );
+    expect(await validatePersistedSchedule(world)).toEqual({ valid: true, violations: [] });
+  });
+
   it('accepts an appointment overlapping another, and keeps tasks out of both', async () => {
     const add = (start: string, end: string, title: string) =>
       world.run({

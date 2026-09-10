@@ -72,11 +72,19 @@ export function placement(
   return { occurrenceId, interval: { start, end: start + durationMin }, cooldownMin };
 }
 
-export function fixedBlock(id: string, startIso: string, endIso: string): FixedBlock {
+export function fixedBlock(
+  id: string,
+  startIso: string,
+  endIso: string,
+  cooldownMin = 0,
+): FixedBlock {
   return {
     id,
     calendarId: CALENDAR.id,
     interval: { start: at(startIso), end: at(endIso) },
+    // Omitted at zero, so the default fixture is exactly the shape a caller
+    // that has never heard of block cooldowns produces.
+    ...(cooldownMin === 0 ? {} : { cooldownMin }),
   };
 }
 

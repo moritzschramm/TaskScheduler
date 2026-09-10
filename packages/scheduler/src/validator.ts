@@ -1,3 +1,4 @@
+import { footprint } from './spans.js';
 import { overlaps, type Interval } from './time.js';
 import { byId, byInt, chain, sorted } from './ordering.js';
 import { eligibleWindows, windowContaining } from './windows.js';
@@ -18,14 +19,6 @@ import type { Placement, ResolvedWindow, Schedulable, ScheduleContext } from './
  * Violations are collected rather than thrown on first failure, so a caller
  * sees everything wrong at once.
  */
-
-/** The footprint a placement occupies: its own time plus its cooldown (rule 3). */
-function footprintOf(placement: Placement): Interval {
-  return {
-    start: placement.interval.start,
-    end: placement.interval.end + placement.cooldownMin,
-  };
-}
 
 /** Deterministic output order, so two runs report violations identically. */
 const compareViolations = chain<Violation>(
@@ -138,7 +131,9 @@ function checkWindowMembership(
 
 /**
  * Rules 2 and 3 — no overlap between placements, or between a placement and a
- * fixed block, with each placement's cooldown counted as part of its footprint.
+ * fixed block, with the cooldown counted as part of the footprint **on both
+ * sides**: a placement may not run into a block, and may not start inside the
+ * cooldown reserved after one.
  *
  * Compared pairwise over a sorted copy, so the same pair is reported once and
  * always in the same direction regardless of input order.
@@ -158,7 +153,7 @@ function checkOverlaps(
 
   for (let i = 0; i < ordered.length; i += 1) {
     const first = ordered[i]!;
-    const firstFootprint = footprintOf(first);
+    const firstFootprint = footprint(first);
 
     for (let j = i + 1; j < ordered.length; j += 1) {
       const second = ordered[j]!;
@@ -203,9 +198,11 @@ function checkOverlaps(
   );
 
   for (const placement of ordered) {
-    const footprint = footprintOf(placement);
+    const reach = footprint(placement);
 
     for (const block of blocks) {
+      const taken = footprint(block);
+
       if (overlaps(placement.interval, block.interval)) {
         violations.push({
           code: 'fixed_block_overlap',
@@ -217,14 +214,29 @@ function checkOverlaps(
         continue;
       }
 
-      if (overlaps(footprint, block.interval)) {
+      // The block's own cooldown, which a placement may not start inside
+      // (rule 3) — the same reservation a task's makes, in the other
+      // direction.
+      if (overlaps(placement.interval, taken)) {
         violations.push({
           code: 'cooldown_overlap',
           occurrenceId: placement.occurrenceId,
           relatedBlockId: block.id,
           interval: placement.interval,
-          limit: footprint.end,
-          message: `The ${placement.cooldownMin}-minute cooldown after occurrence ${placement.occurrenceId} runs to ${footprint.end}, overlapping fixed block ${block.id}.`,
+          limit: taken.end,
+          message: `Occurrence ${placement.occurrenceId} starts at ${placement.interval.start}, inside the ${block.cooldownMin}-minute cooldown reserved after fixed block ${block.id} until ${taken.end}.`,
+        });
+        continue;
+      }
+
+      if (overlaps(reach, block.interval)) {
+        violations.push({
+          code: 'cooldown_overlap',
+          occurrenceId: placement.occurrenceId,
+          relatedBlockId: block.id,
+          interval: placement.interval,
+          limit: reach.end,
+          message: `The ${placement.cooldownMin}-minute cooldown after occurrence ${placement.occurrenceId} runs to ${reach.end}, overlapping fixed block ${block.id}.`,
         });
       }
     }

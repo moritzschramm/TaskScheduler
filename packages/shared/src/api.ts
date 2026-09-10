@@ -159,6 +159,8 @@ export const fixedBlockSchema = z.object({
   occurrenceStart: instant.nullable(),
   isRecurring: z.boolean(),
   isUnavailability: z.boolean(),
+  /** Non-compressible minutes reserved after the block (§6.2 rule 3). */
+  cooldownMin: z.int().nonnegative(),
   isInternal: z.boolean(),
   status: z.enum(['confirmed', 'tentative', 'cancelled']),
 });

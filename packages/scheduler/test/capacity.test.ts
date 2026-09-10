@@ -112,6 +112,19 @@ describe('supply (spec §6.6)', () => {
     expect(cellOf(report)?.supplyMin).toBe(WINDOW_MIN - 60);
   });
 
+  it('subtracts a fixed block’s cooldown along with the block', () => {
+    // The minutes after a meeting that nothing may be scheduled into are not
+    // supply the report should be offering.
+    const report = computeCapacity({
+      context: context({
+        windows: [MONDAY_WINDOW],
+        fixedBlocks: [fixedBlock('meeting', '2026-03-23T09:00:00Z', '2026-03-23T10:00:00Z', 30)],
+      }),
+    });
+
+    expect(cellOf(report)?.supplyMin).toBe(WINDOW_MIN - 90);
+  });
+
   it('ignores a fixed block outside the windows', () => {
     // Time the user was never available for is not capacity being consumed.
     const report = computeCapacity({

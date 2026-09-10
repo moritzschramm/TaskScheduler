@@ -41,6 +41,7 @@ const title = ref('');
 const notes = ref('');
 const start = ref('');
 const end = ref('');
+const cooldown = ref('0');
 const repeats = ref(false);
 const frequency = ref<'DAILY' | 'WEEKLY' | 'MONTHLY'>('WEEKLY');
 
@@ -73,6 +74,7 @@ watch(
       const from = seed ?? new Date().toISOString();
       title.value = '';
       notes.value = '';
+      cooldown.value = '0';
       start.value = toLocalInput(from, props.timeZone);
       end.value = toLocalInput(
         new Date(Date.parse(from) + 60 * 60_000).toISOString(),
@@ -83,6 +85,7 @@ watch(
 
     title.value = block.title;
     notes.value = block.notes ?? '';
+    cooldown.value = String(block.cooldownMin);
     start.value = toLocalInput(block.start, props.timeZone);
     end.value = toLocalInput(block.end, props.timeZone);
     repeats.value = false;
@@ -155,6 +158,18 @@ async function save(): Promise<void> {
   }
 }
 
+/**
+ * The gap after the block, in minutes (§6.2 rule 3).
+ *
+ * Zero is sent as nothing at all rather than as `0`: the column defaults to it,
+ * so an omitted value and a typed zero mean the same thing, and the log is
+ * shorter for the overwhelming majority of blocks that reserve nothing.
+ */
+function cooldownMin(): number {
+  const minutes = Number(cooldown.value);
+  return Number.isInteger(minutes) && minutes > 0 ? minutes : 0;
+}
+
 function createRequest(times: { start: string; end: string }): CommandRequest {
   if (isUnavailability.value) {
     return {
@@ -166,6 +181,7 @@ function createRequest(times: { start: string; end: string }): CommandRequest {
         ...(title.value.trim() === '' ? {} : { title: title.value.trim() }),
         start: times.start,
         end: times.end,
+        ...(cooldownMin() === 0 ? {} : { cooldownMin: cooldownMin() }),
         ...(repeats.value ? { recurrence: { rule: ruleText(), timeZone: props.timeZone } } : {}),
       },
     };
@@ -179,6 +195,7 @@ function createRequest(times: { start: string; end: string }): CommandRequest {
       ...(notes.value === '' ? {} : { notes: notes.value }),
       start: times.start,
       end: times.end,
+      ...(cooldownMin() === 0 ? {} : { cooldownMin: cooldownMin() }),
       // The rule carries its zone, because "every Monday at 09:00" is not a
       // statement about instants: it means a different moment either side of a
       // DST boundary (§5.1, §8.1).
@@ -253,6 +270,9 @@ function editRequest(times: { start: string; end: string }): CommandRequest {
         title: title.value.trim() === '' ? null : title.value.trim(),
         notes: notes.value === '' ? null : notes.value,
         interval: times,
+        // Always sent on an edit, zero included: this is the one place the
+        // value can be taken back down again.
+        cooldownMin: cooldownMin(),
       },
     },
   };
@@ -371,6 +391,23 @@ async function cancelBlock(): Promise<void> {
           data-testid="appointment-end"
         />
       </div>
+    </div>
+
+    <div class="space-y-1">
+      <Label for="appointment-cooldown">{{ t('appointments.cooldown') }}</Label>
+      <Input
+        id="appointment-cooldown"
+        v-model="cooldown"
+        type="number"
+        min="0"
+        class="w-32"
+        data-testid="appointment-cooldown"
+      />
+      <!--
+        Said in words, because the block's own end does not move and the effect
+        is only visible in where *other* things land.
+      -->
+      <p class="text-muted-foreground text-xs">{{ t('appointments.cooldownNote') }}</p>
     </div>
 
     <fieldset v-if="isCreate" class="space-y-2" data-testid="recurrence-fieldset">
