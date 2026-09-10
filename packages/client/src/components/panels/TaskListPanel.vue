@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from '@/i18n';
 import {
   createCoreRowModel,
@@ -9,9 +9,32 @@ import {
 } from '@tanstack/vue-table';
 import type { Category, TaskNode } from '@ambitime/shared';
 import type { MessageKey } from '@/i18n';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Plus } from 'lucide-vue-next';
+
+// Read during setup as well as during render — the quick-add drafts are
+// seeded from the group names — so it is destructured before anything uses it.
+const { t } = useI18n();
+
+/**
+ * What the quick-add row can say about a task: the four fields §4.4 needs to
+ * place one, and nothing else.
+ *
+ * Everything a task *can* have is a long form, and opening it is the right
+ * thing to do when there is something to think about. Most tasks have nothing
+ * to think about — a name, how long, and sometimes a deadline — and for those
+ * the modal was the whole cost of writing one down.
+ */
+export interface QuickAddDraft {
+  /** The group the row belongs to; `null` is the ungrouped one. */
+  categoryId: string | null;
+  title: string;
+  estimatedDurationMin: number;
+  priority: number | null;
+  /** A local `YYYY-MM-DD`; the view knows the zone to read it in. */
+  dueDate: string | null;
+}
 
 const props = withDefaults(
   defineProps<{
@@ -20,8 +43,17 @@ const props = withDefaults(
     categories?: Category[];
     selectedId?: string | null;
     editable?: boolean;
+    /**
+     * Creates a task from the quick-add row, and says whether it landed.
+     *
+     * A function rather than an emit, for one reason: the row has to know
+     * whether to clear itself, and an emit cannot answer. Building the command
+     * stays with the view, which is the layer that knows the calendar and the
+     * zone a due date is read in.
+     */
+    quickAdd?: ((draft: QuickAddDraft) => Promise<boolean>) | undefined;
   }>(),
-  { categories: () => [], selectedId: null, editable: false },
+  { categories: () => [], selectedId: null, editable: false, quickAdd: undefined },
 );
 
 const emit = defineEmits<{ select: [task: TaskNode]; addChild: [parent: TaskNode]; addRoot: [] }>();
@@ -65,9 +97,19 @@ const MAX_DEPTH = 5;
 // options. Only the core model: no sorting, filtering or pagination yet.
 const features = { coreRowModel: createCoreRowModel() } satisfies TableFeatures;
 
+/**
+ * No status column.
+ *
+ * It carried two things and neither earned a fifth of the width: a badge for
+ * the tasks that are not active, which are a small minority of a list somebody
+ * is reading to decide what to do next, and the words "leaf" or "parent" for
+ * every task that is — which is the shape of the tree, and the indentation
+ * beside it already says that. What was worth keeping is that a cancelled or
+ * completed task should not read as work outstanding; the title is struck
+ * through and dimmed instead, which costs no column at all.
+ */
 const columns: ColumnDef<typeof features, TaskNode>[] = [
   { id: 'title', header: 'tasks.column.task', accessorKey: 'title' },
-  { id: 'status', header: 'tasks.column.status', accessorKey: 'status' },
   { id: 'duration', header: 'tasks.column.estimate', accessorKey: 'estimatedDurationMin' },
   { id: 'priority', header: 'tasks.column.priority', accessorKey: 'effectivePriority' },
   { id: 'due', header: 'tasks.column.due', accessorKey: 'effectiveDueDate' },
@@ -165,7 +207,81 @@ function canHaveChildren(task: TaskNode): boolean {
   return task.depth < MAX_DEPTH && task.status === 'active';
 }
 
-const { t } = useI18n();
+/**
+ * One unsent task per group, held while it is being typed.
+ *
+ * Per group rather than one shared row, because the group *is* the activity
+ * type: the row is already the answer to "what kind of thing is this", which is
+ * the field a person is least likely to volunteer and the one §6.2 rule 1 makes
+ * mandatory. A single row at the bottom of the table would have to ask.
+ */
+interface QuickDraft {
+  title: string;
+  estimate: string;
+  priority: string;
+  due: string;
+}
+
+const drafts = reactive(new Map<string, QuickDraft>());
+const adding = ref<string | null>(null);
+
+function emptyDraft(): QuickDraft {
+  return { title: '', estimate: '', priority: '', due: '' };
+}
+
+// Seeded from the groups rather than created on demand in the template: a
+// render that writes to reactive state is a render that schedules another one.
+watch(
+  () => groups.value.map((group) => group.key),
+  (keys) => {
+    for (const key of keys) if (!drafts.has(key)) drafts.set(key, emptyDraft());
+    const live = new Set(keys);
+    for (const key of [...drafts.keys()]) if (!live.has(key)) drafts.delete(key);
+  },
+  { immediate: true },
+);
+
+/**
+ * Both required, and that is the point.
+ *
+ * A task with no estimate cannot be placed (§6.2), so a quick way to make one
+ * would be a quick way to fill the "these could not be scheduled" list. The
+ * long form is where a task without one belongs, because there it is a
+ * deliberate act rather than a field somebody skipped.
+ */
+function ready(key: string): boolean {
+  const draft = drafts.get(key);
+  if (draft === undefined) return false;
+
+  const estimate = Number(draft.estimate);
+  return draft.title.trim() !== '' && Number.isInteger(estimate) && estimate > 0;
+}
+
+async function add(key: string): Promise<void> {
+  const draft = drafts.get(key);
+  if (props.quickAdd === undefined || draft === undefined || !ready(key) || adding.value !== null) {
+    return;
+  }
+
+  adding.value = key;
+  try {
+    const priority = Number(draft.priority);
+    const landed = await props.quickAdd({
+      categoryId: key === NO_CATEGORY ? null : key,
+      title: draft.title.trim(),
+      estimatedDurationMin: Number(draft.estimate),
+      priority: draft.priority.trim() === '' || !Number.isInteger(priority) ? null : priority,
+      dueDate: draft.due === '' ? null : draft.due,
+    });
+
+    // Cleared only when it landed: a refused command leaves the error banner
+    // above the table and the words still in the row, which is the only state
+    // from which the user can try again without retyping.
+    if (landed) drafts.set(key, emptyDraft());
+  } finally {
+    adding.value = null;
+  }
+}
 </script>
 
 <template>
@@ -240,24 +356,30 @@ const { t } = useI18n();
         >
           <td class="py-1.5 pr-3">
             <span :style="{ paddingLeft: `${entry.indent * 16}px` }">
+              <!--
+                Struck through and dimmed where the status column used to say
+                so: a completed or cancelled task is still part of the tree and
+                still worth reading, and it must not read as work outstanding.
+              -->
               <button
                 v-if="editable"
                 type="button"
                 class="hover:underline"
+                :class="
+                  entry.row.original.status === 'active' ? '' : 'text-muted-foreground line-through'
+                "
                 data-testid="select-task"
                 @click="emit('select', entry.row.original)"
               >
                 {{ entry.row.original.title }}
               </button>
-              <template v-else>{{ entry.row.original.title }}</template>
-            </span>
-          </td>
-          <td class="py-1.5 pr-3">
-            <Badge v-if="entry.row.original.status !== 'active'" variant="secondary">
-              {{ entry.row.original.status }}
-            </Badge>
-            <span v-else class="text-muted-foreground text-xs">
-              {{ entry.row.original.isLeaf ? t('tasks.leaf') : t('tasks.parent') }}
+              <span
+                v-else
+                :class="
+                  entry.row.original.status === 'active' ? '' : 'text-muted-foreground line-through'
+                "
+                >{{ entry.row.original.title }}</span
+              >
             </span>
           </td>
           <td class="py-1.5 pr-3 tabular-nums">
@@ -291,6 +413,75 @@ const { t } = useI18n();
               @click="emit('addChild', entry.row.original)"
             >
               {{ t('tasks.subtask') }}
+            </Button>
+          </td>
+        </tr>
+
+        <!--
+          The empty row at the foot of every group: a task written down without
+          opening anything. One per group because the group is the activity
+          type, which is the field §6.2 rule 1 makes mandatory and the one a
+          person is least likely to volunteer — a single row under the whole
+          table would have to ask for it.
+
+          Enter sends from any of the four fields. The modal is still there for
+          everything this row cannot say, and the title links to it.
+        -->
+        <tr
+          v-if="editable && quickAdd && !collapsed.has(group.key) && drafts.get(group.key)"
+          class="border-b last:border-0"
+          data-testid="quick-add"
+          :data-group="group.key"
+        >
+          <td class="py-1.5 pr-3">
+            <Input
+              v-model="drafts.get(group.key)!.title"
+              :placeholder="t('tasks.quickAdd')"
+              :aria-label="t('tasks.quickAddIn', { group: group.name })"
+              data-testid="quick-add-title"
+              @keydown.enter="add(group.key)"
+            />
+          </td>
+          <td class="py-1.5 pr-3">
+            <Input
+              v-model="drafts.get(group.key)!.estimate"
+              type="number"
+              min="1"
+              class="w-20"
+              :placeholder="t('tasks.quickAddMinutes')"
+              :aria-label="t('tasks.column.estimate')"
+              data-testid="quick-add-estimate"
+              @keydown.enter="add(group.key)"
+            />
+          </td>
+          <td class="py-1.5 pr-3">
+            <Input
+              v-model="drafts.get(group.key)!.priority"
+              type="number"
+              class="w-20"
+              :aria-label="t('tasks.column.priority')"
+              data-testid="quick-add-priority"
+              @keydown.enter="add(group.key)"
+            />
+          </td>
+          <td class="py-1.5 pr-3">
+            <input
+              v-model="drafts.get(group.key)!.due"
+              type="date"
+              class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+              :aria-label="t('tasks.column.due')"
+              data-testid="quick-add-due"
+              @keydown.enter="add(group.key)"
+            />
+          </td>
+          <td class="py-1.5 text-right">
+            <Button
+              size="sm"
+              :disabled="!ready(group.key) || adding !== null"
+              data-testid="quick-add-save"
+              @click="add(group.key)"
+            >
+              {{ t('common.add') }}
             </Button>
           </td>
         </tr>

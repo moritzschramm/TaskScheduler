@@ -152,14 +152,14 @@ export const en = {
       'Grouped by activity type. Values shown in italics are inherited from an ancestor. Tasks nest five deep at most.',
     column: {
       task: 'Task',
-      status: 'Status',
       estimate: 'Estimate',
       priority: 'Priority',
       due: 'Due',
       actions: 'Actions',
     },
-    leaf: 'leaf',
-    parent: 'parent',
+    quickAdd: 'Add a task…',
+    quickAddIn: 'New task in {group}',
+    quickAddMinutes: 'min',
   },
 
   backlog: {

@@ -167,14 +167,14 @@ export const de: Messages = {
       'Nach Aktivitätsart gruppiert. Kursiv gesetzte Werte sind von einer übergeordneten Aufgabe geerbt. Aufgaben lassen sich höchstens fünf Ebenen tief verschachteln.',
     column: {
       task: 'Aufgabe',
-      status: 'Status',
       estimate: 'Schätzung',
       priority: 'Priorität',
       due: 'Fällig',
       actions: 'Aktionen',
     },
-    leaf: 'einzeln',
-    parent: 'übergeordnet',
+    quickAdd: 'Aufgabe hinzufügen…',
+    quickAddIn: 'Neue Aufgabe in {group}',
+    quickAddMinutes: 'Min.',
   },
 
   backlog: {

@@ -224,8 +224,11 @@ describe('the panels', () => {
   };
 
   it('has no axe violations in the task tree', async () => {
+    // With the quick-add row: four unlabelled inputs in a table is exactly the
+    // kind of thing axe is for, and every one of them carries an `aria-label`
+    // because the column header is not a label a screen reader will find.
     const wrapper = mount(TaskListPanel, {
-      props: { tasks: [node], editable: true },
+      props: { tasks: [node], editable: true, quickAdd: async () => true },
       attachTo: document.body,
     });
 

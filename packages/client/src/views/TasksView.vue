@@ -2,12 +2,13 @@
 import { onMounted } from 'vue';
 import { useI18n } from '@/i18n';
 import BacklogPanel from '@/components/panels/BacklogPanel.vue';
-import TaskListPanel from '@/components/panels/TaskListPanel.vue';
+import TaskListPanel, { type QuickAddDraft } from '@/components/panels/TaskListPanel.vue';
 import TaskActions from '@/components/tasks/TaskActions.vue';
 import TaskEditor from '@/components/tasks/TaskEditor.vue';
 import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
 import { Dialog } from '@/components/ui/dialog';
 import { useWorkspace } from '@/lib/workspace';
+import { fromLocalInput } from '@/lib/time';
 import type { ScheduledBlock } from '@ambitime/shared';
 
 const { t, plural } = useI18n();
@@ -51,6 +52,43 @@ function placementOf(taskId: string): ScheduledBlock | null {
 /** Everything else on the calendar, as swap candidates (§7.3). */
 function swapCandidates(taskId: string): ScheduledBlock[] {
   return (view.value?.schedule.blocks ?? []).filter((block) => block.taskId !== taskId);
+}
+
+/**
+ * The hour a date-only due date means.
+ *
+ * The quick row asks for a day, because that is what a person has in mind, and
+ * §4.4's due date is an instant. Five in the afternoon of that day, in the
+ * calendar's own zone: the end of a working day rather than midnight, which is
+ * the first moment of the day *after* the one somebody typed.
+ */
+const DUE_HOUR = '17:00';
+
+/**
+ * A task from the quick-add row (§4.4).
+ *
+ * The command is assembled here rather than in the panel because this is the
+ * layer that knows which calendar is open and which zone its dates are read
+ * in — the panel deals in a group, four fields and a local date.
+ */
+async function quickAdd(draft: QuickAddDraft): Promise<boolean> {
+  const calendarId = calendar.value?.id;
+  if (calendarId === undefined) return false;
+
+  const due =
+    draft.dueDate === null ? null : fromLocalInput(`${draft.dueDate}T${DUE_HOUR}`, zone.value);
+
+  return submit({
+    type: 'CreateTask',
+    params: {
+      calendarId,
+      title: draft.title,
+      estimatedDurationMin: draft.estimatedDurationMin,
+      ...(draft.categoryId === null ? {} : { categoryId: draft.categoryId }),
+      ...(draft.priority === null ? {} : { priority: draft.priority }),
+      ...(due === null ? {} : { dueDate: { date: due, kind: 'soft' as const } }),
+    },
+  });
 }
 </script>
 
@@ -107,6 +145,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           :tasks="tasks"
           :categories="categories"
           :selected-id="editing.kind === 'task' ? (editing.task?.id ?? null) : null"
+          :quick-add="quickAdd"
           editable
           @select="(task) => (editing = { kind: 'task', task, parent: parentOf(task) })"
           @add-child="(parent) => (editing = { kind: 'task', task: null, parent })"

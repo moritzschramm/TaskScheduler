@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { flushPromises } from '@vue/test-utils';
+import { describe, expect, it, vi } from 'vitest';
 import TaskListPanel from '@/components/panels/TaskListPanel.vue';
 import type { TaskNode } from '@ambitime/shared';
 
@@ -146,9 +147,119 @@ describe('the task tree', () => {
       node('inherited', 2, { ownPriority: null, effectivePriority: 3 }),
     ]).findAll('[data-testid="task-row"]');
 
-    const priorityCell = (index: number) => rows[index]!.findAll('td')[3]!.find('span');
+    // Title, estimate, priority, due, actions — the third cell is priority.
+    const priorityCell = (index: number) => rows[index]!.findAll('td')[2]!.find('span');
 
     expect(priorityCell(0).classes()).not.toContain('italic');
     expect(priorityCell(1).classes()).toContain('italic');
+  });
+});
+
+describe('the quick-add row', () => {
+  const work = { id: 'cat-work', name: 'Work', defaultCooldownMin: 0, color: null, version: 1 };
+
+  function panelWith(quickAdd: (draft: unknown) => Promise<boolean>) {
+    return mount(TaskListPanel, {
+      props: {
+        tasks: [node('t1', 1, { effectiveCategoryId: 'cat-work' })],
+        categories: [work],
+        editable: true,
+        quickAdd,
+      },
+    });
+  }
+
+  it('creates a task in the group it sits in', async () => {
+    const quickAdd = vi.fn().mockResolvedValue(true);
+    const wrapper = panelWith(quickAdd);
+
+    await wrapper.find('[data-testid="quick-add-title"]').setValue('Invoices');
+    await wrapper.find('[data-testid="quick-add-estimate"]').setValue('30');
+    await wrapper.find('[data-testid="quick-add-due"]').setValue('2026-04-02');
+    await wrapper.find('[data-testid="quick-add-save"]').trigger('click');
+
+    // The group is the activity type, so the row never has to ask for it —
+    // which is the field §6.2 rule 1 makes mandatory.
+    expect(quickAdd).toHaveBeenCalledWith({
+      categoryId: 'cat-work',
+      title: 'Invoices',
+      estimatedDurationMin: 30,
+      priority: null,
+      dueDate: '2026-04-02',
+    });
+  });
+
+  it('will not send without a title and an estimate', async () => {
+    const quickAdd = vi.fn().mockResolvedValue(true);
+    const wrapper = panelWith(quickAdd);
+    const save = () => wrapper.find('[data-testid="quick-add-save"]');
+
+    expect(save().attributes('disabled')).toBeDefined();
+
+    await wrapper.find('[data-testid="quick-add-title"]').setValue('Invoices');
+    // A task with no estimate cannot be placed, so a quick way to make one
+    // would be a quick way to fill the "could not be scheduled" list.
+    expect(save().attributes('disabled')).toBeDefined();
+
+    await wrapper.find('[data-testid="quick-add-estimate"]').setValue('30');
+    expect(save().attributes('disabled')).toBeUndefined();
+  });
+
+  it('empties itself once the task has landed, and not before', async () => {
+    const quickAdd = vi.fn().mockResolvedValue(false);
+    const wrapper = panelWith(quickAdd);
+
+    await wrapper.find('[data-testid="quick-add-title"]').setValue('Invoices');
+    await wrapper.find('[data-testid="quick-add-estimate"]').setValue('30');
+    await wrapper.find('[data-testid="quick-add-save"]').trigger('click');
+    await flushPromises();
+
+    // Refused: the words stay, because that is the only state the user can try
+    // again from without retyping.
+    const title = () => wrapper.find('[data-testid="quick-add-title"]').element as HTMLInputElement;
+    expect(title().value).toBe('Invoices');
+
+    quickAdd.mockResolvedValue(true);
+    await wrapper.find('[data-testid="quick-add-save"]').trigger('click');
+    await flushPromises();
+
+    expect(title().value).toBe('');
+  });
+
+  it('sends on Enter from any of its fields', async () => {
+    const quickAdd = vi.fn().mockResolvedValue(true);
+    const wrapper = panelWith(quickAdd);
+
+    await wrapper.find('[data-testid="quick-add-title"]').setValue('Invoices');
+    await wrapper.find('[data-testid="quick-add-estimate"]').setValue('30');
+    await wrapper.find('[data-testid="quick-add-estimate"]').trigger('keydown.enter');
+
+    expect(quickAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it('is absent from a panel with no way to create one', () => {
+    const readOnly = mount(TaskListPanel, { props: { tasks: [node('t1', 1)], editable: false } });
+
+    expect(readOnly.find('[data-testid="quick-add"]').exists()).toBe(false);
+  });
+});
+
+describe('a task that is no longer outstanding', () => {
+  it('is struck through, where the status column used to say so', () => {
+    const rows = panel([
+      node('done', 1, { status: 'completed' }),
+      node('live', 1, { status: 'active' }),
+    ]).findAll('[data-testid="task-row"]');
+
+    expect(rows[0]!.find('[data-testid="select-task"]').classes()).toContain('line-through');
+    expect(rows[1]!.find('[data-testid="select-task"]').classes()).not.toContain('line-through');
+  });
+
+  it('has no status column to say it in', () => {
+    const headers = panel([node('t1', 1)])
+      .findAll('th')
+      .map((cell) => cell.text());
+
+    expect(headers).not.toContain('Status');
   });
 });
