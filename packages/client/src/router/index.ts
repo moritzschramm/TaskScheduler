@@ -19,7 +19,6 @@ import { loadSession, RESET_PASSWORD_PATH, session, VERIFY_EMAIL_PATH } from '@/
  */
 const TasksView = () => import('@/views/TasksView.vue');
 const CategoriesView = () => import('@/views/CategoriesView.vue');
-const AppointmentsView = () => import('@/views/AppointmentsView.vue');
 const AuditView = () => import('@/views/AuditView.vue');
 const SettingsView = () => import('@/views/SettingsView.vue');
 const SignUpView = () => import('@/views/SignUpView.vue');
@@ -43,13 +42,18 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
     history,
     routes: [
       /**
-       * Three views of one week, not three applications (§6.1).
+       * Two views of one week, not two applications (§6.1).
        *
-       * Schedule answers "when", Tasks answers "what", and Appointments is the
-       * fixed time the first two are arranged around. They were one screen and
-       * it had become a list of everything the system knows; splitting them is
-       * what lets each be short enough to read. All three share the workspace,
-       * so the week you paged to is the week you find on the next tab.
+       * Schedule answers "when" and Tasks answers "what". They were one screen
+       * and it had become a list of everything the system knows; splitting them
+       * is what lets each be short enough to read, and they share the
+       * workspace, so the week you paged to is the week you find on the next
+       * tab.
+       *
+       * There was a third, Appointments, and it was this same week with the
+       * tasks left out — a way of looking rather than a place to be. It is a
+       * checkbox in the display options now, and the fixed blocks it created
+       * are made from the button beside "New task".
        */
       { path: '/', name: 'schedule', component: ScheduleView, meta: { requiresAuth: true } },
       { path: '/tasks', name: 'tasks', component: TasksView, meta: { requiresAuth: true } },
@@ -57,12 +61,6 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
         path: '/categories',
         name: 'categories',
         component: CategoriesView,
-        meta: { requiresAuth: true },
-      },
-      {
-        path: '/appointments',
-        name: 'appointments',
-        component: AppointmentsView,
         meta: { requiresAuth: true },
       },
       {

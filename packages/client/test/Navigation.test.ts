@@ -63,17 +63,16 @@ describe('the primary navigation', () => {
     document.body.innerHTML = '';
   });
 
-  it('offers the four screens, in the order they are used', async () => {
+  it('offers the three screens, in the order they are used', async () => {
     const wrapper = await shell('/');
 
-    // Categories sits between Tasks and Appointments because that is the order
-    // a person meets them: what to do, what kind of thing it is and when that
-    // kind may happen, then the fixed time it all works around.
+    // What to do, and what kind of thing it is — then when that kind may
+    // happen. Appointments was a fourth and is now a checkbox on the first:
+    // it was this same week with the tasks left out.
     expect(wrapper.findAll('nav a').map((link) => link.text())).toEqual([
       'Schedule',
       'Tasks',
       'Activity types',
-      'Appointments',
     ]);
     expect(wrapper.find('[data-testid="nav-categories"]').attributes('href')).toBe('/categories');
     wrapper.unmount();
@@ -89,16 +88,17 @@ describe('the primary navigation', () => {
 
   it('does not leave Schedule lit on every route beneath it', async () => {
     // `/` is a prefix of every path, so an active-match rather than an
-    // exact-match would mark Schedule current while you stood on Tasks.
-    const onAppointments = await shell('/appointments');
+    // exact-match would mark Schedule current while you stood on Activity
+    // types.
+    const onCategories = await shell('/categories');
 
     expect(
-      onAppointments.find('[data-testid="nav-schedule"]').attributes('aria-current'),
+      onCategories.find('[data-testid="nav-schedule"]').attributes('aria-current'),
     ).toBeUndefined();
-    expect(onAppointments.find('[data-testid="nav-appointments"]').attributes('aria-current')).toBe(
+    expect(onCategories.find('[data-testid="nav-categories"]').attributes('aria-current')).toBe(
       'page',
     );
-    onAppointments.unmount();
+    onCategories.unmount();
   });
 
   it('has no axe violations', async () => {

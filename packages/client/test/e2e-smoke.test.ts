@@ -450,7 +450,7 @@ describe('seed via the API, render the client', () => {
     await loadSession();
 
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/appointments');
+    await router.push('/');
     await router.isReady();
 
     const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
@@ -472,7 +472,7 @@ describe('seed via the API, render the client', () => {
     );
   });
 
-  it('starts a block on the hour that was clicked', async () => {
+  it('opens a block on a sensible day from the toolbar', async () => {
     const email = `slot-${Date.now()}@example.test`;
     await seed(email);
 
@@ -480,21 +480,22 @@ describe('seed via the API, render the client', () => {
     await loadSession();
 
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/appointments');
+    await router.push('/');
     await router.isReady();
 
     const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
     await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);
 
-    await wrapper.findAll('[data-testid="day-body"]')[2]!.trigger('click', { clientY: 0 });
+    await wrapper.find('[data-testid="add-block"]').trigger('click');
     await flushPromises();
 
-    // Wednesday at the top of the visible span, in the calendar's own zone,
-    // with the hour that follows already in the second field.
+    // A day in the week on screen, and an hour after it in the second field.
+    // Which day is a starting point rather than a decision — it is a field on
+    // the form — and clicking an empty hour is the precise version.
     const start = wrapper.find('[data-testid="appointment-start"]').element as HTMLInputElement;
     const end = wrapper.find('[data-testid="appointment-end"]').element as HTMLInputElement;
-    expect(start.value).toBe('2026-03-25T06:00');
-    expect(end.value).toBe('2026-03-25T07:00');
+    expect(start.value).toMatch(/^2026-03-2\dT09:00$/);
+    expect(end.value).toMatch(/^2026-03-2\dT10:00$/);
   });
 
   it('takes a block that overlaps another, and draws them side by side', async () => {
@@ -505,7 +506,7 @@ describe('seed via the API, render the client', () => {
     await loadSession();
 
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/appointments');
+    await router.push('/');
     await router.isReady();
 
     const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
@@ -1034,7 +1035,7 @@ describe('seed via the API, render the client', () => {
       await loadSession();
 
       const router = createAppRouter(createMemoryHistory());
-      await router.push('/appointments');
+      await router.push('/');
       await router.isReady();
 
       const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));

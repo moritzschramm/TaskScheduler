@@ -44,7 +44,6 @@ const primary = computed(() => [
   { to: '/', label: t('nav.schedule'), testId: 'nav-schedule' },
   { to: '/tasks', label: t('nav.tasks'), testId: 'nav-tasks' },
   { to: '/categories', label: t('nav.categories'), testId: 'nav-categories' },
-  { to: '/appointments', label: t('nav.appointments'), testId: 'nav-appointments' },
 ]);
 
 // Presence is a fact about a signed-in page being open (§11), so the beat

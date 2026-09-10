@@ -44,7 +44,6 @@ export const de: Messages = {
     schedule: 'Plan',
     tasks: 'Aufgaben',
     categories: 'Aktivitätsarten',
-    appointments: 'Termine',
   },
 
   verify: {
@@ -212,6 +211,7 @@ export const de: Messages = {
 
   calendar: {
     daysShown: 'Angezeigte Tage',
+    showTasks: 'Geplante Aufgaben zeigen',
     rowHeight: 'Zeilenhöhe',
     view: 'Kalenderansicht',
     week: 'Woche',
@@ -237,9 +237,7 @@ export const de: Messages = {
   appointments: {
     addBlock: 'Block hinzufügen',
     saveBlock: 'Block speichern',
-    title: 'Termine',
     newBlock: 'Neuer Termin',
-    lead: 'Zeit, die schon vergeben ist: Besprechungen und Stunden, in denen du schlicht nicht verfügbar bist. Aufgaben werden darum herum geplant und im Plan angezeigt.',
     editorNew: 'Neuer Termin',
     editorEdit: 'Termin bearbeiten',
     editorEditUnavailability: 'Nicht-verfügbar-Block bearbeiten',

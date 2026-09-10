@@ -18,7 +18,7 @@ import { formatDayLabel, toIso } from '@/lib/time';
 import { dayOf, useWorkspace } from '@/lib/workspace';
 import type { GridBlock } from '@/lib/grid';
 import type { ScheduledBlock } from '@ambitime/shared';
-import { Plus } from 'lucide-vue-next';
+import { CalendarPlus, Plus } from 'lucide-vue-next';
 
 const { t, plural } = useI18n();
 
@@ -31,6 +31,13 @@ const { t, plural } = useI18n();
  * itself and the two things that comment on it — the signals of §11 and the
  * capacity indicator of §6.6 — plus an editor for whatever block you click,
  * because the block you clicked is the thing you want to change.
+ *
+ * **Appointments were a second copy of this screen** with the tasks left out,
+ * and everything else on it was already shared: the same toolbar, the same
+ * month view, the same editor opened by clicking the same block. What that page
+ * really offered was a *way of looking* at the week, so it is a checkbox in the
+ * display options now, beside the hidden weekdays and for the same reason.
+ * Making a fixed block is a button here, next to the one that makes a task.
  */
 const {
   view,
@@ -63,7 +70,9 @@ const {
   openTask,
   showWeekOf,
   setMode,
-  newTaskAt,
+  newBlockAt,
+  newAtSlot,
+  showTasks,
 } = useWorkspace();
 
 onMounted(ensureLoaded);
@@ -120,6 +129,19 @@ function newTask(): void {
   editing.value = { kind: 'task', task: null, parent: null };
 }
 
+/**
+ * Opens the block editor on a sensible day (§7.4).
+ *
+ * Today, or the first day drawn when today is not one of them — the date is a
+ * field on the form either way, so this picks a starting point rather than
+ * making the choice. Clicking an empty hour is the precise version of the same
+ * gesture.
+ */
+function newBlock(): void {
+  const day = today.value ?? days.value[0];
+  if (day !== undefined) newBlockAt(day);
+}
+
 async function completeBlock(block: GridBlock): Promise<void> {
   if (block.taskId === undefined) return;
   await submit({ type: 'CompleteTask', params: { taskId: block.taskId } });
@@ -164,6 +186,10 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         <Button size="sm" data-testid="new-task" @click="newTask">
           <Plus class="size-4" aria-hidden="true" />
           {{ t('schedule.newTask') }}
+        </Button>
+        <Button variant="outline" size="sm" data-testid="add-block" @click="newBlock">
+          <CalendarPlus class="size-4" aria-hidden="true" />
+          {{ t('appointments.newBlock') }}
         </Button>
       </template>
     </WeekToolbar>
@@ -219,9 +245,9 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         v-if="mode === 'week'"
         :days="days"
         :time-zone="zone"
-        :blocks="view.schedule.blocks"
+        :blocks="showTasks ? view.schedule.blocks : []"
         :fixed-blocks="view.fixedBlocks"
-        :completed-blocks="view.completedBlocks"
+        :completed-blocks="showTasks ? view.completedBlocks : []"
         :windows="openWindows"
         :categories="categories"
         :special-weeks="configuration?.weekTypeOverrides ?? []"
@@ -234,7 +260,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         @select-block="editBlock"
         @move-block="moveBlock"
         @complete-block="completeBlock"
-        @select-slot="({ day, startMin }) => newTaskAt(day, startMin)"
+        @select-slot="({ day, startMin }) => newAtSlot(day, startMin)"
       />
 
       <!--
@@ -250,9 +276,9 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           :time-zone="zone"
           :first-day-of-week="firstDayOfWeek"
           :locale="locale"
-          :blocks="view.schedule.blocks"
+          :blocks="showTasks ? view.schedule.blocks : []"
           :fixed-blocks="view.fixedBlocks"
-          :completed-blocks="view.completedBlocks"
+          :completed-blocks="showTasks ? view.completedBlocks : []"
           :special-weeks="configuration?.weekTypeOverrides ?? []"
           :today="today"
           :horizon-end="horizonEnd"

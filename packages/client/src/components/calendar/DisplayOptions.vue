@@ -21,7 +21,8 @@ import { useWorkspace } from '@/lib/workspace';
  * menu that closes on the first interaction would make the day range impossible
  * to set.
  */
-const { calendar, zone, locale, visibleWeekdays, setVisibleWeekdays } = useWorkspace();
+const { calendar, zone, locale, visibleWeekdays, setVisibleWeekdays, showTasks, setShowTasks } =
+  useWorkspace();
 const { t } = useI18n();
 
 /** The seven, in ISO order with short names in the reader's language. */
@@ -88,6 +89,23 @@ function toggle(day: number): void {
 
           <DayRangeSlider />
           <RowHeightSlider />
+
+          <!--
+            What used to be the Appointments page: the same week with the
+            placed tasks left out, which is a way of looking at it rather than
+            a different week. Here rather than in the navigation because it
+            changes how much you can see, not what you can do.
+          -->
+          <label class="flex cursor-pointer items-center justify-between gap-3 text-sm font-medium">
+            {{ t('calendar.showTasks') }}
+            <input
+              type="checkbox"
+              class="size-4"
+              :checked="showTasks"
+              data-testid="show-tasks"
+              @change="setShowTasks(($event.target as HTMLInputElement).checked)"
+            />
+          </label>
 
           <!--
             Which columns to draw. A crop, not a rule: a hidden Saturday is

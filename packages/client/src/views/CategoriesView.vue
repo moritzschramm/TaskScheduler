@@ -3,6 +3,7 @@ import { onMounted } from 'vue';
 import { useI18n } from '@/i18n';
 import AvailabilitySection from '@/components/settings/AvailabilitySection.vue';
 import CategoriesSection from '@/components/settings/CategoriesSection.vue';
+import OverridesSection from '@/components/settings/OverridesSection.vue';
 import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
 import { useWorkspace } from '@/lib/workspace';
 
@@ -20,6 +21,12 @@ const { t } = useI18n();
  * The two halves are here together because neither is any use alone. A category
  * with no hours schedules nothing; hours belong to a category and cannot be
  * entered without one.
+ *
+ * **Special weeks are the third.** They were defined on the Appointments page
+ * and filled in here, through a selector that named them — so a holiday was
+ * declared on one screen and given its hours on another, and the fact that one
+ * *replaces* the other had nowhere to be said. They are a rule about
+ * availability, which is what this page is.
  */
 const { configuration, categories, ensureLoaded, submit } = useWorkspace();
 
@@ -46,6 +53,10 @@ onMounted(ensureLoaded);
         </p>
       </section>
       <AvailabilitySection v-else :configuration="configuration" :submit="submit" />
+
+      <div class="border-t pt-6">
+        <OverridesSection :configuration="configuration" :submit="submit" />
+      </div>
     </template>
   </div>
 </template>

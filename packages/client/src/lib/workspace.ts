@@ -285,6 +285,40 @@ function setVisibleWeekdays(next: readonly number[]): void {
   }
 }
 
+/**
+ * Whether the grid draws the tasks the engine placed (§13).
+ *
+ * The last of the view preferences, and the one that replaced a whole screen:
+ * Appointments was this calendar with the tasks left out, which is a way of
+ * *looking* at a week rather than a different week. Turning them off answers
+ * "what is already fixed, before anything is arranged around it" — which is the
+ * question somebody has while they are adding a meeting.
+ *
+ * A crop, like the hidden weekdays beside it. Nothing is unscheduled by it: the
+ * placements are still there, the capacity panel still counts them, and the
+ * notices above the grid still name the ones that could not be placed.
+ */
+const SHOW_TASKS_KEY = 'ambitime.showTasks';
+
+export function readStoredShowTasks(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(SHOW_TASKS_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+const showTasks = ref(readStoredShowTasks());
+
+function setShowTasks(next: boolean): void {
+  showTasks.value = next;
+  try {
+    globalThis.localStorage?.setItem(SHOW_TASKS_KEY, String(next));
+  } catch {
+    // Same as the other view preferences: it applies to this session either way.
+  }
+}
+
 let started = false;
 
 /** Only ever reached before the first read, when nothing is drawn anyway. */
@@ -676,6 +710,21 @@ function newTaskAt(day: CivilDate, startMin: number): void {
   editing.value = { kind: 'task', task: null, parent: null, slot: { day, startMin } };
 }
 
+/**
+ * What an empty hour means, which depends on which week you are looking at.
+ *
+ * With the tasks drawn, clicking one is "I want to do something then" — a task
+ * that prefers the hour. With them hidden, the grid is showing only the time
+ * that is already spoken for, and clicking an empty stretch of it means the
+ * obvious other thing: put a fixed block there. That is exactly what the
+ * Appointments page's own grid did, and the checkbox that replaced it carries
+ * the distinction it used to carry.
+ */
+function newAtSlot(day: CivilDate, startMin: number): void {
+  if (showTasks.value) newTaskAt(day, startMin);
+  else newBlockAt(day, startMin);
+}
+
 function newBlockAt(day: CivilDate, minuteOfDay = 9 * 60): void {
   editing.value = {
     kind: 'block',
@@ -712,6 +761,8 @@ export interface Workspace {
   blockDialogOpen: WritableComputedRef<boolean>;
   anchor: Ref<CivilDate | null>;
   visibleWeekdays: Ref<number[]>;
+  showTasks: Ref<boolean>;
+  setShowTasks: (next: boolean) => void;
   setVisibleWeekdays: (next: readonly number[]) => void;
   mode: Ref<CalendarMode>;
   setMode: (next: CalendarMode) => void;
@@ -744,6 +795,7 @@ export interface Workspace {
   openTask: (taskId: string) => void;
   newTaskAt: (day: CivilDate, startMin: number) => void;
   newBlockAt: (day: CivilDate, minuteOfDay?: number) => void;
+  newAtSlot: (day: CivilDate, startMin: number) => void;
 }
 
 export function useWorkspace(): Workspace {
@@ -775,6 +827,8 @@ export function useWorkspace(): Workspace {
     blockDialogOpen,
     anchor,
     visibleWeekdays,
+    showTasks,
+    setShowTasks,
     setVisibleWeekdays,
     mode,
     setMode,
@@ -805,6 +859,7 @@ export function useWorkspace(): Workspace {
     openTask,
     newTaskAt,
     newBlockAt,
+    newAtSlot,
   };
 }
 

@@ -30,7 +30,6 @@ export const en = {
     schedule: 'Schedule',
     tasks: 'Tasks',
     categories: 'Activity types',
-    appointments: 'Appointments',
   },
 
   verify: {
@@ -196,6 +195,7 @@ export const en = {
 
   calendar: {
     daysShown: 'Days shown',
+    showTasks: 'Show scheduled tasks',
     rowHeight: 'Row height',
     view: 'Calendar view',
     week: 'week',
@@ -221,9 +221,7 @@ export const en = {
   appointments: {
     addBlock: 'Add block',
     saveBlock: 'Save block',
-    title: 'Appointments',
     newBlock: 'New appointment',
-    lead: 'Time that is already spoken for: meetings, and hours you are simply not available. Tasks are scheduled around these, and are drawn on the Schedule.',
     editorNew: 'New appointment',
     editorEdit: 'Edit appointment',
     editorEditUnavailability: 'Edit unavailability',

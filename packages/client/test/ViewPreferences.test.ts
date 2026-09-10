@@ -76,4 +76,30 @@ describe('view preferences', () => {
 
     expect(readStoredWeekdays()).toEqual([1, 2, 3, 4, 5]);
   });
+
+  describe('with the tasks hidden', () => {
+    it('is on by default, so the week shows what was scheduled', () => {
+      expect(useWorkspace().showTasks.value).toBe(true);
+    });
+
+    it('turns an empty hour into a fixed block rather than a task', () => {
+      const { setShowTasks, newAtSlot, editing } = useWorkspace();
+      const friday = { year: 2026, month: 3, day: 27 };
+
+      newAtSlot(friday, 9 * 60);
+      expect(editing.value.kind).toBe('task');
+
+      // Hidden, the grid is showing only the time already spoken for — so
+      // clicking an empty stretch of it means the other obvious thing. This is
+      // what the Appointments page's own grid did, before it was a checkbox.
+      setShowTasks(false);
+      newAtSlot(friday, 9 * 60);
+      expect(editing.value.kind).toBe('block');
+    });
+
+    it('remembers the answer in this browser', () => {
+      useWorkspace().setShowTasks(false);
+      expect(globalThis.localStorage?.getItem('ambitime.showTasks')).toBe('false');
+    });
+  });
 });
