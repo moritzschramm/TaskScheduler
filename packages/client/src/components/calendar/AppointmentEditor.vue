@@ -138,10 +138,8 @@ async function save(): Promise<void> {
 
   busy.value = true;
   try {
-    // An overlap is refused by the database's exclusion constraint and comes
-    // back as a sentence the caller can read (§5.3); nothing is checked here,
-    // because a read-then-write check cannot hold against a concurrent insert
-    // and would only be a second, weaker opinion.
+    // Nothing checks for an overlap, here or on the server: two blocks may
+    // share an hour (§5.3, migration 0016).
     const applied = await props.submit(isCreate.value ? createRequest(times) : editRequest(times));
     if (!applied) return;
 

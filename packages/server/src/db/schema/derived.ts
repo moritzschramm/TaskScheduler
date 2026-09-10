@@ -32,6 +32,8 @@ import { users } from './identity.js';
  * - **No exclusion constraint.** Placements must not overlap (§6.2 rule 2), but
  *   that is the validator's job on a *proposed* schedule. A database constraint
  *   here would make a legal recompute fail midway purely on write ordering.
+ *   There are none left anywhere in the schema; the appointment one went in
+ *   migration 0016, for a different reason and with the same shape of cost.
  * - **No `version`.** Optimistic locking guards user intent against concurrent
  *   edits; a derived cache is replaced wholesale, so there is nothing to lock.
  */

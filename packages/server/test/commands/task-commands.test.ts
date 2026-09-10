@@ -307,18 +307,33 @@ describe('appointments as hard blocks (spec §7.4)', () => {
     expect(await validatePersistedSchedule(world)).toEqual({ valid: true, violations: [] });
   });
 
-  it('refuses an appointment overlapping another, in the user’s words', async () => {
-    const add = (start: string, end: string) =>
+  it('accepts an appointment overlapping another, and keeps tasks out of both', async () => {
+    const add = (start: string, end: string, title: string) =>
       world.run({
         type: 'AddAppointment',
-        params: { calendarId: world.calendarId, title: 'Meeting', start, end },
+        params: { calendarId: world.calendarId, title, start, end },
       });
 
-    await add('2026-03-23T09:00:00Z', '2026-03-23T10:00:00Z');
+    await world.run({
+      type: 'CreateTask',
+      params: {
+        calendarId: world.calendarId,
+        title: 'Deep work',
+        categoryId: world.categoryId,
+        estimatedDurationMin: 60,
+      },
+    });
 
-    await expect(add('2026-03-23T09:30:00Z', '2026-03-23T10:30:00Z')).rejects.toBeInstanceOf(
-      PreconditionFailedError,
+    // From the top of the working day, so the task has nowhere earlier to go.
+    await add('2026-03-23T08:00:00Z', '2026-03-23T09:00:00Z', 'Conference');
+    // Migration 0016: two things a person says are happening may be happening
+    // at once. What must still hold is rule 2 — the task goes after both.
+    const outcome = await add('2026-03-23T08:30:00Z', '2026-03-23T09:30:00Z', 'Keynote');
+
+    expect(outcome.schedules[0]!.placements[0]!.interval.start).toBe(
+      toInstant('2026-03-23T09:30:00Z'),
     );
+    expect(await validatePersistedSchedule(world)).toEqual({ valid: true, violations: [] });
   });
 
   it('allows an appointment that abuts another, since intervals are half-open', async () => {

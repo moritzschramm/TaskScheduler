@@ -199,7 +199,7 @@ describe('the remaining §7.3–7.4 commands', () => {
       expect(row).toEqual({ title: '', flag: true });
     });
 
-    it('will not overlap an existing block', async () => {
+    it('may cover a block that is already there', async () => {
       await world.run({
         type: 'AddAppointment',
         params: {
@@ -210,6 +210,9 @@ describe('the remaining §7.3–7.4 commands', () => {
         },
       });
 
+      // "I am not here this morning" is a true thing to say about a morning
+      // that has a standup in it — and it leaves the standup for its owner to
+      // deal with rather than deleting it (§7.2, migration 0016).
       await expect(
         world.run({
           type: 'AddUnavailability',
@@ -219,7 +222,28 @@ describe('the remaining §7.3–7.4 commands', () => {
             end: '2026-03-23T11:00:00Z',
           },
         }),
-      ).rejects.toBeInstanceOf(PreconditionFailedError);
+      ).resolves.toBeDefined();
+    });
+
+    it('keeps the title the user gave it', async () => {
+      await world.run({
+        type: 'AddUnavailability',
+        params: {
+          calendarId: world.calendarId,
+          title: 'School run',
+          start: '2026-03-23T13:00:00Z',
+          end: '2026-03-23T15:00:00Z',
+        },
+      });
+
+      const [row] = await world.read((tx) =>
+        tx
+          .select({ title: appointments.title, flag: appointments.isUnavailability })
+          .from(appointments)
+          .limit(1),
+      );
+
+      expect(row).toEqual({ title: 'School run', flag: true });
     });
   });
 });

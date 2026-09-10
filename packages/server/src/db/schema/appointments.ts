@@ -60,7 +60,7 @@ export const appointments = pgTable(
     title: text('title').notNull(),
     notes: text('notes'),
 
-    /** Half-open `[start, end)`; the GiST exclusion constraint keys on this. */
+    /** Half-open `[start, end)`. Two blocks may share an hour (migration 0016). */
     during: tstzrange('during').notNull(),
 
     /**

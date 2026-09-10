@@ -176,7 +176,11 @@ Shared schema; every scheduling table carries `tenant_id`; **Postgres row-level 
 
 ### 5.3 Postgres features to use
 
-- **`tstzrange` + GiST exclusion constraints** to enforce appointment non-overlap at the database level.
+- **`tstzrange`** for every appointment's span, so overlap questions are asked of the database in one operator.
+  Amended after v1 design: appointments **may** overlap one another, and the GiST exclusion constraint that
+  forbade it was dropped (migration 0016). A diary has to be able to hold a conference with sessions inside it
+  or a call taken on a train, and refusing those made ordinary weeks unrecordable. §6.2 rule 2 is unchanged:
+  nothing the scheduler *places* may overlap a fixed block.
 - **Recursive CTEs** for the task tree (depth ≤ 5 makes an adjacency list sufficient; `ltree` / closure tables are unnecessary).
 - **RLS** for tenant isolation and the user boundary.
 

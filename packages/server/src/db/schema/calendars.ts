@@ -151,9 +151,10 @@ export const categories = pgTable(
  * a window with `week_type_override_id IS NULL` belongs to the default set, and
  * one with it set belongs to that override's replacement set.
  *
- * Deliberately **no** exclusion constraint on overlapping ranges — the plan
- * scopes exclusion constraints to appointments only. Overlap resolution is the
- * engine's business.
+ * Deliberately **no** exclusion constraint on overlapping ranges. Two special
+ * weeks that meet in the middle are the engine's business to resolve, not a
+ * write to refuse — the same conclusion the appointment constraint eventually
+ * came to (migration 0016).
  */
 export const weekTypeOverrides = pgTable(
   'week_type_overrides',

@@ -1,7 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withSystemPrivileges } from '../src/db/context.js';
-import { appointments, tasks } from '../src/db/schema/index.js';
+import { tasks } from '../src/db/schema/index.js';
 import type { DatabaseHandle } from '../src/db/client.js';
 import { captureSqlState, SQLSTATE } from './support/errors.js';
 import { addMember, createWorkTenant, registerUser } from './support/fixtures.js';
@@ -15,9 +15,6 @@ import {
   tstzrangeLiteral,
 } from './support/scheduling-fixtures.js';
 import { resetDomainTables, setupTestDatabase } from './support/database.js';
-
-/** SQLSTATE 23P01: an exclusion constraint rejected the row. */
-const EXCLUSION_VIOLATION = '23P01';
 
 describe('scheduling-domain constraints', () => {
   let handle: DatabaseHandle;
@@ -43,7 +40,7 @@ describe('scheduling-domain constraints', () => {
     base = { tenantId, calendarId, ownerId: userId };
   });
 
-  describe('appointment non-overlap (spec §5.3, §6.2)', () => {
+  describe('appointments sharing a calendar (spec §5.3, §6.2)', () => {
     it('accepts appointments that merely touch', async () => {
       // Intervals are half-open, so 09:00–10:00 and 10:00–11:00 do not conflict
       // (spec §5.1). This is the case a closed-interval model gets wrong.
@@ -62,27 +59,27 @@ describe('scheduling-domain constraints', () => {
       ).resolves.toBeTruthy();
     });
 
-    it('rejects a genuinely overlapping appointment in the same calendar', async () => {
+    it('accepts one that genuinely overlaps another', async () => {
+      // Migration 0016. A conference with sessions inside it, or a call taken
+      // on a train: the database no longer has an opinion about whether two
+      // things a person says are happening can be happening at once.
       await createAppointment(handle.db, {
         ...base,
-        title: 'Dentist',
-        during: tstzrangeLiteral('2026-03-02T09:00:00Z', '2026-03-02T10:00:00Z'),
+        title: 'Conference',
+        during: tstzrangeLiteral('2026-03-02T09:00:00Z', '2026-03-02T17:00:00Z'),
       });
 
-      const state = await captureSqlState(() =>
+      await expect(
         createAppointment(handle.db, {
           ...base,
-          title: 'Clashing call',
+          title: 'Keynote',
           during: tstzrangeLiteral('2026-03-02T09:30:00Z', '2026-03-02T10:30:00Z'),
         }),
-      );
-
-      expect(state).toBe(EXCLUSION_VIOLATION);
+      ).resolves.toBeTruthy();
     });
 
     it('allows the same slot in a different calendar', async () => {
-      // The constraint is scoped per calendar; separate contexts schedule
-      // independently (spec §9.3).
+      // Separate contexts schedule independently (spec §9.3).
       const otherCalendar = await createCalendar(handle.db, tenantId, userId, 'Personal');
 
       await createAppointment(handle.db, {
@@ -101,44 +98,37 @@ describe('scheduling-domain constraints', () => {
       ).resolves.toBeTruthy();
     });
 
-    it('frees the slot once an appointment is cancelled', async () => {
-      const first = await createAppointment(handle.db, {
-        ...base,
-        title: 'Cancelled thing',
-        during: tstzrangeLiteral('2026-03-02T09:00:00Z', '2026-03-02T10:00:00Z'),
-      });
-
-      await withSystemPrivileges(handle.db, (tx) =>
-        tx.update(appointments).set({ status: 'cancelled' }).where(eq(appointments.id, first)),
-      );
-
-      await expect(
-        createAppointment(handle.db, {
-          ...base,
-          title: 'Replacement',
-          during: tstzrangeLiteral('2026-03-02T09:00:00Z', '2026-03-02T10:00:00Z'),
-        }),
-      ).resolves.toBeTruthy();
-    });
-
-    it('treats an unavailability block like any other fixed block', async () => {
-      // Spec §7.4: a content-free hard block behaves as an appointment does.
+    it('takes a meeting inside a block that says the day is gone', async () => {
+      // Spec §7.4: a hard block with no content of its own behaves as an
+      // appointment does, and neither one excludes the other any more.
       await createAppointment(handle.db, {
         ...base,
-        title: 'Unavailable',
+        title: '',
         isUnavailability: true,
         during: tstzrangeLiteral('2026-03-02T14:00:00Z', '2026-03-02T16:00:00Z'),
       });
 
-      const state = await captureSqlState(() =>
+      await expect(
         createAppointment(handle.db, {
           ...base,
-          title: 'Meeting',
+          title: 'Meeting somebody insisted on',
           during: tstzrangeLiteral('2026-03-02T15:00:00Z', '2026-03-02T15:30:00Z'),
         }),
+      ).resolves.toBeTruthy();
+    });
+
+    it('leaves no exclusion constraint on the table at all', async () => {
+      // The guard on migration 0016: an exclusion constraint reinstated by a
+      // later generated migration would be silent everywhere else, because
+      // every assertion above is about a write being *accepted*.
+      const rows = await withSystemPrivileges(handle.db, (tx) =>
+        tx.execute<{ conname: string }>(sql`
+          SELECT conname FROM pg_constraint
+           WHERE conrelid = 'appointments'::regclass AND contype = 'x'
+        `),
       );
 
-      expect(state).toBe(EXCLUSION_VIOLATION);
+      expect(rows.map((row) => row.conname)).toEqual([]);
     });
   });
 

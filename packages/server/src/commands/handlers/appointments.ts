@@ -23,10 +23,13 @@ import { eq } from 'drizzle-orm';
  * `AddUnavailability` is the same insert with `is_unavailability` set. The
  * engine does not distinguish the two — both are simply time already taken
  * (§7.4) — so nothing downstream of here has a branch for it.
+ *
+ * **Two blocks may occupy the same hour.** The exclusion constraint that
+ * forbade it went in migration 0016: a diary has to be able to describe a
+ * conference with sessions inside it, or a call taken on a train. Rule 2 is
+ * unaffected — a *placement* still never overlaps a fixed block — so nothing
+ * here checks anything, and there is no refusal left to translate.
  */
-
-/** SQLSTATE for a GiST exclusion constraint — here, two overlapping blocks. */
-const EXCLUSION_VIOLATION = '23P01';
 
 export async function addAppointment(
   params: AddAppointmentParams,
@@ -46,7 +49,7 @@ export async function addAppointment(
     recurrenceTimezone: params.recurrence?.timeZone,
   };
 
-  await insertingBlock(() => insertRow(ctx, 'appointments', values), params.calendarId);
+  await insertRow(ctx, 'appointments', values);
   return { calendarIds: [params.calendarId] };
 }
 
@@ -81,7 +84,7 @@ export async function addUnavailability(
     recurrenceTimezone: params.recurrence?.timeZone,
   };
 
-  await insertingBlock(() => insertRow(ctx, 'appointments', values), params.calendarId);
+  await insertRow(ctx, 'appointments', values);
   return { calendarIds: [params.calendarId] };
 }
 
@@ -102,10 +105,7 @@ export async function editAppointment(
 
   const values = patchValues(params);
 
-  await insertingBlock(
-    () => updateRow(ctx, 'appointments', appointment.id, values),
-    appointment.calendarId,
-  );
+  await updateRow(ctx, 'appointments', appointment.id, values);
 
   if (values.during !== undefined) await notifyParticipants(ctx, appointment);
 
@@ -213,7 +213,7 @@ async function detachOccurrence(
     ...(patch.status === undefined ? {} : { status: patch.status }),
   };
 
-  await insertingBlock(() => insertRow(ctx, 'appointments', values), template.calendarId);
+  await insertRow(ctx, 'appointments', values);
 
   return { calendarIds: [template.calendarId] };
 }
@@ -266,7 +266,7 @@ async function splitSeries(
     ...(patch.status === undefined ? {} : { status: patch.status }),
   };
 
-  await insertingBlock(() => insertRow(ctx, 'appointments', values), template.calendarId);
+  await insertRow(ctx, 'appointments', values);
 
   return { calendarIds: [template.calendarId] };
 }
@@ -325,19 +325,11 @@ function interval(startIso: string, endIso: string): string {
 }
 
 /**
- * Translates the database's overlap refusal into the command layer's language.
- *
- * The exclusion constraint (§5.3) is the authority on appointment overlap, not
- * a check in application code — it holds against concurrent inserts, which a
- * read-then-write check does not. What is added here is only a sentence a user
- * can act on.
- */
-/**
- * Inserts a content-free block, with the overlap refusal already translated.
+ * Inserts a block with no content of its own.
  *
  * Shared with the bulk family, whose "block out this day" writes the same rows
- * for a different reason. Keeping one entry point means `is_unavailability`,
- * the empty title and the exclusion-violation message are decided once.
+ * for a different reason. Keeping one entry point means `is_unavailability` and
+ * the empty title are decided once.
  */
 export async function insertUnavailability(
   ctx: CommandContext,
@@ -353,19 +345,5 @@ export async function insertUnavailability(
     isUnavailability: true,
   };
 
-  return insertingBlock(() => insertRow(ctx, 'appointments', values), calendarId);
-}
-
-async function insertingBlock<T>(action: () => Promise<T>, calendarId: string): Promise<T> {
-  try {
-    return await action();
-  } catch (error) {
-    const cause = (error as { cause?: unknown }).cause ?? error;
-    if ((cause as { code?: unknown }).code === EXCLUSION_VIOLATION) {
-      throw new PreconditionFailedError(
-        `That time overlaps an existing appointment in calendar ${calendarId}`,
-      );
-    }
-    throw error;
-  }
+  return insertRow(ctx, 'appointments', values);
 }

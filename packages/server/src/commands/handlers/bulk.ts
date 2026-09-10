@@ -58,10 +58,11 @@ export async function postponeRestOfDay(
  * still there tomorrow.
  *
  * **Written as the gaps between what is already booked, not as one 24-hour
- * block.** The exclusion constraint (§5.3) refuses two overlapping blocks in a
- * calendar, so a single whole-day row would be rejected outright by any day
- * with a meeting in it — which is most days worth blocking out. Filling around
- * them is the only version of this that works on a Tuesday.
+ * block.** The exclusion constraint that made this mandatory is gone (migration
+ * 0016) and the shape stays, because it was the better answer anyway: a slab
+ * laid over the day's meetings would make the calendar split every column in
+ * two to draw them side by side, for a block whose whole content is "nothing
+ * more goes here". Filling the gaps leaves what is booked reading as booked.
  *
  * Those meetings then stay exactly where they were, and come back as attention
  * items (§7.2). Being unavailable does not cancel what other people are
@@ -97,12 +98,11 @@ export async function blockOutDay(
 /**
  * The blocks in `span` that occupy real time in the table.
  *
- * Recurring templates and their modified occurrences are excluded for the same
- * reason the exclusion constraint excludes them (migration 0008): a template's
+ * Recurring templates and their modified occurrences are excluded for the
+ * reason migration 0008 gave when the constraint still existed: a template's
  * `during` stands for a series rather than for that one hour. Its expansions
  * are not rows at all, so a recurring meeting on this day will end up sharing
- * its hour with a block — which the engine tolerates exactly as it tolerates
- * two overlapping expansions, and which leaves the day unavailable either way.
+ * its hour with a block — which leaves the day unavailable either way.
  */
 async function concreteBlocks(
   ctx: CommandContext,
@@ -133,9 +133,8 @@ async function concreteBlocks(
 /**
  * What is left of `span` once `taken` is removed from it.
  *
- * `taken` arrives sorted by start and may overlap itself — the constraint stops
- * concrete blocks colliding, but a modified occurrence is exempt from it — so
- * the cursor only ever moves forward.
+ * `taken` arrives sorted by start and may overlap itself, so the cursor only
+ * ever moves forward.
  */
 function gapsIn(span: Interval, taken: readonly Interval[]): Interval[] {
   const gaps: Interval[] = [];

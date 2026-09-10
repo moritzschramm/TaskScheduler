@@ -31,7 +31,7 @@ describe('GET /api/health', () => {
     expect(body.database.reachable).toBe(true);
     // Bumped by each milestone's migration; asserting the exact value proves
     // migrations ran to completion, not just that the table exists.
-    expect(body.database.schemaVersion).toBe('m20');
+    expect(body.database.schemaVersion).toBe('m21');
     expect(Number.isNaN(Date.parse(body.database.serverTime))).toBe(false);
     expect(body.database.latencyMs).toBeGreaterThanOrEqual(0);
   });
