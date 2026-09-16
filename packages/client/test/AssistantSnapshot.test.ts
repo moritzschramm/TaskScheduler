@@ -42,6 +42,16 @@ const configuration = {
   weekTypeOverrides: [],
 } as unknown as CalendarConfiguration;
 
+const HOLIDAY = '01890000-0000-7000-8000-0000000000fa';
+
+/** The same planner with a holiday, and Work given no hours during it. */
+const withHoliday = {
+  ...configuration,
+  weekTypeOverrides: [
+    { id: HOLIDAY, name: 'Christmas', startDate: '2026-12-24', endDate: '2027-01-02', version: 1 },
+  ],
+} as unknown as CalendarConfiguration;
+
 /** A complete task node; the read is Zod-parsed, so none of these is absent. */
 function task(overrides: Record<string, unknown> = {}): never {
   return {
@@ -168,6 +178,39 @@ describe('the schedule as the assistant reads it', () => {
 
     expect(renderSnapshot(input({ configuration: bare }))).toContain(
       'no hours set, so nothing is ever placed in it',
+    );
+  });
+
+  it('lists a special week, and says what having no hours in it means', () => {
+    // An override *replaces* the ordinary set, so a type with nothing set
+    // during it is not missing information — it is the holiday. A reader shown
+    // only the types with hours would conclude the rest carried on as usual.
+    const text = renderSnapshot(input({ configuration: withHoliday }));
+
+    expect(text).toContain(`- ${HOLIDAY} "Christmas" from 2026-12-24 up to but not including`);
+    expect(text).toContain('"Work": nothing, so it is not available at all during this week');
+  });
+
+  it('gives the whole set, because setting hours replaces one', () => {
+    // A caller working from a partial list deletes the part it could not see.
+    const full = {
+      ...configuration,
+      availability: [
+        ...configuration.availability,
+        {
+          id: 'w2',
+          categoryId: WORK,
+          weekTypeOverrideId: null,
+          weekday: 5,
+          startMin: 600,
+          endMin: 780,
+          focusLevel: 3,
+        },
+      ],
+    } as unknown as CalendarConfiguration;
+
+    expect(renderSnapshot(input({ configuration: full }))).toContain(
+      'Wed 09:00–17:00, Fri 10:00–13:00 (focus 3)',
     );
   });
 

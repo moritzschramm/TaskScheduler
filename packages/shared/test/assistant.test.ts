@@ -28,17 +28,29 @@ describe('the tools offered to a model', () => {
     }
   });
 
-  it('leave configuration, undo and settings alone', () => {
-    // Set-replacing configuration is the worst shape for a caller working from
-    // a summary, undo is the user's own gesture, and a timezone changed on
-    // somebody's behalf changes what every other screen means.
-    for (const off of [
+  it('cover what the Activity types screen can do', () => {
+    // The line is a screen: the week, the work, and the hours the work may
+    // happen in are all things somebody describes in sentences every day.
+    for (const on of [
       'CreateCategory',
+      'EditCategory',
       'DeleteCategory',
       'SetAvailabilityWindows',
-      'SetCalendarWindows',
       'CreateWeekTypeOverride',
+      'EditWeekTypeOverride',
+      'DeleteWeekTypeOverride',
+    ]) {
+      expect(isAssistantCommand(on)).toBe(true);
+    }
+  });
+
+  it('stop at the Settings screen, and at the user’s own gestures', () => {
+    // The planner itself and the person using it: these change once, and
+    // change what every other screen *means*.
+    for (const off of [
       'CreateCalendar',
+      'ConfigureCalendar',
+      'SetCalendarWindows',
       'UpdateSettings',
       'MarkNotificationsRead',
       'Undo',
@@ -46,6 +58,15 @@ describe('the tools offered to a model', () => {
     ]) {
       expect(isAssistantCommand(off)).toBe(false);
     }
+  });
+
+  it('warn, in the tool itself, that setting hours replaces a set', () => {
+    // The one command here that destroys by omission. A caller that does not
+    // know that writes a plausible-looking call which deletes a weekday.
+    const hours = ASSISTANT_TOOLS.find((tool) => tool.name === 'SetAvailabilityWindows');
+
+    expect(hours?.description).toContain('replaces the whole set');
+    expect(hours?.description).toContain('omitted');
   });
 
   it('never offer a calendar to act on', () => {
@@ -121,7 +142,7 @@ describe('the transcript', () => {
     const turn = {
       role: 'assistant',
       text: '',
-      calls: [{ id: 'call_1', command: 'DeleteCategory', params: {} }],
+      calls: [{ id: 'call_1', command: 'UpdateSettings', params: {} }],
     };
 
     expect(assistantTurnSchema.safeParse(turn).success).toBe(false);

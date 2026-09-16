@@ -211,6 +211,12 @@ function subject() {
       ]),
     ),
     categoryNames: new Map(workspace.categories.value.map((c) => [c.id, c.name])),
+    weekNames: new Map(
+      (workspace.configuration.value?.weekTypeOverrides ?? []).map((week) => [week.id, week.name]),
+    ),
+    // What a replacement is measured against — see `replacement` in
+    // `proposals.ts`. The plan has to be able to say what would be *lost*.
+    availability: workspace.configuration.value?.availability ?? [],
     zone: workspace.zone.value,
     locale: workspace.locale.value,
   };

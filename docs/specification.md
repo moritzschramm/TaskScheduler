@@ -478,11 +478,20 @@ one tool per command, its parameters taken from that command's own Zod object. I
 cannot express anything the GUI could not, and everything it does lands in the log, in the
 audit view and under undo like anything else.
 
-**A subset, and the schedule-working half.** Tasks, fixed blocks and the bulk actions of §7.2.
-Not the configuration family (§4.3's categories, availability windows, special weeks,
-calendars), not `UpdateSettings`, not `Undo`/`Redo`. Set-replacing commands are the worst
-possible shape for a caller working from a summary; the rest are either the user's own gesture
-or wide enough in effect that a screen is the right place for them.
+**A subset, and the line is a screen.** Everything the Schedule, Tasks and Activity types
+pages can do: tasks, fixed blocks, the bulk actions of §7.2, and §4.3's categories,
+availability windows and week-type overrides. Nothing the Settings page can do — no
+`CreateCalendar`, `ConfigureCalendar`, `SetCalendarWindows` or `UpdateSettings` — and not
+`Undo`/`Redo` or `MarkNotificationsRead`, which are the user's own gestures. The first three
+screens are the application: the week, the work, and the hours the work may happen in, all of
+which somebody describes in sentences every day. Settings is the planner itself and the person
+using it, which changes once and changes what every other screen *means*.
+
+`SetAvailabilityWindows` is the one that needed thinking about, because it replaces a set
+rather than adding to it: a caller that forgets a Thursday deletes that Thursday. Three things
+carry it. The snapshot holds every window of every set, including each week-type override's,
+so it is never working from a partial picture; the plan draws the resulting week **and names
+what would be removed**; and it is one undo away like everything else.
 
 **Nothing applies itself.** A turn returns text plus proposed commands; the client renders each
 one from the command that would be sent — never from the model's description of it — and sends

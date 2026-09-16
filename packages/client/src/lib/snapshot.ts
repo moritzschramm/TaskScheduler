@@ -89,6 +89,7 @@ export function renderSnapshot(input: SnapshotInput): string {
   }
 
   section(lines, 'Activity types', activityTypes(input));
+  section(lines, 'Special weeks', specialWeeks(input));
   section(lines, 'Fixed blocks on screen', fixedBlocks(input));
   section(lines, 'Tasks the scheduler has placed on screen', placements(input, names));
   section(lines, 'All tasks', taskList(input, names, titles));
@@ -115,28 +116,76 @@ function localDateOf(iso: string, zone: string): string {
 
 function activityTypes({ configuration, locale }: SnapshotInput): string[] {
   if (configuration === null) return [];
-  const weekdays = weekdayNames(locale, 'short');
 
   return configuration.categories.map((category) => {
     // The hours are what decides whether a task can be scheduled at all, so
     // they travel with the type rather than in a section of their own — "no
     // window on a Saturday" is the answer to half the questions this gets.
-    const windows = configuration.availability
-      .filter((window) => window.categoryId === category.id && window.weekTypeOverrideId === null)
-      .sort((a, b) => a.weekday - b.weekday || a.startMin - b.startMin)
-      .map(
-        (window) =>
-          `${weekdays[window.weekday - 1] ?? window.weekday} ` +
-          `${formatMinuteOfDay(window.startMin)}–${formatMinuteOfDay(window.endMin)}`,
-      );
-
+    // They are also the *whole* set, because `SetAvailabilityWindows` replaces
+    // a set rather than adding to it: a caller working from a partial list
+    // would delete the part it could not see.
+    const windows = hoursFor(configuration, category.id, null, locale);
     const cooldown =
       category.defaultCooldownMin > 0 ? `, ${category.defaultCooldownMin}m cooldown` : '';
 
     return (
       `- ${category.id} "${category.name}"${cooldown} — ` +
-      (windows.length === 0 ? 'no hours set, so nothing is ever placed in it' : windows.join(', '))
+      (windows === null ? 'no hours set, so nothing is ever placed in it' : windows)
     );
+  });
+}
+
+/** One address's whole set, in reading order, or `null` when it is empty. */
+function hoursFor(
+  configuration: CalendarConfiguration,
+  categoryId: string,
+  weekTypeOverrideId: string | null,
+  locale: string,
+): string | null {
+  const weekdays = weekdayNames(locale, 'short');
+
+  const windows = configuration.availability
+    .filter(
+      (window) =>
+        window.categoryId === categoryId && window.weekTypeOverrideId === weekTypeOverrideId,
+    )
+    .sort((a, b) => a.weekday - b.weekday || a.startMin - b.startMin)
+    .map(
+      (window) =>
+        `${weekdays[window.weekday - 1] ?? window.weekday} ` +
+        `${formatMinuteOfDay(window.startMin)}\u2013${formatMinuteOfDay(window.endMin)}` +
+        (window.focusLevel === null ? '' : ` (focus ${window.focusLevel})`),
+    );
+
+  return windows.length === 0 ? null : windows.join(', ');
+}
+
+/**
+ * The stretches that run on different hours (§4.3).
+ *
+ * Each one lists every activity type, including the ones with nothing set —
+ * because an override *replaces* the ordinary set rather than adding to it, so
+ * "nothing set" during a holiday is not missing information, it is the holiday.
+ * A reader who saw only the types with hours would conclude the rest carried on
+ * as usual.
+ */
+function specialWeeks({ configuration, locale }: SnapshotInput): string[] {
+  if (configuration === null) return [];
+
+  return configuration.weekTypeOverrides.flatMap((override) => {
+    const head =
+      `- ${override.id} "${override.name}" from ${override.startDate} up to but not ` +
+      `including ${override.endDate}. During it these hours replace the ordinary ones:`;
+
+    const sets = configuration.categories.map((category) => {
+      const windows = hoursFor(configuration, category.id, override.id, locale);
+      return (
+        `  - "${category.name}": ` +
+        (windows ?? 'nothing, so it is not available at all during this week')
+      );
+    });
+
+    return [head, ...sets];
   });
 }
 

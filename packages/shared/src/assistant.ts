@@ -7,15 +7,22 @@ import {
   clearFloorParams,
   clearWeekParams,
   completeTaskParams,
+  createCategoryParams,
   createTaskParams,
+  createWeekTypeOverrideParams,
   deferTaskParams,
+  deleteCategoryParams,
+  deleteWeekTypeOverrideParams,
   editAppointmentParams,
+  editCategoryParams,
   editTaskParams,
+  editWeekTypeOverrideParams,
   extendTaskParams,
   moveTaskParams,
   moveToBacklogParams,
   postponeRestOfDayParams,
   promoteFromBacklogParams,
+  setAvailabilityWindowsParams,
   swapForwardParams,
   swapTasksParams,
   type CommandType,
@@ -36,11 +43,14 @@ import {
  * is a second vocabulary that drifts, and the drift is silent, because the only
  * thing that notices is a model getting a rejection it cannot explain.
  *
- * **It is a subset, and deliberately the schedule-working half.** Categories,
- * availability windows, special weeks, calendars and display settings are not
- * here (see `ASSISTANT_COMMANDS`). Those are configuration: rarely changed,
- * wide blast radius, and already fronted by a screen built for them. What the
- * assistant gets is the part of the application a person touches every day.
+ * **It is a subset, and the line is a screen.** Everything the Schedule, Tasks
+ * and Activity types pages can do is here; nothing the Settings page can do is
+ * (see `ASSISTANT_COMMANDS`). That line is not arbitrary. The first three are
+ * the application — the week, the work, and the hours the work may happen in,
+ * all of which somebody describes in sentences every day. Settings is the
+ * planner itself and the person using it: which timezone their dates mean,
+ * which calendars exist, what other people can see. Those change once and
+ * change what every other screen *means*, so they are worth walking to.
  *
  * **Nothing here executes.** These are proposals. The client turns each call
  * into a command, shows a person what it would do in their own language, and
@@ -73,16 +83,21 @@ export const DEFAULT_ASSISTANT_MODEL: Readonly<Record<AssistantProvider, string>
  *
  * Four kinds are absent on purpose:
  *
- * - **Configuration** (`CreateCategory`, `SetAvailabilityWindows`,
- *   `CreateWeekTypeOverride`, the calendar family). Set-replacing commands are
- *   the worst possible shape for a model working from a summary — one forgotten
- *   window and a whole weekday's availability is gone — and the screens for
- *   these are two clicks away.
- * - **`Undo` / `Redo`.** Undo is the user's own gesture and sits in the header.
- *   A model that can undo can undo the thing you asked it to keep.
+ * - **The planner itself** (`CreateCalendar`, `ConfigureCalendar`,
+ *   `SetCalendarWindows`) — the Settings page's own vocabulary.
  * - **`UpdateSettings`.** Timezone and locale change what every screen *means*;
  *   nothing a chat is asked for is worth that.
+ * - **`Undo` / `Redo`.** Undo is the user's own gesture and sits in the header.
+ *   A model that can undo can undo the thing you asked it to keep.
  * - **`MarkNotificationsRead`.** Dismissing a warning on someone's behalf.
+ *
+ * `SetAvailabilityWindows` is here and is the one that needed thinking about,
+ * because it **replaces** a whole set rather than adding to it: a model that
+ * forgets a Thursday deletes that Thursday. Three things make it safe enough to
+ * offer. The snapshot carries every window of every set, so it is never working
+ * from a partial picture; the plan draws the resulting week *and names what
+ * would be removed*, so a missing Thursday is a red line a person reads; and
+ * the whole thing is one undo away like everything else.
  */
 export const ASSISTANT_COMMANDS = [
   'CreateTask',
@@ -103,6 +118,13 @@ export const ASSISTANT_COMMANDS = [
   'PostponeRestOfDay',
   'BlockOutDay',
   'ClearWeek',
+  'CreateCategory',
+  'EditCategory',
+  'DeleteCategory',
+  'SetAvailabilityWindows',
+  'CreateWeekTypeOverride',
+  'EditWeekTypeOverride',
+  'DeleteWeekTypeOverride',
 ] as const satisfies readonly CommandType[];
 
 export type AssistantCommandType = (typeof ASSISTANT_COMMANDS)[number];
@@ -129,6 +151,8 @@ const WITHHELD: Readonly<Partial<Record<AssistantCommandType, readonly string[]>
   PostponeRestOfDay: ['calendarId'],
   BlockOutDay: ['calendarId'],
   ClearWeek: ['calendarId'],
+  SetAvailabilityWindows: ['calendarId'],
+  CreateWeekTypeOverride: ['calendarId'],
 };
 
 /** True when the command's params carry a `calendarId` the client must fill in. */
@@ -155,6 +179,13 @@ const PARAMS: Readonly<Record<AssistantCommandType, z.ZodObject>> = {
   PostponeRestOfDay: postponeRestOfDayParams,
   BlockOutDay: blockOutDayParams,
   ClearWeek: clearWeekParams,
+  CreateCategory: createCategoryParams,
+  EditCategory: editCategoryParams,
+  DeleteCategory: deleteCategoryParams,
+  SetAvailabilityWindows: setAvailabilityWindowsParams,
+  CreateWeekTypeOverride: createWeekTypeOverrideParams,
+  EditWeekTypeOverride: editWeekTypeOverrideParams,
+  DeleteWeekTypeOverride: deleteWeekTypeOverrideParams,
 };
 
 /**
@@ -239,6 +270,34 @@ const DESCRIPTIONS: Readonly<Record<AssistantCommandType, string>> = {
     'until somebody takes the block away. Existing appointments are left alone and reported.',
   ClearWeek:
     'Declare a whole week unavailable — the holiday action. Any date inside the week will do.',
+  CreateCategory:
+    'Add a kind of activity — work, exercise, errands. A new type has no hours until ' +
+    'SetAvailabilityWindows gives it some, and until then nothing of that kind is ever ' +
+    'scheduled, so offer to set them in the same breath. defaultCooldownMin is the gap ' +
+    'reserved after every task of this kind unless the task overrides it.',
+  EditCategory: 'Rename an activity type, or change its colour or its default cooldown.',
+  DeleteCategory:
+    'Remove an activity type. Refused while any task still belongs to it — move those ' +
+    'first. Its hours go with it.',
+  SetAvailabilityWindows:
+    'Set when one activity type may be scheduled. **This replaces the whole set for that ' +
+    'type**: send every window you want to keep, not just the ones you are adding, or the ' +
+    'omitted ones are deleted. The current set for every type is in the schedule above — ' +
+    "start from it. weekTypeOverrideId addresses a special week's replacement set; leave " +
+    'it out for the ordinary week. An empty list is meaningful — it says this type is not ' +
+    'available at all here, which during a holiday is exactly the point. Times are minutes ' +
+    'after local midnight (540 = 09:00); focusLevel 1 (shallow) to 5 (deep) says what kind ' +
+    'of work a window suits.',
+  CreateWeekTypeOverride:
+    'Declare a stretch of days that runs on different hours — a holiday, a conference ' +
+    'week, parental leave. Dates are half-open: endDate is the first day back to normal. ' +
+    'It **replaces** the ordinary hours for those dates, so a special week with no windows ' +
+    'of its own is a stretch with no availability at all — which is what a holiday means, ' +
+    'and is worth saying out loud if that is not what was wanted.',
+  EditWeekTypeOverride: 'Rename a special week, or move its dates.',
+  DeleteWeekTypeOverride:
+    'Remove a special week, so its dates go back to the ordinary hours. The replacement ' +
+    'hours set up for it are deleted with it.',
 };
 
 export interface AssistantTool {

@@ -2,10 +2,11 @@ import {
   assistantParamsSchema,
   needsCalendarId,
   type AssistantCall,
+  type AvailabilityWindow,
   type CommandRequest,
 } from '@ambitime/shared';
 import { language, translate, type MessageKey, type Params } from '@/i18n';
-import { formatMinuteOfDay, localDate } from './time';
+import { formatMinuteOfDay, localDate, weekdayNames } from './time';
 
 /**
  * A proposed command, checked and then said in a sentence (spec §2.2).
@@ -46,6 +47,14 @@ export interface Subject {
   taskTitles: ReadonlyMap<string, string>;
   blockTitles: ReadonlyMap<string, string>;
   categoryNames: ReadonlyMap<string, string>;
+  weekNames: ReadonlyMap<string, string>;
+  /**
+   * Every availability window as it stands, so a replacement can be shown as
+   * one. `SetAvailabilityWindows` replaces a whole set (§4.3), which means the
+   * interesting half of any such plan is what is *missing* from it — and a plan
+   * that listed only what would exist afterwards would hide exactly that.
+   */
+  availability: readonly AvailabilityWindow[];
   zone: string;
   locale: string;
 }
@@ -143,7 +152,9 @@ function attempted(params: Record<string, unknown>, subject: Subject): Params {
 
   return {
     title: unknown,
+    name: unknown,
     what: unknown,
+    week: unknown,
     when: unknown,
     day: unknown,
     minutes: '?',
@@ -254,6 +265,35 @@ function headlineOf(request: CommandRequest, subject: Subject): string {
       return t('assistant.plan.BlockOutDay', { day: day(request.params.date, subject) });
     case 'ClearWeek':
       return t('assistant.plan.ClearWeek', { day: day(request.params.week, subject) });
+    case 'CreateCategory':
+      return t('assistant.plan.CreateCategory', { name: request.params.name });
+    case 'EditCategory':
+      return t('assistant.plan.EditCategory', {
+        what: named(request.params.categoryId, subject.categoryNames),
+      });
+    case 'DeleteCategory':
+      return t('assistant.plan.DeleteCategory', {
+        what: named(request.params.categoryId, subject.categoryNames),
+      });
+    case 'SetAvailabilityWindows':
+      return request.params.weekTypeOverrideId === undefined
+        ? t('assistant.plan.SetAvailabilityWindows', {
+            what: named(request.params.categoryId, subject.categoryNames),
+          })
+        : t('assistant.plan.SetAvailabilityWindowsIn', {
+            what: named(request.params.categoryId, subject.categoryNames),
+            week: named(request.params.weekTypeOverrideId, subject.weekNames),
+          });
+    case 'CreateWeekTypeOverride':
+      return t('assistant.plan.CreateWeekTypeOverride', { name: request.params.name });
+    case 'EditWeekTypeOverride':
+      return t('assistant.plan.EditWeekTypeOverride', {
+        what: named(request.params.weekTypeOverrideId, subject.weekNames),
+      });
+    case 'DeleteWeekTypeOverride':
+      return t('assistant.plan.DeleteWeekTypeOverride', {
+        what: named(request.params.weekTypeOverrideId, subject.weekNames),
+      });
     default:
       // Every assistant command is handled above; anything reaching here is a
       // command that gained an NL surface without gaining a sentence.
@@ -278,6 +318,9 @@ function span(start: string, end: string, subject: Subject): string {
  * a reader, and the titles are already in the sentence above.
  */
 function detailsOf(request: CommandRequest, subject: Subject): string[] {
+  // The one command that replaces rather than amends, shown as a replacement.
+  if (request.type === 'SetAvailabilityWindows') return replacement(request.params, subject);
+
   const source: Record<string, unknown> =
     'patch' in request.params
       ? (request.params.patch as Record<string, unknown>)
@@ -292,6 +335,87 @@ function detailsOf(request: CommandRequest, subject: Subject): string[] {
   }
 
   return details;
+}
+
+/**
+ * A replaced availability set, with the losses named.
+ *
+ * "Mon 09:00–17:00, Tue 09:00–17:00, Wed 09:00–17:00" is a perfectly accurate
+ * description of a plan that has just deleted Thursday, and nobody reads it and
+ * notices. So the removals are computed against what is there now and listed
+ * separately — which is the difference between a plan a person approves and a
+ * plan a person *checks*.
+ */
+function replacement(
+  params: {
+    categoryId: string;
+    weekTypeOverrideId?: string | undefined;
+    windows: readonly WindowRule[];
+  },
+  subject: Subject,
+): string[] {
+  const address = params.weekTypeOverrideId ?? null;
+  const current = subject.availability.filter(
+    (window) =>
+      window.categoryId === params.categoryId && (window.weekTypeOverrideId ?? null) === address,
+  );
+
+  const proposed = new Set(params.windows.map(key));
+  const removed = current.filter((window) => !proposed.has(key(window)));
+
+  const details = [
+    `${t('assistant.field.windows')}: ${
+      params.windows.length === 0
+        ? t('assistant.field.noWindows')
+        : [...params.windows]
+            .sort(byWeekday)
+            .map((window) => rule(window, subject))
+            .join(', ')
+    }`,
+  ];
+
+  if (removed.length > 0) {
+    details.push(
+      `${t('assistant.field.removed')}: ${[...removed]
+        .sort(byWeekday)
+        .map((window) => rule(window, subject))
+        .join(', ')}`,
+    );
+  }
+
+  return details;
+}
+
+/**
+ * A window as either side writes one.
+ *
+ * `focusLevel` is optional-and-absent in a command and nullable-and-present in
+ * a read model; they mean the same thing, and `key` folds both to the empty
+ * string so a set is compared by what it says rather than by how it was typed.
+ */
+interface WindowRule {
+  weekday: number;
+  startMin: number;
+  endMin: number;
+  focusLevel?: number | null | undefined;
+}
+
+function key(window: WindowRule): string {
+  return `${window.weekday}:${window.startMin}:${window.endMin}:${window.focusLevel ?? ''}`;
+}
+
+function byWeekday(a: WindowRule, b: WindowRule): number {
+  return a.weekday - b.weekday || a.startMin - b.startMin;
+}
+
+function rule(window: WindowRule, subject: Subject): string {
+  const name = weekdayNames(subject.locale, 'short')[window.weekday - 1] ?? window.weekday;
+  const focus =
+    window.focusLevel === null || window.focusLevel === undefined
+      ? ''
+      : ` (${t('assistant.field.focusLevel')} ${window.focusLevel})`;
+
+  return `${name} ${formatMinuteOfDay(window.startMin)}–${formatMinuteOfDay(window.endMin)}${focus}`;
 }
 
 /** Ids, and the fields the headline has already said. */

@@ -138,8 +138,12 @@ describe('talking to Anthropic', () => {
 
     expect(names).toContain('MoveTask');
     expect(names).toContain('BlockOutDay');
-    // The configuration family has no natural-language surface (§17).
-    expect(names).not.toContain('DeleteCategory');
+    // Everything the Activity types screen can do (§17).
+    expect(names).toContain('SetAvailabilityWindows');
+    expect(names).toContain('CreateWeekTypeOverride');
+    // Nothing the Settings screen can do, and none of the user's own gestures.
+    expect(names).not.toContain('UpdateSettings');
+    expect(names).not.toContain('SetCalendarWindows');
     expect(names).not.toContain('Undo');
   });
 
