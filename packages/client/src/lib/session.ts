@@ -1,5 +1,5 @@
 import { readonly, ref } from 'vue';
-import { MINIMUM_PASSWORD_LENGTH } from '@ambitime/shared';
+import { MINIMUM_PASSWORD_LENGTH, type AssistantCredentials } from '@ambitime/shared';
 export { MINIMUM_PASSWORD_LENGTH } from '@ambitime/shared';
 import { api, RATE_LIMITED, rateLimitMessage } from './api';
 
@@ -41,6 +41,15 @@ export interface DisplaySettings {
 export interface Session {
   user: { id: string; email: string; displayName: string | null; emailVerified: boolean };
   settings: DisplaySettings;
+  /**
+   * Whether §2.2's assistant has a key to work with, and which.
+   *
+   * The key itself is never here and never can be: the server stores it
+   * encrypted and answers with the last four characters (`hint`). `null` means
+   * nothing is configured, which is what the panel checks before offering to
+   * open — a chat with no way to reach a model is a button that does nothing.
+   */
+  assistant: AssistantCredentials | null;
   activeTenantId: string;
   contexts: SessionContext[];
 }

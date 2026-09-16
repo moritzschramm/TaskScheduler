@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
 import { useI18n } from '@/i18n';
+import AssistantSection from '@/components/settings/AssistantSection.vue';
 import CalendarSection from '@/components/settings/CalendarSection.vue';
 import DisplaySection from '@/components/settings/DisplaySection.vue';
 import { Button } from '@/components/ui/button';
@@ -209,6 +210,14 @@ watch(selectedId, () => load());
     <template v-else>
       <DisplaySection :calendar-time-zone="configuration.calendar.timezone" :submit="submit" />
       <CalendarSection :configuration="configuration" :submit="submit" />
+
+      <!--
+        The assistant's key, which is the one thing on this page that is not a
+        command — see the section's own note, and migration 0019.
+      -->
+      <div class="border-t pt-6">
+        <AssistantSection />
+      </div>
 
       <!--
         §4.3 has always allowed several planners — the picker above appears as

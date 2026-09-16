@@ -96,3 +96,6 @@ class MemoryStorage implements Storage {
 }
 
 globalThis.localStorage ??= new MemoryStorage();
+// The same for `sessionStorage`, which the assistant keeps a conversation in so
+// that a reload mid-sentence does not cost it (spec §2.2).
+globalThis.sessionStorage ??= new MemoryStorage();

@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from 'reka-ui';
 import { ChevronDown } from 'lucide-vue-next';
+import AssistantLauncher from '@/components/assistant/AssistantLauncher.vue';
 import UndoRedo from '@/components/UndoRedo.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -286,5 +287,15 @@ async function confirmAgain() {
     <main id="main" class="relative min-h-0 flex-1 overflow-y-auto" tabindex="-1">
       <slot />
     </main>
+
+    <!--
+      Outside `main`, and fixed to the viewport (spec §2.2).
+
+      Both halves matter. Inside the one element on the page that scrolls, the
+      panel would scroll away with the week; inside a view, it would be
+      unmounted on every navigation — and a chat that forgets what was being
+      discussed because somebody looked at their task list is not a chat.
+    -->
+    <AssistantLauncher />
   </div>
 </template>

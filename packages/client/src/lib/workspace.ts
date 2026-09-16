@@ -674,6 +674,68 @@ async function submit(request: CommandRequest): Promise<boolean> {
   }
 }
 
+/**
+ * What became of one command in a batch.
+ *
+ * `created` travels back because a batch is where it matters: the assistant's
+ * second command often names what its first one made, and an id is the only
+ * way to say which (spec §5.1).
+ */
+export interface BatchOutcome {
+  ok: boolean;
+  /** The server's sentence when it refused, written for a person to read. */
+  error: string | null;
+  created: CommandResult['created'];
+}
+
+/**
+ * Several commands as one unit of history (spec §7.5).
+ *
+ * The natural-language interface is the caller this exists for. A sentence like
+ * "move the invoices to Thursday and push the report to next week" is two
+ * commands and **one** thing the person asked for, so it has to be one thing
+ * they can take back — otherwise undo becomes a count nobody kept, and the
+ * safety story ("if it gets it wrong, press undo") is only true for the last
+ * line of a plan.
+ *
+ * Sequential rather than parallel, and it stops at the first refusal. Later
+ * commands in a plan routinely depend on earlier ones — the task being moved is
+ * the task just created — so racing them would be racing a dependency, and
+ * carrying on past a failure would apply the second half of a plan whose first
+ * half did not happen.
+ *
+ * One read at the end rather than one per command: the intermediate schedules
+ * are states nobody asked to see, and drawing each of them is the flicker that
+ * makes a batch look like a malfunction.
+ */
+async function runBatch(
+  requests: readonly CommandRequest[],
+  groupId: string,
+): Promise<BatchOutcome[]> {
+  error.value = null;
+  const outcomes: BatchOutcome[] = [];
+
+  for (const request of requests) {
+    try {
+      const result = await runCommand({ ...request, groupId });
+      outcomes.push({ ok: true, error: null, created: result.created });
+    } catch (cause) {
+      const message =
+        cause instanceof ApiError
+          ? cause.message
+          : cause instanceof Error
+            ? cause.message
+            : 'That change could not be applied';
+
+      outcomes.push({ ok: false, error: message, created: [] });
+      break;
+    }
+  }
+
+  await load({ silent: true });
+  return outcomes;
+}
+
 function shiftWeek(weeks: number): void {
   if (anchor.value !== null) anchor.value = addDays(anchor.value, weeks * 7);
 }
@@ -788,6 +850,7 @@ export interface Workspace {
   ensureLoaded: () => Promise<void>;
   load: () => Promise<void>;
   submit: (request: CommandRequest) => Promise<boolean>;
+  runBatch: (requests: readonly CommandRequest[], groupId: string) => Promise<BatchOutcome[]>;
   shiftWeek: (weeks: number) => void;
   shiftMonths: (months: number) => void;
   showWeekOf: (date: CivilDate) => void;
@@ -852,6 +915,7 @@ export function useWorkspace(): Workspace {
     ensureLoaded,
     load,
     submit,
+    runBatch,
     shiftWeek,
     shiftMonths,
     showWeekOf,
