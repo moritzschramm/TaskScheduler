@@ -41,7 +41,9 @@ The data model and interfaces must accommodate these without redesign:
 - External calendar sync (Google, Outlook, CalDAV); iCalendar import/export.
 - Real-time updates (WebSocket / SSE).
 - Offline / PWA.
-- Natural-language (speech/text) command interface (the command layer is the seam).
+- ~~Natural-language (speech/text) command interface (the command layer is the seam).~~
+  **Built — see §17.** The text half of it, at least; speech is still deferred. It needed no
+  new write path, which was the point of the seam: the assistant's tools *are* the commands.
 - Native mobile client.
 - Dedicated fine-grained authorization engine (ReBAC); resources carry owner + visibility scope now so the migration is additive.
 - Full audit tooling; cross-context co-optimization.
@@ -74,7 +76,9 @@ All mutations to source state flow through **commands**: named, parameterized, s
 1. **Derived state** (§3.4) — commands mutate source; schedule is recomputed.
 2. **Undo / history** (§12) — commands are logged append-only; undo reverses a command.
 3. **Audit** (§12) — the same log is the audit trail.
-4. **Future NL interface** (§2.2) — GUI actions and a future NL parser both emit commands; nothing else can write.
+4. **NL interface** (§17) — GUI actions and the assistant both emit commands; nothing else can write.
+   Written as a future payoff and now collected: the assistant's tool vocabulary is generated from the
+   command schemas themselves, so it cannot express anything a button could not.
 
 GUI actions map to commands 1:1. No code path mutates source state except by applying a command.
 
@@ -460,6 +464,44 @@ Parameters expected to change; centralize them in configuration:
 - **Soft / hard constraint** — soft constraints are scored and may be violated; hard constraints are enforced and invalidate a schedule if broken.
 - **Tenant** — the multi-tenancy isolation boundary (`tenant_id` + RLS); each user has a personal tenant plus work tenants.
 - **Working window / shareable window** — when tasks may be placed / what busy time is exposed to other users.
+
+---
+
+## 17. Natural-language interface
+
+Added after v1 design; §2.2 listed it as deferred and §3.2 named the command layer as its seam.
+
+A chat panel, fixed to the corner of every signed-in page, that turns sentences into commands.
+
+**No new write path.** The assistant's tools are generated from the command schemas of §7 —
+one tool per command, its parameters taken from that command's own Zod object. It therefore
+cannot express anything the GUI could not, and everything it does lands in the log, in the
+audit view and under undo like anything else.
+
+**A subset, and the schedule-working half.** Tasks, fixed blocks and the bulk actions of §7.2.
+Not the configuration family (§4.3's categories, availability windows, special weeks,
+calendars), not `UpdateSettings`, not `Undo`/`Redo`. Set-replacing commands are the worst
+possible shape for a caller working from a summary; the rest are either the user's own gesture
+or wide enough in effect that a screen is the right place for them.
+
+**Nothing applies itself.** A turn returns text plus proposed commands; the client renders each
+one from the command that would be sent — never from the model's description of it — and sends
+nothing until the user agrees. A plan travels under one `group_id`, so §7.5 folds it into a
+single unit of undo. One typed message buys a bounded number of turns, and every turn past the
+first still needs a press of Apply.
+
+**The schedule travels with the question.** The week on screen, the task list, the backlog and
+the diagnostics of §6.7 are rendered into the prompt, so ordinary questions are answered
+without a lookup.
+
+**The key is the user's, and is not a command.** Provider and API key are per-user settings
+(§13), stored encrypted (AES-256-GCM under a key derived from the signing secret) and never
+returned. This is the one thing that changes a user row without going through the command
+layer, and deliberately: the log is append-only with UPDATE and DELETE revoked, so a secret
+journalled into it could never be removed. Credentials were already outside the command layer
+here — a password reaches the database through Better Auth (§10.1). See migration 0019.
+
+Speech remains deferred.
 
 ---
 
