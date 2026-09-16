@@ -37,6 +37,13 @@ export function meRoute(auth: Auth) {
           locale: users.locale,
           timeZone: users.timeZone,
           firstDayOfWeek: users.firstDayOfWeek,
+          // §2.2's assistant: which provider and model are configured, and the
+          // last four characters of the key. Never the key — see
+          // `assistant/secrets.ts`, and note that the column holding it is not
+          // even selected here.
+          assistantProvider: users.assistantProvider,
+          assistantModel: users.assistantModel,
+          assistantKeyHint: users.assistantKeyHint,
         })
         .from(users)
         .where(eq(users.id, context.userId))
@@ -69,6 +76,19 @@ export function meRoute(auth: Auth) {
           timeZone: user?.timeZone ?? null,
           firstDayOfWeek: user?.firstDayOfWeek ?? null,
         },
+        /**
+         * Whether the assistant has a key, said in a way that cannot become
+         * the key. Null means "not set up", which is what the panel checks
+         * before it offers to open.
+         */
+        assistant:
+          user?.assistantProvider && user.assistantModel && user.assistantKeyHint
+            ? {
+                provider: user.assistantProvider,
+                model: user.assistantModel,
+                hint: user.assistantKeyHint,
+              }
+            : null,
         activeTenantId: context.tenantId,
         contexts: contexts.map((row) => ({
           tenantId: row.tenantId,

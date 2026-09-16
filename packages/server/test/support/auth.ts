@@ -39,13 +39,20 @@ export interface Signed {
 
 export const TEST_PASSWORD = 'correct-horse-battery-staple';
 
-export function createTestApp(db: Database, clock?: () => Date): TestApp {
+export function createTestApp(
+  db: Database,
+  clock?: () => Date,
+  /** §2.2's credential encryption key; two apps with different ones is the
+   * only way to test what a rotated secret does to a stored key. */
+  assistantSecret?: string,
+): TestApp {
   const auth = createAuth({ db, secret: TEST_AUTH_SECRET, baseURL: TEST_BASE_URL });
   const app = createApp({
     db,
     auth,
     requestLogging: false,
     ...(clock === undefined ? {} : { clock }),
+    ...(assistantSecret === undefined ? {} : { assistantSecret }),
   });
 
   const post = async (path: string, body: unknown, cookie?: string): Promise<Response> =>

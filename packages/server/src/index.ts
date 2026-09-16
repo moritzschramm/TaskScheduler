@@ -33,6 +33,7 @@ const app = createApp({
   auth,
   corsOrigins: env.corsOrigins,
   requestLogging: env.NODE_ENV !== 'test',
+  assistantSecret: env.BETTER_AUTH_SECRET,
   ...(env.AUDIT_RETENTION_DAYS === undefined
     ? {}
     : { auditRetentionDays: env.AUDIT_RETENTION_DAYS }),

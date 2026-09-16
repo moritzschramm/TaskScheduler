@@ -1,7 +1,15 @@
+import { randomBytes } from 'node:crypto';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { AUTH_LIMIT, COMMAND_LIMIT, rateLimit, READ_LIMIT } from './api/rate-limit.js';
+import {
+  ASSISTANT_LIMIT,
+  AUTH_LIMIT,
+  COMMAND_LIMIT,
+  rateLimit,
+  READ_LIMIT,
+} from './api/rate-limit.js';
 import { logger } from 'hono/logger';
+import { assistantRoutes } from './routes/assistant.js';
 import { authRoutes } from './auth/middleware.js';
 import { calendarRoutes } from './routes/calendars.js';
 import { commandRoutes } from './routes/commands.js';
@@ -17,6 +25,16 @@ export interface AppEnv {
     db: Database;
     /** Set by `requireContext`; absent on routes that do not require a session. */
     context: RequestContext;
+    /**
+     * The secret the assistant's stored API keys are encrypted under (§2.2).
+     *
+     * On the request rather than read from the environment where it is used,
+     * for the same reason `db` and `clock` are: a module that reaches for
+     * `process.env` is a module a test cannot put a different value into, and
+     * the one thing worth testing about an encrypted column is what happens
+     * when the key changes.
+     */
+    assistantSecret: string;
   };
 }
 
@@ -39,6 +57,17 @@ export interface CreateAppOptions {
   /** Off in tests so the suite output stays readable. */
   requestLogging?: boolean;
   clock?: Clock;
+  /**
+   * What the assistant's stored API keys are encrypted under (§2.2).
+   *
+   * `index.ts` passes `BETTER_AUTH_SECRET`. Left unset it becomes **fresh
+   * random bytes**, not a constant: a published default is a published secret,
+   * and the one that works in development is the one that reaches production.
+   * Random means a deployment that forgets to pass it finds its stored keys
+   * unreadable after the next restart — which is loud, recoverable in one
+   * paste, and vastly better than ciphertext anyone with the source can open.
+   */
+  assistantSecret?: string;
 }
 
 /**
@@ -57,6 +86,7 @@ export function createApp({
   auditRetentionDays,
   requestLogging = true,
   clock = () => new Date(),
+  assistantSecret = randomBytes(32).toString('hex'),
 }: CreateAppOptions) {
   const app = new Hono<AppEnv>().basePath('/api');
 
@@ -86,6 +116,9 @@ export function createApp({
    */
   app.use('/auth/*', rateLimit(AUTH_LIMIT));
   app.use('/commands', rateLimit(COMMAND_LIMIT));
+  // Tighter than everything else, because this is the one route where a loop
+  // in a client spends the user's money rather than the server's CPU.
+  app.use('/assistant/turn', rateLimit(ASSISTANT_LIMIT));
   app.use('/*', rateLimit(READ_LIMIT));
 
   if (corsOrigins.length > 0) {
@@ -94,6 +127,7 @@ export function createApp({
 
   app.use('*', async (c, next) => {
     c.set('db', db);
+    c.set('assistantSecret', assistantSecret);
     await next();
   });
 
@@ -103,7 +137,8 @@ export function createApp({
     .route('/', meRoute(auth))
     .route('/', commandRoutes(auth, clock))
     .route('/', calendarRoutes(auth, clock, auditRetentionDays))
-    .route('/', notificationRoutes(auth, clock));
+    .route('/', notificationRoutes(auth, clock))
+    .route('/', assistantRoutes(auth));
 
   return routes;
 }

@@ -80,6 +80,24 @@ export const users = pgTable(
      */
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'string' }),
 
+    /**
+     * The key that reaches a language model, and which one (spec §2.2).
+     *
+     * A user's own credential with a user's own bill attached, so it hangs off
+     * the person rather than off a tenant or a calendar. `assistantKey` is
+     * ciphertext — see `assistant/secrets.ts`; `assistantKeyHint` is the last
+     * four characters, which is all a settings screen is ever told.
+     *
+     * Written by a route rather than by a command, alone among the things on
+     * this row. The reasoning is in migration 0019 and comes down to the
+     * command log being append-only: a secret journalled into it could never be
+     * taken back out.
+     */
+    assistantProvider: text('assistant_provider'),
+    assistantModel: text('assistant_model'),
+    assistantKey: text('assistant_key'),
+    assistantKeyHint: text('assistant_key_hint'),
+
     version: versionColumn(),
     // Date-mode: Better Auth writes this table (§10.1). See `columns.ts`.
     createdAt: createdAtDateColumn(),

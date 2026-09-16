@@ -38,6 +38,17 @@ export const READ_LIMIT: RateLimit = { limit: 600, windowMs: 60_000 };
  */
 export const AUTH_LIMIT: RateLimit = { limit: 20, windowMs: 60_000 };
 
+/**
+ * The assistant (spec §2.2), which is the only route that spends money.
+ *
+ * Twenty a minute is far more than a person types and far less than a loop
+ * costs. The ceiling here is not the server's — it is somebody's bill with a
+ * provider, and the failure this guards against is a client bug rather than an
+ * attacker: a retry that re-sends the last turn, or an auto-continue that never
+ * decides it is finished.
+ */
+export const ASSISTANT_LIMIT: RateLimit = { limit: 20, windowMs: 60_000 };
+
 interface Window {
   count: number;
   resetAt: number;
