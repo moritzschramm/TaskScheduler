@@ -35,6 +35,13 @@ services:
       dockerfile: docker/node/dev.Dockerfile
     command: sh -c "/usr/local/bin/server-entrypoint.sh pnpm --filter @ambitime/server dev"
     environment:
+      # pnpm checks whether node_modules matches the lockfile before running a
+      # script, and installs when it does not. In a container that check has no
+      # terminal to ask permission from, so it aborted — which turned "a new
+      # dependency was added" into a 502 with a stack trace about TTYs. `CI`
+      # makes the install non-interactive, which is what it always should have
+      # been here.
+      CI: 'true'
       NODE_ENV: development
       SERVER_PORT: 3000
       DATABASE_URL: postgres://${POSTGRES_USER:-ambitime}:${POSTGRES_PASSWORD:-ambitime}@postgres:5432/${POSTGRES_DB:-ambitime}
@@ -74,6 +81,7 @@ services:
       dockerfile: docker/node/dev.Dockerfile
     command: pnpm --filter @ambitime/client dev --host 0.0.0.0
     environment:
+      CI: 'true'
       NODE_ENV: development
     volumes:
       - .:/app
