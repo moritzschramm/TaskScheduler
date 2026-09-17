@@ -304,7 +304,12 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         data-testid="scheduled-elsewhere"
       >
         <h2 class="text-sm font-semibold">
-          {{ plural('schedule.elsewhere', scheduledElsewhere.length) }}
+          {{
+            plural(
+              mode === 'month' ? 'schedule.elsewhereMonth' : 'schedule.elsewhere',
+              scheduledElsewhere.length,
+            )
+          }}
         </h2>
         <ul class="space-y-1">
           <li v-for="block in scheduledElsewhere" :key="block.occurrenceId" class="text-sm">

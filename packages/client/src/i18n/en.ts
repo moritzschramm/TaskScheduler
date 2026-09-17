@@ -126,6 +126,14 @@ export const en = {
       one: '{count} task is scheduled outside this week',
       other: '{count} tasks are scheduled outside this week',
     },
+    // The same footnote when the grid is a month. Said in the reader's unit
+    // rather than in the code's: the alternative was a month view telling them
+    // four tasks were outside "this week" while pointing at the cells holding
+    // them.
+    elsewhereMonth: {
+      one: '{count} task is scheduled outside this month',
+      other: '{count} tasks are scheduled outside this month',
+    },
     unschedulable: {
       one: '{count} task is not being scheduled',
       other: '{count} tasks are not being scheduled',

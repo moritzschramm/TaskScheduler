@@ -141,6 +141,10 @@ export const de: Messages = {
       one: '{count} Aufgabe liegt außerhalb dieser Woche',
       other: '{count} Aufgaben liegen außerhalb dieser Woche',
     },
+    elsewhereMonth: {
+      one: '{count} Aufgabe liegt außerhalb dieses Monats',
+      other: '{count} Aufgaben liegen außerhalb dieses Monats',
+    },
     unschedulable: {
       one: '{count} Aufgabe wird nicht eingeplant',
       other: '{count} Aufgaben werden nicht eingeplant',

@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { DEFAULT_SCALE, MAX_SCALE, MIN_SCALE, currentScale } from '@/lib/grid';
+import { formatCivilDate, parseCivilDate } from '@/lib/time';
 import { readStoredWeekdays, resetWorkspace, useWorkspace } from '@/lib/workspace';
 
 /**
@@ -75,6 +76,71 @@ describe('view preferences', () => {
     resetWorkspace();
 
     expect(readStoredWeekdays()).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  describe('the days on screen', () => {
+    // The crop outlives `resetWorkspace` on purpose — it belongs to the screen,
+    // not the account — so each of these says which days it is starting from.
+    beforeEach(() => useWorkspace().setVisibleWeekdays([1, 2, 3, 4, 5, 6, 7]));
+
+    it('is the week, when a week is what is drawn', () => {
+      const { setMode, showWeekOf, drawnDays } = useWorkspace();
+      showWeekOf(parseCivilDate('2026-03-25'));
+      setMode('week');
+
+      expect(drawnDays.value.map(formatCivilDate)).toEqual([
+        '2026-03-23',
+        '2026-03-24',
+        '2026-03-25',
+        '2026-03-26',
+        '2026-03-27',
+        '2026-03-28',
+        '2026-03-29',
+      ]);
+    });
+
+    it('loses a weekday that has been hidden', () => {
+      const { setMode, setVisibleWeekdays, showWeekOf, drawnDays } = useWorkspace();
+      showWeekOf(parseCivilDate('2026-03-25'));
+      setMode('week');
+      setVisibleWeekdays([1, 2, 3, 4, 5]);
+
+      // Which is why "elsewhere" asks the set rather than comparing against its
+      // two ends: a Wednesday hidden on its own is not between Monday and
+      // Friday as far as a reader is concerned.
+      expect(drawnDays.value.map(formatCivilDate)).not.toContain('2026-03-28');
+    });
+
+    it('is whole weeks, either side of the month, when a month is drawn', () => {
+      // **The fix for a footnote that argued with the grid above it.** Measured
+      // against the week, a month view showing four tasks on the 21st reported
+      // all four as scheduled somewhere else — while pointing at the cells they
+      // were in. March 2026 starts on a Sunday, so the grid opens on the 23rd
+      // of February and runs to the 5th of April, and everything drawn on those
+      // days is on screen.
+      const { setMode, showWeekOf, drawnDays } = useWorkspace();
+      showWeekOf(parseCivilDate('2026-03-25'));
+      setMode('month');
+
+      const drawn = drawnDays.value.map(formatCivilDate);
+      expect(drawn).toHaveLength(6 * 7);
+      expect(drawn[0]).toBe('2026-02-23');
+      expect(drawn.at(-1)).toBe('2026-04-05');
+      expect(drawn).toContain('2026-03-01');
+      expect(drawn).toContain('2026-03-31');
+    });
+
+    it('draws the whole month even with a weekday hidden', () => {
+      // The month grid has seven columns whatever the week view is cropped to;
+      // a notice that trusted the crop would claim a hidden Saturday's work was
+      // off screen while the cell for it is right there.
+      const { setMode, setVisibleWeekdays, showWeekOf, drawnDays } = useWorkspace();
+      showWeekOf(parseCivilDate('2026-03-25'));
+      setVisibleWeekdays([1, 2, 3, 4, 5]);
+      setMode('month');
+
+      expect(drawnDays.value).toHaveLength(6 * 7);
+    });
   });
 
   describe('with the tasks hidden', () => {

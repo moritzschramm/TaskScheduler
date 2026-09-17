@@ -25,7 +25,7 @@ import { now } from './clock';
 import { fetchConfiguration, fetchContext, fetchHistory, runCommand } from './commands';
 import { DEFAULT_SCALE, setScale, windowsForWeek } from './grid';
 import { language, translate, type MessageKey } from '@/i18n';
-import { monthOf, shiftMonth } from './month';
+import { monthOf, monthWeeks, shiftMonth } from './month';
 import { optimisticBlocks, schedulesAgree } from './optimistic';
 import {
   fetchCalendars,
@@ -35,7 +35,7 @@ import {
   type ScheduleView,
 } from './schedule';
 import { displayFirstDayOfWeek, displayLocale, displayTimeZone } from './session';
-import { addDays, localDate, toIso, weekDays } from './time';
+import { addDays, formatCivilDate, localDate, toIso, weekDays } from './time';
 
 /**
  * The one copy of the schedule the whole application looks at.
@@ -427,7 +427,22 @@ const unschedulable = computed(() =>
 const noWindows = computed(() => configuration.value !== null && openWindows.value.length === 0);
 
 /**
- * Placements the engine made outside the week on screen (spec §6.1).
+ * The days the grid is drawing, whichever grid that is.
+ *
+ * The month renders whole weeks rather than the calendar month — the last days
+ * of August are on screen while you are looking at September — so the leading
+ * and trailing days count as drawn, because something placed on one of them is
+ * visible.
+ */
+const drawnDays = computed<CivilDate[]>(() => {
+  if (mode.value !== 'month') return days.value;
+  return monthWeeks(month.value, firstDayOfWeek.value).flatMap((week) =>
+    week.map((day) => day.date),
+  );
+});
+
+/**
+ * Placements the engine made outside the days on screen (spec §6.1).
  *
  * **This is the one that made "nothing is showing" so hard to believe.** The
  * horizon runs two weeks and the view opens on today's, so a calendar whose
@@ -435,20 +450,26 @@ const noWindows = computed(() => configuration.value !== null && openWindows.val
  * into *next* Monday — correctly, invisibly, on a grid nobody is looking at.
  * Counting them costs a filter over an array that is already in memory, and it
  * is the difference between a broken app and one that needs the Next button.
+ *
+ * **Measured against what is drawn, not against the week.** In the month view
+ * that was a footnote reporting four tasks as somewhere else while pointing at
+ * the very cells they were sitting in — the notice disagreeing with the grid
+ * above it about a fact both of them had.
+ *
+ * Membership in the set rather than a range between its ends, so a weekday the
+ * user has hidden counts as off screen even when it falls in the middle of the
+ * week. Its days are the ones being looked *for*, so the set is built once and
+ * every block asks it one question.
  */
 const scheduledElsewhere = computed<ScheduledBlock[]>(() => {
-  const week = days.value;
-  const first = week[0];
-  const last = week.at(-1);
-  if (first === undefined || last === undefined) return [];
+  const drawn = drawnDays.value;
+  if (drawn.length === 0) return [];
 
-  const start = wallClockToInstant(first, 0, zone.value);
-  const end = wallClockToInstant(addDays(last, 1), 0, zone.value);
+  const shown = new Set(drawn.map((day) => formatCivilDate(day)));
 
-  return (view.value?.schedule.blocks ?? []).filter((block) => {
-    const at = Date.parse(block.start) / 60_000;
-    return at < start || at >= end;
-  });
+  return (view.value?.schedule.blocks ?? []).filter(
+    (block) => !shown.has(formatCivilDate(localDate(block.start, zone.value))),
+  );
 });
 
 /**
@@ -837,6 +858,8 @@ export interface Workspace {
   locale: ComputedRef<string>;
   zone: ComputedRef<string>;
   days: ComputedRef<CivilDate[]>;
+  /** Every day on screen — seven, or the whole weeks a month is drawn as. */
+  drawnDays: ComputedRef<CivilDate[]>;
   today: ComputedRef<CivilDate | null>;
   month: ComputedRef<CivilDate>;
   firstDayOfWeek: ComputedRef<number>;
@@ -904,6 +927,7 @@ export function useWorkspace(): Workspace {
     locale,
     zone,
     days,
+    drawnDays,
     today,
     month,
     firstDayOfWeek,
