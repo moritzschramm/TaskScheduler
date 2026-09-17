@@ -226,6 +226,7 @@ export const de: Messages = {
     blockToday: 'Heute freihalten',
     blockTodayHint:
       'Heute wird nicht verfügbar: alles Geplante wird verschoben, Termine bleiben, wo sie sind',
+    blockedToday: 'Heute ist ab {time} freigehalten. Es wird nichts Neues mehr eingeplant.',
     completeBlock: '{title} als erledigt markieren',
     showWeekOf: 'Woche vom {day} anzeigen',
     more: '+{count} weitere',

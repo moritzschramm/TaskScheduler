@@ -105,6 +105,21 @@ const engineContext = ref<ScheduleContext | null>(null);
  * happens often is a bug worth someone noticing.
  */
 const diverged = ref(false);
+
+/**
+ * One line about what the last command did, for a change that is easy to miss.
+ *
+ * Almost every command answers for itself — a task moves, a block appears, the
+ * week reflows under you. `BlockOutDay` is the one that need not: it closes the
+ * day from *now* forward, so pressing it at ten past ten at night writes an hour
+ * and fifty minutes of unavailability that a grid drawn from six to ten does not
+ * reach, and the screen is identical afterwards.
+ *
+ * Cleared by the next command, the way `diverged` is. A confirmation is about
+ * the press that caused it and stops being true the moment something else
+ * happens.
+ */
+const notice = ref<string | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(true);
 const editing = ref<Editing>({ kind: 'none' });
@@ -661,6 +676,7 @@ async function pinToSlot(
  */
 async function submit(request: CommandRequest): Promise<boolean> {
   error.value = null;
+  notice.value = null;
   const predicted = predict(request);
 
   // A create started from an hour becomes two commands, tied into one unit of
@@ -734,6 +750,7 @@ async function runBatch(
   groupId: string,
 ): Promise<BatchOutcome[]> {
   error.value = null;
+  notice.value = null;
   const outcomes: BatchOutcome[] = [];
 
   for (const request of requests) {
@@ -860,6 +877,8 @@ export interface Workspace {
   notifications: Ref<Notification[]>;
   capacity: Ref<CapacityCell[]>;
   diverged: Ref<boolean>;
+  /** A line confirming the last command, for one whose effect can be off screen. */
+  notice: Ref<string | null>;
   error: Ref<string | null>;
   loading: Ref<boolean>;
   editing: Ref<Editing>;
@@ -931,6 +950,7 @@ export function useWorkspace(): Workspace {
     notifications,
     capacity,
     diverged,
+    notice,
     error,
     loading,
     editing,
@@ -1002,6 +1022,7 @@ export function resetWorkspace(): void {
   capacity.value = [];
   engineContext.value = null;
   diverged.value = false;
+  notice.value = null;
   error.value = null;
   loading.value = true;
   editing.value = { kind: 'none' };

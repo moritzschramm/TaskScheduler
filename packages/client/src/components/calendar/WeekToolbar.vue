@@ -3,8 +3,9 @@ import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import DisplayOptions from '@/components/calendar/DisplayOptions.vue';
+import { now } from '@/lib/clock';
 import { formatMonth } from '@/lib/month';
-import { formatCivilDate } from '@/lib/time';
+import { formatCivilDate, formatMinuteOfDay, minuteOfDay } from '@/lib/time';
 import { useWorkspace } from '@/lib/workspace';
 import { CalendarOff, ChevronLeft, ChevronRight } from 'lucide-vue-next';
 
@@ -33,6 +34,8 @@ const {
   mode,
   setMode,
   today,
+  notice,
+  zone,
   shiftWeek,
   shiftMonths,
   showWeekOf,
@@ -73,10 +76,22 @@ async function blockToday(): Promise<void> {
 
   blocking.value = true;
   try {
-    await submit({ type: 'BlockOutDay', params: { calendarId, date: formatCivilDate(day) } });
+    const from = minuteOfDay(now().toISOString(), zone.value);
+    const applied = await submit({
+      type: 'BlockOutDay',
+      params: { calendarId, date: formatCivilDate(day) },
+    });
     // Whatever week was on screen, the change is on today's. A command whose
     // effect is off-screen reads as a button that did nothing.
     showWeekOf(day);
+
+    // **And it can still be off screen after that.** The day closes from now
+    // forward (§7.2), so pressing this late in the evening writes hours the
+    // grid's own crop does not reach — the same screen, and a button that
+    // appears not to have worked. Said in words, with the hour it starts from,
+    // because that is the part a reader cannot infer from a grid they cannot
+    // see the change on.
+    if (applied) notice.value = t('calendar.blockedToday', { time: formatMinuteOfDay(from) });
   } finally {
     blocking.value = false;
   }

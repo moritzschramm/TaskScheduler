@@ -214,6 +214,7 @@ export const en = {
     blockToday: 'Block out today',
     blockTodayHint:
       'Today becomes unavailable: everything scheduled on it moves, and appointments stay where they are',
+    blockedToday: 'Today is blocked out from {time}. Nothing new will be scheduled on it.',
     completeBlock: 'Mark {title} done',
     showWeekOf: 'Show the week of {day}',
     more: '+{count} more',

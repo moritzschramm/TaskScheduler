@@ -10,7 +10,7 @@ import { useWorkspace } from '@/lib/workspace';
  * so three times in three slightly different wordings would be three chances
  * to drift.
  */
-const { calendars, categories, error, diverged, loading } = useWorkspace();
+const { calendars, categories, error, diverged, notice, loading } = useWorkspace();
 
 const { t } = useI18n();
 </script>
@@ -25,6 +25,15 @@ const { t } = useI18n();
   >
     The server placed things a little differently from the preview, and its answer is what you are
     looking at now.
+  </p>
+  <!--
+    What the last command did, when the grid cannot say it (see `notice` in
+    `lib/workspace`). Below the error and the divergence line, which are both
+    about something having gone differently from the plan, and above "loading",
+    which by this point is over.
+  -->
+  <p v-else-if="notice" class="text-muted-foreground text-sm" role="status" data-testid="notice">
+    {{ notice }}
   </p>
   <p v-else-if="loading" class="text-muted-foreground text-sm">{{ t('app.loading') }}</p>
 
