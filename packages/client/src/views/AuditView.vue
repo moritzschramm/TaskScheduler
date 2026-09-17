@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { useI18n, type MessageKey } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api';
 import { fetchAudit } from '@/lib/commands';
 import { displayLocale } from '@/lib/session';
 import { formatDateTime } from '@/lib/time';
+import { useWorkspace } from '@/lib/workspace';
 import type { AuditEntry } from '@ambitime/shared';
 
 const { t } = useI18n();
@@ -67,6 +68,32 @@ function readable(type: string): string {
 function when(iso: string): string {
   return formatDateTime(iso, displayLocale());
 }
+
+/**
+ * The table follows the log it is a reading of (§7.5, §12).
+ *
+ * Undo and redo are in the header, so they are reachable from this very page —
+ * and pressing one appended a row this table then declined to show. Nothing was
+ * wrong underneath: a reload produced the `Undo` and the `Redo`, both of them
+ * where they should be. But a history that does not move while you are watching
+ * it is a history you stop believing, which is the one thing an audit trail
+ * cannot afford (§12).
+ *
+ * The undo stacks are what changes, and they change on every command the
+ * workspace applies, so watching them is watching "something was written".
+ *
+ * **Back to the first page, not appended to the last.** The new entries are at
+ * the top and paging is a cursor into what was below them; splicing them into a
+ * list somebody had already paged through would put two orderings in one table.
+ * Anyone who had asked for older rows can ask again.
+ */
+const { history } = useWorkspace();
+
+watch(history, (_next, previous) => {
+  // Skipped once: the shell reads the stacks for itself as it mounts, and that
+  // first arrival is this page's own `onMounted` read under another name.
+  if (previous !== null) void load();
+});
 
 onMounted(() => load());
 </script>

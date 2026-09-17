@@ -823,6 +823,29 @@ async function ensureLoaded(): Promise<void> {
   await load();
 }
 
+/**
+ * The undo stacks on their own (spec §7.5).
+ *
+ * Undo and redo belong to the application rather than to the week, so they are
+ * on every screen — including the two that never read the workspace. Opening
+ * History or Settings directly left both buttons greyed out over a full log,
+ * which reads as "there is nothing to undo" and is the one thing they must
+ * never say wrongly.
+ *
+ * The cheap half of `load`: one request, no solve, no schedule. It re-reads
+ * every time it is called rather than only once, because the caller is the
+ * shell reacting to a session — signing in as somebody else has to replace the
+ * previous person's stacks, not keep them.
+ */
+async function refreshHistory(): Promise<void> {
+  try {
+    history.value = await fetchHistory();
+  } catch {
+    // Not signed in yet, or offline. The buttons stay as they are, which for a
+    // page that has not loaded anything means disabled.
+  }
+}
+
 let watching = false;
 
 export interface Workspace {
@@ -871,6 +894,8 @@ export interface Workspace {
   noWindows: ComputedRef<boolean>;
   scheduledElsewhere: ComputedRef<ScheduledBlock[]>;
   ensureLoaded: () => Promise<void>;
+  /** Re-reads the undo stacks alone, for a screen that loads nothing else. */
+  refreshHistory: () => Promise<void>;
   load: () => Promise<void>;
   submit: (request: CommandRequest) => Promise<boolean>;
   runBatch: (requests: readonly CommandRequest[], groupId: string) => Promise<BatchOutcome[]>;
@@ -937,6 +962,7 @@ export function useWorkspace(): Workspace {
     noWindows,
     scheduledElsewhere,
     ensureLoaded,
+    refreshHistory,
     load,
     submit,
     runBatch,

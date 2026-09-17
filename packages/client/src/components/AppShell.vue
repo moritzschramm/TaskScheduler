@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   DropdownMenuContent,
@@ -33,7 +33,7 @@ import { useI18n } from '@/i18n';
 const router = useRouter();
 
 const { t } = useI18n();
-const { history, submit } = useWorkspace();
+const { history, refreshHistory, submit } = useWorkspace();
 
 /**
  * The labels are computed, not constants.
@@ -53,6 +53,24 @@ const primary = computed(() => [
 // starts with the shell and stops with it.
 onMounted(startHeartbeat);
 onUnmounted(stopHeartbeat);
+
+/**
+ * What undo and redo would take back, read for whoever is signed in (§7.5).
+ *
+ * The two buttons are the shell's, and the shell outlives every view — so on
+ * Settings or History, which load no workspace of their own, they sat greyed
+ * out over a log full of commands. Watching the session rather than mounting
+ * once is what makes that true in both directions: the shell is mounted before
+ * anyone has signed in, and it is still mounted when somebody signs in as
+ * somebody else.
+ */
+watch(
+  () => session.value?.user.id,
+  (id) => id !== undefined && void refreshHistory(),
+  {
+    immediate: true,
+  },
+);
 
 /**
  * The surface, and the system's opinion of it (§13).
