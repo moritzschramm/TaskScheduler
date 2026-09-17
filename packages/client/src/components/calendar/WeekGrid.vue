@@ -597,10 +597,14 @@ function classesFor(block: GridBlock): string {
  * out from under it; and a type still carrying no colour from before migration
  * 0018. None of them is worth a fourth appearance on the grid.
  */
-function blockHueOf(block: GridBlock): string | null {
+function slotOf(block: GridBlock): string | null {
   if (block.categoryId === null) return null;
-  const color = categoryById.value.get(block.categoryId)?.color ?? null;
-  return color === null ? null : `var(--category-block-${color})`;
+  return categoryById.value.get(block.categoryId)?.color ?? null;
+}
+
+function blockHueOf(block: GridBlock): string | null {
+  const slot = slotOf(block);
+  return slot === null ? null : `var(--category-block-${slot})`;
 }
 
 /**
@@ -613,7 +617,8 @@ function blockHueOf(block: GridBlock): string | null {
  * at 20% without either of them knowing which case it is in.
  */
 function inkOf(block: GridBlock): string {
-  return blockHueOf(block) === null ? 'var(--primary-foreground)' : 'var(--category-ink)';
+  const slot = slotOf(block);
+  return slot === null ? 'var(--primary-foreground)' : `var(--category-ink-${slot})`;
 }
 
 /** The hue half of a block's appearance; `{}` where `classesFor` covers it. */
@@ -630,7 +635,7 @@ function styleFor(block: GridBlock): Record<string, string> {
     };
   }
 
-  return { backgroundColor: hue, borderColor: hue, color: 'var(--category-ink)' };
+  return { backgroundColor: hue, borderColor: hue, color: inkOf(block) };
 }
 
 /** Which blocks carry a done control: a placed task, on a grid that edits. */
@@ -831,7 +836,7 @@ const DONE_INSET = 6;
             :data-start-min="lane.startMin"
             :title="nameOf(lane.categoryId)"
           >
-            <span class="text-muted-foreground truncate px-1 text-[0.65rem] leading-4">
+            <span class="truncate px-1 text-[0.65rem] leading-4 text-(--ink-subtle)">
               {{ nameOf(lane.categoryId) }}
             </span>
           </div>
@@ -903,7 +908,18 @@ const DONE_INSET = 6;
               <span v-if="block.continuesBefore" aria-hidden="true">↑ </span>{{ block.title
               }}<span v-if="block.continuesAfter" aria-hidden="true"> ↓</span>
             </p>
-            <p class="tabular-nums opacity-70">{{ block.label }}</p>
+            <!--
+              Weight, not opacity.
+
+              The second line used to be the block's ink at 70%, which was a
+              fine way to make it quieter while every block was one near-black.
+              On a hued fill it is a contrast failure: the steps clear 5:1 at
+              full strength, so *any* fade drops them under 4.5 — measured, the
+              best a fade can do is 4.35 at 90%, and at the 70% this was it is
+              3.23. The title is `font-medium` and this is not, which says the
+              same thing about which line matters and says it legibly.
+            -->
+            <p class="font-normal tabular-nums">{{ block.label }}</p>
           </component>
 
           <!--

@@ -106,32 +106,71 @@ export function isCategoryColor(value: unknown): value is CategoryColor {
  * version of its background, which is exactly the confusion this set exists to
  * remove.
  *
- * **Derived, not chosen.** Each value is its lane step walked along OKLCH
- * lightness — hue and chroma held, chroma reduced only where the walk left the
- * sRGB gamut — away from the surface until the text on it clears 5:1. Light
- * steps darken until white passes; dark steps lighten until the dark surface
- * ink passes. So a block is recognisably the same hue as the lane it sits on,
- * and never a different colour that happens to be near it.
+ * **Derived, not chosen.** Each value is the nearest lightness to its lane step
+ * — hue and chroma held, in OKLCH, chroma reduced only where the walk left the
+ * sRGB gamut — that satisfies two rules at once:
+ *
+ * 1. the text on it clears **5:1** (WCAG 1.4.3 wants 4.5 for 12px; the extra is
+ *    headroom, so a later re-step is a decision rather than a regression), and
+ * 2. the block itself clears **3:1 against the day body** it is drawn on, which
+ *    is WCAG 1.4.11 — a block is a graphical object, and one that meets the
+ *    text rule while melting into the column behind it has met the wrong rule.
+ *
+ * Nearest, so the fill stays the colour the lane is. Five of the eight light
+ * steps move by less than 0.06 in lightness and violet does not move at all.
+ *
+ * **The ink varies, and that is what keeps the hues recognisable.** One ink for
+ * all eight was the first attempt: it meant darkening yellow until white sat on
+ * it, and dark yellow is *brown* — the same hue angle, and not a colour anybody
+ * looking at a pale yellow lane would connect to it. Letting each slot take
+ * whichever of the two inks it wants costs a rule and buys back the palette.
+ * See `CATEGORY_BLOCK_INK`.
  *
  * **What it measures.** Against its own lane wash, every block separates by
- * ΔE 32–51 (OKLab ×100) — the separation the fill is for. Against each other,
- * neighbouring slots clear ΔE 16 light and 18.8 dark, above the 15 floor for
- * normal vision; the worst pair overall is orange against red at ΔE 5.2, which
- * is the same weakness the lane palette has and has the same answer: **every
- * block carries its title**, so colour groups and the word names. Nothing here
- * asks a reader to tell two hues apart to know what a block is.
- *
- * Green moved furthest, and only in dark mode. `#008300` is one value in both
- * columns above — fine for a 14% wash, and a dark green box on a dark surface
- * once it became a fill.
+ * ΔE 30+ (OKLab ×100) — the separation the fill is for. Against each other,
+ * neighbouring slots clear the ΔE 15 floor for normal vision; the worst pair
+ * overall is orange against red, which is the same weakness the lane palette
+ * has and has the same answer: **every block carries its title**, so colour
+ * groups and the word names. Nothing here asks a reader to tell two hues apart
+ * to know what a block is.
  */
 export const CATEGORY_BLOCK_STEPS: Readonly<Record<CategoryColor, ColorSteps>> = {
   blue: { light: '#1e6ecb', dark: '#3b89e7' },
-  orange: { light: '#c44400', dark: '#e1602e' },
-  aqua: { light: '#007f56', dark: '#199e70' },
-  yellow: { light: '#976500', dark: '#c98500' },
-  magenta: { light: '#b24b75', dark: '#de5988' },
+  orange: { light: '#e86631', dark: '#e1602e' },
+  aqua: { light: '#00a16e', dark: '#199e70' },
+  yellow: { light: '#c08100', dark: '#c98500' },
+  magenta: { light: '#d56a93', dark: '#de5988' },
   green: { light: '#008200', dark: '#2e9c2a' },
   violet: { light: '#4a3aa7', dark: '#9085e9' },
-  red: { light: '#ce3437', dark: '#e66767' },
+  red: { light: '#ed5250', dark: '#e66767' },
+};
+
+/** The two inks a block is ever written in. */
+export const BLOCK_INK = {
+  /** `--primary-foreground` on the light surface. */
+  light: '#ffffff',
+  /** `--primary` on the light surface, `--primary-foreground` on the dark one. */
+  dark: '#0f172b',
+} as const;
+
+/**
+ * Which of the two each step is written in, chosen with the step.
+ *
+ * Every dark-surface block takes the dark ink, because a block on a dark page
+ * has to be lighter than the page to be a block at all — rule 2 above — and
+ * anything light enough for that is too light for white text. The light surface
+ * is mixed, and that is not an inconsistency to tidy away: it is what a hue
+ * that is *already* dark (violet, blue, green) and a hue that is *already*
+ * light (yellow, magenta) each need, and forcing one answer on both is what
+ * turned yellow brown.
+ */
+export const CATEGORY_BLOCK_INK: Readonly<Record<CategoryColor, ColorSteps>> = {
+  blue: { light: BLOCK_INK.light, dark: BLOCK_INK.dark },
+  orange: { light: BLOCK_INK.dark, dark: BLOCK_INK.dark },
+  aqua: { light: BLOCK_INK.dark, dark: BLOCK_INK.dark },
+  yellow: { light: BLOCK_INK.dark, dark: BLOCK_INK.dark },
+  magenta: { light: BLOCK_INK.dark, dark: BLOCK_INK.dark },
+  green: { light: BLOCK_INK.light, dark: BLOCK_INK.dark },
+  violet: { light: BLOCK_INK.light, dark: BLOCK_INK.dark },
+  red: { light: BLOCK_INK.dark, dark: BLOCK_INK.dark },
 };

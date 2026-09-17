@@ -140,7 +140,7 @@ async function blockToday(): Promise<void> {
           :key="option"
           type="button"
           class="rounded px-2.5 py-1 text-sm capitalize"
-          :class="mode === option ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'"
+          :class="mode === option ? 'bg-background shadow-sm font-medium' : 'text-(--ink-subtle)'"
           :aria-pressed="mode === option"
           :data-testid="`view-${option}`"
           @click="setMode(option)"

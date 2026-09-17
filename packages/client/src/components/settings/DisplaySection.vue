@@ -6,6 +6,7 @@ import { timeZones } from '@/lib/zones';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { session } from '@/lib/session';
+import { setTheme, useTheme, type ThemeChoice } from '@/lib/theme';
 import { weekdayNames } from '@/lib/time';
 import type { CommandRequest } from '@ambitime/shared';
 
@@ -30,6 +31,18 @@ const props = defineProps<{
 }>();
 
 const autosave = useAutosave();
+
+/**
+ * The surface, which is the one setting on this page that is not a command.
+ *
+ * Deliberately outside the watcher below. The other three are facts about the
+ * person and travel with the account; this one is a fact about the screen in
+ * front of them, kept in this browser — see `lib/theme.ts` for the argument,
+ * and the note under the control for how it is said to the user. It saves on
+ * selection rather than through `autosave`, because there is nothing to debounce
+ * and nothing that can fail.
+ */
+const { theme } = useTheme();
 
 const locale = ref('');
 const timeZone = ref('');
@@ -166,6 +179,28 @@ function edited(): void {
           </option>
         </Select>
       </div>
+    </div>
+
+    <div class="max-w-xs space-y-1">
+      <Label for="settings-theme">{{ t('settings.display.theme') }}</Label>
+      <Select
+        id="settings-theme"
+        :model-value="theme"
+        data-testid="settings-theme"
+        @update:model-value="setTheme($event as ThemeChoice)"
+      >
+        <option value="system">{{ t('settings.display.themeSystem') }}</option>
+        <option value="light">{{ t('settings.display.themeLight') }}</option>
+        <option value="dark">{{ t('settings.display.themeDark') }}</option>
+      </Select>
+      <!--
+        Said, because it is the one thing here that behaves differently from
+        everything around it: changing your language on this screen changes it
+        on your phone too, and changing this one does not.
+      -->
+      <p class="text-muted-foreground text-xs" data-testid="settings-theme-note">
+        {{ t('settings.display.themeNote') }}
+      </p>
     </div>
 
     <div class="bg-muted/40 rounded-md border p-3 text-sm" data-testid="settings-preview">

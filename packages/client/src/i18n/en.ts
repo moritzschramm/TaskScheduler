@@ -322,6 +322,11 @@ export const en = {
     endOf: 'End of {name}',
   },
 
+  theme: {
+    toLight: 'Switch to the light theme',
+    toDark: 'Switch to the dark theme',
+  },
+
   settings: {
     assistantTitle: 'Assistant',
     assistantLead:
@@ -374,6 +379,12 @@ export const en = {
       weekStartsOn: 'Weeks start on {day}.',
       languageNote:
         'The interface is available in English and German. Any other choice changes dates and numbers only.',
+      theme: 'Appearance',
+      themeSystem: 'Follow my system',
+      themeLight: 'Light',
+      themeDark: 'Dark',
+      themeNote:
+        'Kept in this browser rather than on your account, so a bright office and a dark bedroom can differ.',
     },
   },
 

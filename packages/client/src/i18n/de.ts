@@ -340,6 +340,11 @@ export const de: Messages = {
     endOf: 'Ende von {name}',
   },
 
+  theme: {
+    toLight: 'Zur hellen Darstellung wechseln',
+    toDark: 'Zur dunklen Darstellung wechseln',
+  },
+
   settings: {
     assistantTitle: 'Assistent',
     assistantLead:
@@ -393,6 +398,12 @@ export const de: Messages = {
       weekStartsOn: 'Wochen beginnen am {day}.',
       languageNote:
         'Die Oberfläche gibt es auf Englisch und Deutsch. Jede andere Wahl ändert nur Datums- und Zahlenformate.',
+      theme: 'Darstellung',
+      themeSystem: 'System folgen',
+      themeLight: 'Hell',
+      themeDark: 'Dunkel',
+      themeNote:
+        'Wird in diesem Browser gespeichert, nicht im Konto — ein helles Büro und ein dunkles Schlafzimmer dürfen sich also unterscheiden.',
     },
   },
 

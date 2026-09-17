@@ -122,7 +122,7 @@ A manual edit modifies source constraints; it does **not** freeze an assignment.
 ### 4.3 Scheduling entities (tenant-scoped)
 
 - **Calendar** (a scheduling *context*) — owned by a User within a Tenant; a user may own several. Carries a **visibility scope** (`private` / `team` / `group`), a **working window**, and a **shareable window** (§9). The engine operates over the union of Calendars a user can access.
-- **Category** — e.g. work, exercise, wellness, household. Owns default cooldown and the set of availability windows for its kind of activity.
+- **Category** — e.g. work, exercise, wellness, household. Owns default cooldown and the set of availability windows for its kind of activity. Carries a **colour slot** (one of eight named hues, not free hex) which the calendar draws in two registers: its availability lanes as a 14% wash, and the blocks placed in it as a solid fill. The two are different steps of the same hue, each derived so the text on it clears WCAG 1.4.3 and the shape itself clears 1.4.11 against the column behind it. **Colour groups; the name identifies** — eight hues cannot all be told apart by every reader, so every lane and every block carries its own words.
 - **AvailabilityWindow** — a per-weekday time range for a Category within a Calendar (recurring availability).
 - **WeekTypeOverride** — replaces the default window set for a date range (holidays, special weeks).
 - **Task** — schedulable unit (§4.4).
@@ -423,6 +423,16 @@ This is **not** full event-sourcing: mutable entity tables plus a reversible-cha
 - Date/time formatting, first-day-of-week, locale, and timezone are user settings.
 - UI drag grid snaps to 15-minute blocks; a text field allows exact minutes.
 - All display respects the user's timezone; storage remains UTC (§5.1).
+- **Light and dark are a device preference, not a user setting.** The three above
+  are facts about the person and travel with the account as an `UpdateSettings`
+  command; the surface is a fact about the screen in front of them — the same
+  person wants light on an office monitor and dark on a laptop at night — so it
+  is kept in the browser alongside the day range and row height. It also has to
+  work with no session at all: the sign-in page and the first paint of every
+  reload happen before `/api/me` answers, and a theme that arrived with the
+  session would be a white flash on each of them. Three states, defaulting to
+  following the operating system; a header button flips the current one, and the
+  full choice is in Settings.
 
 ---
 

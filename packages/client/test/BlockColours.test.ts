@@ -1,6 +1,11 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import { CATEGORY_BLOCK_STEPS, CATEGORY_COLORS } from '@ambitime/shared';
+import {
+  BLOCK_INK,
+  CATEGORY_BLOCK_INK,
+  CATEGORY_BLOCK_STEPS,
+  CATEGORY_COLORS,
+} from '@ambitime/shared';
 import type {
   CalendarConfiguration,
   CompletedBlock,
@@ -10,6 +15,7 @@ import type {
 import MonthGrid from '@/components/calendar/MonthGrid.vue';
 import WeekGrid from '@/components/calendar/WeekGrid.vue';
 import { parseCivilDate, weekDays } from '@/lib/time';
+import type { ResolvedWindow } from '@ambitime/scheduler';
 
 /**
  * A placed block wears its activity type's colour (spec §4.3).
@@ -70,13 +76,31 @@ const stretched: CompletedBlock = {
   completedAt: '2026-03-23T06:30:00.000Z',
 };
 
+/** One Berlin 09:00–17:00 window, so a lane is drawn under the blocks. */
+const windows: ResolvedWindow[] = [
+  {
+    ruleId: 'w-1',
+    calendarId: 'cal',
+    categoryId: 'cat-work',
+    interval: { start: Date.UTC(2026, 2, 23, 8) / 60_000, end: Date.UTC(2026, 2, 23, 16) / 60_000 },
+  },
+];
+
 function week(
   blocks: ScheduledBlock[] = [report],
   fixedBlocks: FixedBlock[] = [],
   completedBlocks: CompletedBlock[] = [],
 ) {
   return mount(WeekGrid, {
-    props: { days: WEEK, timeZone: BERLIN, blocks, fixedBlocks, completedBlocks, categories },
+    props: {
+      days: WEEK,
+      timeZone: BERLIN,
+      blocks,
+      fixedBlocks,
+      completedBlocks,
+      categories,
+      windows,
+    },
   });
 }
 
@@ -90,7 +114,7 @@ describe('a task on the week grid', () => {
     const style = styleOf(week(), 'task');
 
     expect(style).toContain('--category-block-blue');
-    expect(style).toContain('var(--category-ink)');
+    expect(style).toContain('var(--category-ink-blue)');
   });
 
   it('draws two types in two colours', () => {
@@ -138,7 +162,28 @@ describe('a task on the week grid', () => {
     // still ahead.
     expect(style).toContain('color-mix');
     expect(style).toContain('--category-block-orange');
-    expect(styleOf(week([], [], [stretched]), 'completed')).not.toContain('var(--category-ink)');
+    expect(styleOf(week([], [], [stretched]), 'completed')).not.toContain('--category-ink');
+  });
+
+  it('does not fade the time under the title, which no hue can carry', () => {
+    // It was the block's ink at 70%, which is fine on one near-black and a
+    // contrast failure on eight hues: the steps clear 5:1 at full strength, so
+    // the best any fade can manage is 4.35 at 90%. Weight says the same thing.
+    const line = week().find('[data-testid="block-task"] p.tabular-nums');
+
+    expect(line.classes()).not.toContain('opacity-70');
+    expect(line.classes()).toContain('font-normal');
+  });
+
+  it('writes the lane label in an ink that passes on the wash', () => {
+    // `--muted-foreground` measured 3.04:1 on a lane in today's column and
+    // 4.00:1 on the dark surface. jsdom cannot compute that, so what is pinned
+    // here is the token; the value behind it is derived in `main.css`.
+    const label = week().find('[data-testid="category-lane"] span');
+
+    expect(label.exists()).toBe(true);
+    expect(label.classes()).toContain('text-(--ink-subtle)');
+    expect(label.classes()).not.toContain('text-muted-foreground');
   });
 
   it('hands the done strip the same ink the block is written in', () => {
@@ -153,12 +198,13 @@ describe('a task on the week grid', () => {
         blocks: [report],
         fixedBlocks: [],
         categories,
+        windows,
         editable: true,
       },
     });
 
     expect(wrapper.find('[data-testid="complete-block"]').attributes('style')).toContain(
-      '--block-ink: var(--category-ink)',
+      '--block-ink: var(--category-ink-blue)',
     );
   });
 });
@@ -213,30 +259,47 @@ describe('the two steps of a slot', () => {
   });
 
   it('carries 12px text on every one of them, in both modes', () => {
-    // The reason the block column exists at all. A block says a title and a
-    // time in `text-xs`, which is small text, which is 4.5:1 — and the lane
-    // steps do not clear it: white on the light blue lane is 4.42, and three of
-    // the dark ones are under 4 against the ink. Derived at 5:1 for headroom,
-    // asserted at the standard so a deliberate re-step is not a failing test.
-    const INK = { light: '#ffffff', dark: '#0f172b' };
-
+    // WCAG 1.4.3: a block says a title and a time in `text-xs`, which is small
+    // text, which is 4.5:1 — and the *lane* steps do not clear it, which is the
+    // reason the block column exists. Derived at 5:1 for headroom, asserted at
+    // the standard so a deliberate re-step is a decision, not a failing test.
     for (const color of CATEGORY_COLORS) {
-      const steps = CATEGORY_BLOCK_STEPS[color];
-      expect(contrast(steps.light, INK.light), `${color} light`).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(steps.dark, INK.dark), `${color} dark`).toBeGreaterThanOrEqual(4.5);
+      const step = CATEGORY_BLOCK_STEPS[color];
+      const ink = CATEGORY_BLOCK_INK[color];
+      expect(contrast(step.light, ink.light), `${color} light`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(step.dark, ink.dark), `${color} dark`).toBeGreaterThanOrEqual(4.5);
     }
   });
 
-  it('stays on the surface it was stepped for', () => {
-    // A block is the figure and the grid is the ground, so the fill has to sit
-    // on the far side of its own surface: darker than the page in light mode,
-    // lighter than it in dark. Green is why this is a test — one value served
-    // both columns of the lane palette, which as a *fill* made a dark green box
-    // on a dark grey page.
+  it('stands clear of the column it is drawn on', () => {
+    // WCAG 1.4.11, and the rule the first derivation forgot. A fill can pass
+    // the text rule and still melt into the day body behind it — which is what
+    // green did, because one value served both columns of the lane palette and
+    // as a *fill* that is a dark green box on a dark grey page.
+    const DAY_BODY = { light: '#f1f5f9', dark: '#1d293d' };
+
     for (const color of CATEGORY_COLORS) {
-      const steps = CATEGORY_BLOCK_STEPS[color];
-      expect(luminance(steps.light), `${color} light`).toBeLessThan(luminance('#ffffff'));
-      expect(luminance(steps.dark), `${color} dark`).toBeGreaterThan(luminance('#1d283a'));
+      const step = CATEGORY_BLOCK_STEPS[color];
+      expect(contrast(step.light, DAY_BODY.light), `${color} light`).toBeGreaterThanOrEqual(3);
+      expect(contrast(step.dark, DAY_BODY.dark), `${color} dark`).toBeGreaterThanOrEqual(3);
     }
+  });
+
+  it('writes every dark-surface block in the dark ink', () => {
+    // Not a rule of its own — a consequence of the two above. On a dark page a
+    // block must be lighter than the page, and nothing light enough for that
+    // carries white text.
+    for (const color of CATEGORY_COLORS) {
+      expect(CATEGORY_BLOCK_INK[color].dark, color).toBe(BLOCK_INK.dark);
+    }
+  });
+
+  it('keeps yellow yellow, which is why the ink is allowed to vary', () => {
+    // The whole argument for a per-slot ink, in one assertion. Forced onto
+    // white text, yellow has to darken to #976500 — the same hue angle, and
+    // brown to anybody naming it, which is not a colour you connect to a pale
+    // yellow lane. With the dark ink it barely moves.
+    expect(CATEGORY_BLOCK_INK.yellow.light).toBe(BLOCK_INK.dark);
+    expect(luminance(CATEGORY_BLOCK_STEPS.yellow.light)).toBeGreaterThan(luminance('#976500'));
   });
 });

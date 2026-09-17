@@ -5,6 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>Ambitime</title>
+    <!--
+      The surface, before the first paint.
+
+      This runs ahead of the stylesheet and of every module, which is the whole
+      point: read in `lib/theme.ts` instead and a dark-mode user watches the
+      application flash white on every single reload, because a module cannot
+      run until the document has already been painted once.
+
+      The key is duplicated from `lib/theme.ts` — an inline script cannot
+      import — and the two must change together.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('ambitime.theme');
+          var following = stored === null || stored === 'system';
+          if (
+            stored === 'dark' ||
+            (following && matchMedia('(prefers-color-scheme: dark)').matches)
+          )
+            document.documentElement.classList.add('dark');
+        } catch (error) {
+          // No storage, or no `matchMedia`. Light is what both would have said.
+        }
+      })();
+    </script>
   </head>
   <body class="h-full">
     <div id="app" class="h-full"></div>

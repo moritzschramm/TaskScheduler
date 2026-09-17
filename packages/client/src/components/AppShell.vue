@@ -11,10 +11,12 @@ import {
 } from 'reka-ui';
 import { ChevronDown } from 'lucide-vue-next';
 import AssistantLauncher from '@/components/assistant/AssistantLauncher.vue';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 import UndoRedo from '@/components/UndoRedo.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { resendVerification, session, signOut, startHeartbeat, stopHeartbeat } from '@/lib/session';
+import { startTheme } from '@/lib/theme';
 import { resetWorkspace, useWorkspace } from '@/lib/workspace';
 import { useI18n } from '@/i18n';
 
@@ -51,6 +53,17 @@ const primary = computed(() => [
 // starts with the shell and stops with it.
 onMounted(startHeartbeat);
 onUnmounted(stopHeartbeat);
+
+/**
+ * The surface, and the system's opinion of it (§13).
+ *
+ * `index.html` has already painted the right one — this attaches the listener
+ * that keeps "follow my system" honest when the system changes underneath a tab
+ * that has been open since morning. Not stopped on unmount: it is one listener
+ * on a media query for the life of the document, and the shell unmounts only
+ * when the document is going away.
+ */
+onMounted(startTheme);
 
 const active = computed(() =>
   session.value?.contexts.find((context) => context.tenantId === session.value?.activeTenantId),
@@ -184,6 +197,13 @@ async function confirmAgain() {
           across every screen (§7.5). Here they are wherever you are.
         -->
         <UndoRedo :history="history" :submit="submit" />
+
+        <!--
+          Light or dark, in one press. The third state — following the system —
+          is in Settings; see the component's own note for why the button does
+          not cycle through it.
+        -->
+        <ThemeToggle />
 
         <!--
           Everything about *you* behind your own name. Three links spread along
