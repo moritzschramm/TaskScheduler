@@ -331,9 +331,18 @@ function styleFor(entry: DayEntry): Record<string, string> {
           {{ day.specialWeek }}
         </p>
 
+        <!--
+          Focusable while it is a panel, because it is a scrolling one.
+          A day with twenty things on it is taller than the two rows the panel
+          may cover, so it scrolls — and a scrolling region nothing can reach is
+          a region a keyboard cannot read (WCAG 2.1.1). It is labelled with its
+          date, since out of the grid a bare list of titles names no day.
+        -->
         <ul
           class="space-y-0.5"
           :class="opened(day) ? panelClassesFor(row) : 'relative mt-0.5'"
+          :tabindex="opened(day) ? 0 : undefined"
+          :aria-label="opened(day) ? day.label : undefined"
           data-testid="month-day-list"
         >
           <li

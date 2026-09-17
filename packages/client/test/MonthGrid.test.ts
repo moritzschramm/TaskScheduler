@@ -90,6 +90,19 @@ describe('a day with more on it than fits', () => {
     expect(list.classes()).not.toContain('top-7');
   });
 
+  it('is something a keyboard can reach, because it scrolls', async () => {
+    // A day with twenty things on it is taller than the two rows the panel may
+    // cover, so it scrolls — and axe was right to call a scrolling region with
+    // nothing focusable in it unreadable by keyboard (WCAG 2.1.1).
+    const wrapper = month(pileOn('2026-03-10', 20));
+    await cellFor(wrapper, '2026-03-10').trigger('pointerenter');
+
+    const list = cellFor(wrapper, '2026-03-10').get('[data-testid="month-day-list"]');
+    expect(list.attributes('tabindex')).toBe('0');
+    // Out of the grid, a bare list of titles names no day.
+    expect(list.attributes('aria-label')).toContain('10');
+  });
+
   it('closes again when the pointer goes elsewhere', async () => {
     const wrapper = month(pileOn('2026-03-10', 7));
     await cellFor(wrapper, '2026-03-10').trigger('pointerenter');
