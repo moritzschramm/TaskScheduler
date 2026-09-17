@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useI18n } from '@/i18n';
 import type { CivilDate } from '@ambitime/scheduler';
 import type {
+  CalendarConfiguration,
   CompletedBlock,
   FixedBlock,
   ScheduledBlock,
@@ -41,6 +42,8 @@ const props = withDefaults(
     blocks?: readonly ScheduledBlock[];
     fixedBlocks?: readonly FixedBlock[];
     completedBlocks?: readonly CompletedBlock[];
+    /** Read for one thing only: which colour each activity type draws in. */
+    categories?: CalendarConfiguration['categories'];
     specialWeeks?: readonly WeekTypeOverrideEntry[];
     today?: CivilDate | null;
     /** The last day anything can be scheduled on; past it, empty means nothing. */
@@ -51,6 +54,7 @@ const props = withDefaults(
     blocks: () => [],
     fixedBlocks: () => [],
     completedBlocks: () => [],
+    categories: () => [],
     specialWeeks: () => [],
     today: null,
     horizonEnd: null,
@@ -69,9 +73,19 @@ interface DayEntry {
   key: string;
   title: string;
   kind: 'task' | 'appointment' | 'unavailability' | 'completed';
+  /** The palette slot to tint it with, or `null` for the neutral fill. */
+  color: string | null;
 }
 
 const headings = computed(() => weekdayHeadings(props.locale, props.firstDayOfWeek));
+
+const categoryById = computed(
+  () => new Map(props.categories.map((category) => [category.id, category])),
+);
+
+function colorOf(categoryId: string | null): string | null {
+  return categoryId === null ? null : (categoryById.value.get(categoryId)?.color ?? null);
+}
 
 /**
  * Everything on a day, in one list keyed by its local date.
@@ -93,16 +107,28 @@ const byDay = computed(() => {
   };
 
   for (const block of props.blocks) {
-    add(block.start, { key: `t-${block.occurrenceId}`, title: block.title, kind: 'task' });
+    add(block.start, {
+      key: `t-${block.occurrenceId}`,
+      title: block.title,
+      kind: 'task',
+      color: colorOf(block.categoryId),
+    });
   }
   for (const block of props.completedBlocks) {
-    add(block.start, { key: `c-${block.occurrenceId}`, title: block.title, kind: 'completed' });
+    add(block.start, {
+      key: `c-${block.occurrenceId}`,
+      title: block.title,
+      kind: 'completed',
+      color: colorOf(block.categoryId),
+    });
   }
   for (const block of props.fixedBlocks) {
     add(block.start, {
       key: `f-${block.appointmentId}-${block.start}`,
       title: block.isUnavailability && block.title === '' ? t('common.unavailable') : block.title,
       kind: block.isUnavailability ? 'unavailability' : 'appointment',
+      // §4.5: a fixed block has no activity type, so there is no hue to take.
+      color: null,
     });
   }
 
@@ -159,11 +185,32 @@ const weeks = computed<Cell[][]>(() => {
   );
 });
 
-function classesFor(kind: DayEntry['kind']): string {
-  if (kind === 'task') return 'bg-primary/15 text-foreground';
-  if (kind === 'completed') return 'bg-primary/[0.06] text-muted-foreground line-through';
-  if (kind === 'unavailability') return 'bg-muted-foreground/15 text-muted-foreground';
+function classesFor(entry: DayEntry): string {
+  if (entry.kind === 'task') return entry.color === null ? 'bg-primary/15 text-foreground' : '';
+  if (entry.kind === 'completed')
+    return entry.color === null
+      ? 'bg-primary/[0.06] text-muted-foreground line-through'
+      : 'text-muted-foreground line-through';
+  if (entry.kind === 'unavailability') return 'bg-muted-foreground/15 text-muted-foreground';
   return 'bg-secondary text-secondary-foreground';
+}
+
+/**
+ * A tint here, where the week view fills solid.
+ *
+ * Same hue, deliberately quieter. A month cell is three lines of 0.7rem text in
+ * a box an inch tall, forty-two of them on screen at once: filled the way the
+ * week fills them, this becomes a quilt, and the thing this view exists to show
+ * — which days are full and which are empty — is the first casualty. The tint
+ * is enough to say *what kind of work*, which is all that is being asked at
+ * this size, and the ink stays the page's own so a 0.7rem line is never
+ * carrying text on a colour.
+ */
+function styleFor(entry: DayEntry): Record<string, string> {
+  if (entry.color === null) return {};
+  const hue = `var(--category-block-${entry.color})`;
+  const strength = entry.kind === 'completed' ? '8%' : '20%';
+  return { backgroundColor: `color-mix(in oklab, ${hue} ${strength}, transparent)` };
 }
 </script>
 
@@ -235,8 +282,10 @@ function classesFor(kind: DayEntry['kind']): string {
             v-for="entry in day.shown"
             :key="entry.key"
             class="truncate rounded px-1 py-0.5 text-[0.7rem]"
-            :class="classesFor(entry.kind)"
+            :class="classesFor(entry)"
+            :style="styleFor(entry)"
             :data-testid="`month-block-${entry.kind}`"
+            :data-color="entry.color ?? undefined"
             :title="entry.title"
           >
             {{ entry.title }}

@@ -48,6 +48,17 @@ export interface GridBlock {
   cooldownMin: number;
   kind: 'task' | 'appointment' | 'unavailability' | 'completed';
   label: string;
+  /**
+   * The activity type this block belongs to, or `null` for one that has none.
+   *
+   * Carried on the block rather than looked up from `taskId` where it is drawn,
+   * because the schedule read already joined it (`scheduledBlockSchema`) and a
+   * second lookup in the grid would be a second answer that can disagree — the
+   * task list's copy of a task is not reloaded on the same beat as the week's.
+   * Null for appointments and unavailability, which have no activity type at
+   * all (§4.5): what a meeting costs is a property of the meeting.
+   */
+  categoryId: string | null;
   taskId?: string;
   appointmentId?: string;
   /** True when the block began before this day, or runs past its end. */
@@ -416,6 +427,7 @@ export function blocksForDay(
       cooldownMin: block.cooldownMin,
       kind: 'task',
       label: `${formatMinuteOfDay(positioned.startMin)}–${formatMinuteOfDay(positioned.endMin)}`,
+      categoryId: block.categoryId,
       taskId: block.taskId,
     });
   }
@@ -433,6 +445,7 @@ export function blocksForDay(
       cooldownMin: block.cooldownMin,
       kind: block.isUnavailability ? 'unavailability' : 'appointment',
       label: `${formatMinuteOfDay(positioned.startMin)}–${formatMinuteOfDay(positioned.endMin)}`,
+      categoryId: null,
       appointmentId: block.appointmentId,
     });
   }
@@ -448,6 +461,7 @@ export function blocksForDay(
       cooldownMin: 0,
       kind: 'completed',
       label: `${formatMinuteOfDay(positioned.startMin)}–${formatMinuteOfDay(positioned.endMin)}`,
+      categoryId: block.categoryId,
       taskId: block.taskId,
     });
   }

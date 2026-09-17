@@ -95,3 +95,43 @@ export function nextCategoryColor(taken: readonly (string | null)[]): CategoryCo
 export function isCategoryColor(value: unknown): value is CategoryColor {
   return typeof value === 'string' && (CATEGORY_COLORS as readonly string[]).includes(value);
 }
+
+/**
+ * The step a *placed block* is filled with, which is not the lane's step.
+ *
+ * A lane is a wash — the hue at 14% over the surface, so the thing standing on
+ * it can be read. A block is the thing standing on it, and it has to look like
+ * a foreground object with two lines of 12px text inside it. One step cannot do
+ * both jobs: filled with the lane's own step, a block is a slightly stronger
+ * version of its background, which is exactly the confusion this set exists to
+ * remove.
+ *
+ * **Derived, not chosen.** Each value is its lane step walked along OKLCH
+ * lightness — hue and chroma held, chroma reduced only where the walk left the
+ * sRGB gamut — away from the surface until the text on it clears 5:1. Light
+ * steps darken until white passes; dark steps lighten until the dark surface
+ * ink passes. So a block is recognisably the same hue as the lane it sits on,
+ * and never a different colour that happens to be near it.
+ *
+ * **What it measures.** Against its own lane wash, every block separates by
+ * ΔE 32–51 (OKLab ×100) — the separation the fill is for. Against each other,
+ * neighbouring slots clear ΔE 16 light and 18.8 dark, above the 15 floor for
+ * normal vision; the worst pair overall is orange against red at ΔE 5.2, which
+ * is the same weakness the lane palette has and has the same answer: **every
+ * block carries its title**, so colour groups and the word names. Nothing here
+ * asks a reader to tell two hues apart to know what a block is.
+ *
+ * Green moved furthest, and only in dark mode. `#008300` is one value in both
+ * columns above — fine for a 14% wash, and a dark green box on a dark surface
+ * once it became a fill.
+ */
+export const CATEGORY_BLOCK_STEPS: Readonly<Record<CategoryColor, ColorSteps>> = {
+  blue: { light: '#1e6ecb', dark: '#3b89e7' },
+  orange: { light: '#c44400', dark: '#e1602e' },
+  aqua: { light: '#007f56', dark: '#199e70' },
+  yellow: { light: '#976500', dark: '#c98500' },
+  magenta: { light: '#b24b75', dark: '#de5988' },
+  green: { light: '#008200', dark: '#2e9c2a' },
+  violet: { light: '#4a3aa7', dark: '#9085e9' },
+  red: { light: '#ce3437', dark: '#e66767' },
+};

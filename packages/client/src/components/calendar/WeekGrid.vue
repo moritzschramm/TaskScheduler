@@ -560,18 +560,77 @@ function labelFor(block: GridBlock, dayLabel: string): string {
  * the lanes underneath had colours of their own it stopped reading as a
  * foreground object at all. Solid fill, inverted text and a shadow put it back
  * on top, and the ring on the moving one still shows over it.
+ *
+ * **And it is filled in its own activity type's colour**, from the block column
+ * of the palette rather than the lane column — a step derived to be the same
+ * hue as the hours underneath and dark enough (light enough, on the dark
+ * surface) that the two lines of text on it clear 5:1. Measured against the
+ * wash it sits on, that is ΔE 32–51: the block is unmistakably the object and
+ * the lane is unmistakably the background, which was the one thing a single
+ * near-black fill could not say about eight different kinds of work.
+ *
+ * Structure here, colour in `styleFor`. A hue cannot be a Tailwind class
+ * without eight of them per role compiled in advance for a set the user edits.
  */
 function classesFor(block: GridBlock): string {
   if (block.kind === 'task')
-    return 'bg-primary text-primary-foreground border-primary shadow-sm font-medium';
+    return blockHueOf(block) === null
+      ? 'bg-primary text-primary-foreground border-primary shadow-sm font-medium'
+      : 'shadow-sm font-medium';
   // Done: drawn faintly, dashed, and struck through in the title. Three signals
   // rather than one, because colour alone would carry it (WCAG 1.4.1) and
   // because a faded block on a faded background is easy to miss entirely.
   if (block.kind === 'completed')
-    return 'border-dashed border-primary/40 bg-primary/20 text-foreground';
+    return blockHueOf(block) === null
+      ? 'border-dashed border-primary/40 bg-primary/20 text-foreground'
+      : 'border-dashed text-foreground';
   if (block.kind === 'unavailability')
     return 'bg-muted border-muted-foreground/30 text-muted-foreground';
   return 'bg-secondary border-secondary-foreground/30 text-secondary-foreground';
+}
+
+/**
+ * The block-column step for a block's activity type, or `null`.
+ *
+ * Null covers three different situations that all want the old neutral fill: a
+ * fixed block, which has no activity type at all; a task whose type was deleted
+ * out from under it; and a type still carrying no colour from before migration
+ * 0018. None of them is worth a fourth appearance on the grid.
+ */
+function blockHueOf(block: GridBlock): string | null {
+  if (block.categoryId === null) return null;
+  const color = categoryById.value.get(block.categoryId)?.color ?? null;
+  return color === null ? null : `var(--category-block-${color})`;
+}
+
+/**
+ * The ink on a block, published as a variable rather than applied as a colour.
+ *
+ * The done strip is a *sibling* of the block it belongs to — a button inside a
+ * button is invalid — so it cannot inherit the block's foreground, and it was
+ * reading `--primary-foreground` directly. On a hued block that is the wrong
+ * white. One name, set on both, and the strip goes on being the block's own ink
+ * at 20% without either of them knowing which case it is in.
+ */
+function inkOf(block: GridBlock): string {
+  return blockHueOf(block) === null ? 'var(--primary-foreground)' : 'var(--category-ink)';
+}
+
+/** The hue half of a block's appearance; `{}` where `classesFor` covers it. */
+function styleFor(block: GridBlock): Record<string, string> {
+  const hue = blockHueOf(block);
+  if (hue === null) return {};
+
+  // Faint, so the strike-through and the dashed edge are what carry "done" and
+  // a finished afternoon does not shout as loudly as the one still to come.
+  if (block.kind === 'completed') {
+    return {
+      backgroundColor: `color-mix(in oklab, ${hue} 22%, transparent)`,
+      borderColor: `color-mix(in oklab, ${hue} 55%, transparent)`,
+    };
+  }
+
+  return { backgroundColor: hue, borderColor: hue, color: 'var(--category-ink)' };
 }
 
 /** Which blocks carry a done control: a placed task, on a grid that edits. */
@@ -808,10 +867,12 @@ const DONE_INSET = 6;
               height: `${drawnHeight(block)}px`,
               left: leftOf(block),
               width: widthOf(block),
+              ...styleFor(block),
               ...(completable(block) ? { paddingRight: `${DONE_WIDTH + DONE_INSET}px` } : {}),
             }"
             :data-lane="block.lanes > 1 ? `${block.lane}/${block.lanes}` : undefined"
             :data-testid="`block-${block.kind}`"
+            :data-category-id="block.categoryId ?? undefined"
             :data-title="block.title"
             :data-start-min="startMinOf(block)"
             :data-end-min="block.endMin"
@@ -867,8 +928,9 @@ const DONE_INSET = 6;
             v-for="block in column.blocks.filter(completable)"
             :key="`done-${block.key}`"
             type="button"
-            class="text-primary-foreground bg-primary-foreground/20 hover:bg-primary-foreground/35 focus-visible:ring-ring absolute z-10 flex items-center justify-center overflow-hidden rounded-sm focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
+            class="text-(--block-ink) focus-visible:ring-ring absolute z-10 flex items-center justify-center overflow-hidden rounded-sm bg-[color-mix(in_oklab,var(--block-ink)_20%,transparent)] hover:bg-[color-mix(in_oklab,var(--block-ink)_35%,transparent)] focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
             :style="{
+              '--block-ink': inkOf(block),
               top: `${offsetOf(startMinOf(block))}px`,
               height: `${drawnHeight(block)}px`,
               right: `calc(${rightOf(block)}% + ${DONE_INSET}px)`,

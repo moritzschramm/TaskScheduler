@@ -56,6 +56,22 @@
   --category-green: #008300;
   --category-violet: #4a3aa7;
   --category-red: #e34948;
+  /*
+   * The fill of a placed block, which is a different job from the lane's wash
+   * and so a different step — see `CATEGORY_BLOCK_STEPS`. Each one is its lane
+   * hue walked darker until white text on it clears 5:1, so the block reads as
+   * the same colour as the hours it sits in and as an object on top of them.
+   */
+  --category-block-blue: #1e6ecb;
+  --category-block-orange: #c44400;
+  --category-block-aqua: #007f56;
+  --category-block-yellow: #976500;
+  --category-block-magenta: #b24b75;
+  --category-block-green: #008200;
+  --category-block-violet: #4a3aa7;
+  --category-block-red: #ce3437;
+  /* One ink for all eight, which is what deriving the steps against it buys. */
+  --category-ink: #ffffff;
 }
 
 .dark {
@@ -103,6 +119,16 @@
   --category-green: #008300;
   --category-violet: #9085e9;
   --category-red: #e66767;
+  /* The same walk, the other way: lighter until the dark ink on them passes. */
+  --category-block-blue: #3b89e7;
+  --category-block-orange: #e1602e;
+  --category-block-aqua: #199e70;
+  --category-block-yellow: #c98500;
+  --category-block-magenta: #de5988;
+  --category-block-green: #2e9c2a;
+  --category-block-violet: #9085e9;
+  --category-block-red: #e66767;
+  --category-ink: oklch(0.208 0.042 265.755);
 }
 
 @theme inline {
@@ -147,6 +173,24 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+
+  /*
+   * What the *browser* draws, told which surface it is drawing on.
+   *
+   * Scrollbars, the caret, `<select>` popups and the autofill wash are the
+   * user agent's, not Tailwind's, and none of them reads a class. Without this
+   * a dark week sits behind a white scrollbar and every dropdown opens as a
+   * slab of light — the two parts of dark mode nobody can style their way out
+   * of. Set on `:root` so it inherits everywhere, including into the portals
+   * Reka renders at the end of `body`.
+   */
+  :root {
+    color-scheme: light;
+  }
+
+  :root.dark {
+    color-scheme: dark;
   }
 
   /*

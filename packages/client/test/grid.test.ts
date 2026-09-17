@@ -481,6 +481,7 @@ describe('blocks that occupy the same minutes', () => {
       cooldownMin: 0,
       kind: 'appointment',
       label: '09:00–10:00',
+      categoryId: null,
       continuesBefore: false,
       continuesAfter: false,
       ...overrides,

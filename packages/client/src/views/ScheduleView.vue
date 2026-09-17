@@ -279,6 +279,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           :blocks="showTasks ? view.schedule.blocks : []"
           :fixed-blocks="view.fixedBlocks"
           :completed-blocks="showTasks ? view.completedBlocks : []"
+          :categories="categories"
           :special-weeks="configuration?.weekTypeOverrides ?? []"
           :today="today"
           :horizon-end="horizonEnd"
