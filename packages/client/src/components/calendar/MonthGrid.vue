@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from '@/i18n';
 import type { CivilDate } from '@ambitime/scheduler';
 import type {
@@ -158,6 +158,8 @@ interface Cell {
   pastHorizon: boolean;
   specialWeek: string | null;
   label: string;
+  /** Everything on the day, for the cell that has been opened. */
+  entries: DayEntry[];
   shown: DayEntry[];
   hidden: number;
 }
@@ -178,12 +180,46 @@ const weeks = computed<Cell[][]>(() => {
         pastHorizon: horizon !== null && ordinal(day.date) > horizon,
         specialWeek: specialWeekOn(day.date, props.specialWeeks)?.name ?? null,
         label: formatFullDate(day.date, props.locale),
+        entries,
         shown: entries.slice(0, SHOWN_PER_DAY),
         hidden: Math.max(entries.length - SHOWN_PER_DAY, 0),
       };
     }),
   );
 });
+
+/**
+ * The cell being pointed at, or holding the keyboard's attention.
+ *
+ * "+3 more" is a count of things a reader wants to read, and the only way to
+ * read them was to leave the month — which is the screen they chose because it
+ * shows the shape of several weeks at once. Pointing at the day is a cheaper
+ * question than navigating to it and back.
+ */
+const attended = ref<string | null>(null);
+
+/** True for the one cell that is showing everything it has. */
+function opened(cell: Cell): boolean {
+  return attended.value === cell.key && cell.hidden > 0;
+}
+
+/**
+ * The full list, as a panel over the weeks below rather than a taller cell.
+ *
+ * In flow it would grow its row, which moves every cell under it — so reaching
+ * for the fourth item on the 21st would shove the 21st itself down the page.
+ * Floating it leaves the grid exactly where it was.
+ *
+ * It opens *upward* from the last two rows, because the grid clips what leaves
+ * it and a panel hanging off the bottom row would be cut in half. Decided from
+ * the row index rather than by measuring: the answer is the same every time and
+ * a measurement would have to happen after a paint the reader is already
+ * looking at.
+ */
+function panelClassesFor(row: number): string {
+  const side = row >= weeks.value.length - 2 ? 'bottom-1' : 'top-7';
+  return `bg-popover absolute inset-x-1 z-20 max-h-40 overflow-y-auto rounded-md border p-1 shadow-lg ${side}`;
+}
 
 function classesFor(entry: DayEntry): string {
   if (entry.kind === 'task') return entry.color === null ? 'bg-primary/15 text-foreground' : '';
@@ -230,17 +266,33 @@ function styleFor(entry: DayEntry): Record<string, string> {
       class="grid grid-cols-7 border-b last:border-b-0"
       data-testid="month-week"
     >
+      <!--
+        The whole cell opens the day, and there is no `role` on it.
+
+        The same accelerator the week grid puts on a column: a person looking at
+        a Thursday and wanting its hours points at the Thursday, not at the four
+        characters of its date. The keyboard path is the day number below, which
+        is a real button and keeps its own label — announcing an inch-tall box
+        of text as one control would take that away rather than add to it.
+      -->
       <div
         v-for="day in week"
         :key="day.key"
-        class="relative min-h-24 border-r p-1.5 last:border-r-0"
+        class="relative min-h-24 cursor-pointer border-r p-1.5 last:border-r-0"
         :class="[
           day.inMonth ? '' : 'bg-muted/30',
           day.isToday ? 'ring-primary/40 ring-inset ring-2' : '',
+          opened(day) ? 'z-20' : '',
         ]"
         data-testid="month-day"
         :data-date="day.key"
         :data-in-month="day.inMonth ? 'true' : 'false'"
+        :data-opened="opened(day) ? 'true' : undefined"
+        @click="emit('openDay', day.date)"
+        @pointerenter="attended = day.key"
+        @pointerleave="attended === day.key && (attended = null)"
+        @focusin="attended = day.key"
+        @focusout="attended === day.key && (attended = null)"
       >
         <!--
           The special week is a background rather than a badge. A fortnight away
@@ -265,7 +317,7 @@ function styleFor(entry: DayEntry): Record<string, string> {
             ]"
             :aria-label="t('calendar.showWeekOf', { day: day.label })"
             data-testid="open-day"
-            @click="emit('openDay', day.date)"
+            @click.stop="emit('openDay', day.date)"
           >
             <span class="text-sm tabular-nums">{{ day.date.day }}</span>
           </button>
@@ -279,9 +331,13 @@ function styleFor(entry: DayEntry): Record<string, string> {
           {{ day.specialWeek }}
         </p>
 
-        <ul class="relative mt-0.5 space-y-0.5">
+        <ul
+          class="space-y-0.5"
+          :class="opened(day) ? panelClassesFor(row) : 'relative mt-0.5'"
+          data-testid="month-day-list"
+        >
           <li
-            v-for="entry in day.shown"
+            v-for="entry in opened(day) ? day.entries : day.shown"
             :key="entry.key"
             class="truncate rounded px-1 py-0.5 text-[0.7rem]"
             :class="classesFor(entry)"
@@ -292,8 +348,14 @@ function styleFor(entry: DayEntry): Record<string, string> {
           >
             {{ entry.title }}
           </li>
+          <!--
+            The count stays a count rather than becoming a control. What opens
+            the list is pointing at the day, which is a bigger target than one
+            line of 0.7rem text and is the gesture somebody makes anyway while
+            reading down a month.
+          -->
           <li
-            v-if="day.hidden > 0"
+            v-if="!opened(day) && day.hidden > 0"
             class="text-muted-foreground px-1 text-[0.7rem]"
             data-testid="month-day-more"
           >
