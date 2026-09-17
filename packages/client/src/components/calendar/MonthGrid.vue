@@ -191,7 +191,9 @@ function classesFor(entry: DayEntry): string {
     return entry.color === null
       ? 'bg-primary/[0.06] text-muted-foreground line-through'
       : 'text-muted-foreground line-through';
-  if (entry.kind === 'unavailability') return 'bg-muted-foreground/15 text-muted-foreground';
+  // The same hatch the week draws it with — one texture for one fact (§7.2).
+  if (entry.kind === 'unavailability')
+    return 'bg-muted-foreground/15 hatched text-muted-foreground';
   return 'bg-secondary text-secondary-foreground';
 }
 

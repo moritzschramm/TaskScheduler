@@ -469,8 +469,10 @@ function heightOfBand(band: DayBand): number {
  * A 15-minute task at this scale is 16 pixels, which is readable; anything
  * shorter would render as a line the user could not tell from a border.
  */
+const MIN_BLOCK_HEIGHT = 14;
+
 function heightOf(block: GridBlock): number {
-  return Math.max((block.endMin - block.startMin) * props.scale, 14);
+  return Math.max((block.endMin - block.startMin) * props.scale, MIN_BLOCK_HEIGHT);
 }
 
 /**
@@ -514,6 +516,29 @@ function expanded(block: GridBlock): boolean {
 
 function drawnHeight(block: GridBlock): number {
   return expanded(block) ? FULL_HEIGHT : heightOf(block);
+}
+
+/**
+ * The box a block is drawn in, clipped to the first hour on screen.
+ *
+ * **A block that starts before the visible band was drawn above it**, and the
+ * two lines it carries with it. Blocking out a whole day writes 00:00–24:00;
+ * against a grid that opens at six that is a box beginning 178 pixels over the
+ * top edge — measured — so the column filled with a shape that said nothing,
+ * and the word "Unavailable" was clipped away with the hours nobody asked to
+ * see. Pushing the top down to the band and taking the same amount off the
+ * height leaves the bottom edge exactly where it was and brings the label back
+ * into the part of the block a reader is looking at.
+ *
+ * Used by the done strip too, so the control stays on the block it belongs to.
+ */
+function boxOf(block: GridBlock): { top: string; height: string } {
+  const offset = offsetOf(startMinOf(block));
+
+  return {
+    top: `${Math.max(offset, 0)}px`,
+    height: `${Math.max(drawnHeight(block) + Math.min(offset, 0), MIN_BLOCK_HEIGHT)}px`,
+  };
 }
 
 function attend(block: GridBlock): void {
@@ -575,7 +600,10 @@ function labelFor(block: GridBlock, dayLabel: string): string {
 function classesFor(block: GridBlock): string {
   if (block.kind === 'task')
     return blockHueOf(block) === null
-      ? 'bg-primary text-primary-foreground border-primary shadow-sm font-medium'
+      ? // The neutral block takes its edge from its own ink rather than from
+        // `--block-edge`: `--primary` on the light surface *is* that deep
+        // neutral already, so darkening it further would draw nothing.
+        'bg-primary text-primary-foreground border-primary-foreground/30 shadow-sm font-medium'
       : 'shadow-sm font-medium';
   // Done: drawn faintly, dashed, and struck through in the title. Three signals
   // rather than one, because colour alone would carry it (WCAG 1.4.1) and
@@ -584,8 +612,12 @@ function classesFor(block: GridBlock): string {
     return blockHueOf(block) === null
       ? 'border-dashed border-primary/40 bg-primary/20 text-foreground'
       : 'border-dashed text-foreground';
+  // Hatched, because the fill alone is the day body's own colour — see the
+  // `.hatched` note in `main.css`. The border is firmer than the appointment's
+  // for the same reason: this is the one block with nothing inside it to look
+  // at, so its outline is the whole of its shape.
   if (block.kind === 'unavailability')
-    return 'bg-muted border-muted-foreground/30 text-muted-foreground';
+    return 'bg-muted hatched border-muted-foreground/40 text-muted-foreground';
   return 'bg-secondary border-secondary-foreground/30 text-secondary-foreground';
 }
 
@@ -635,7 +667,13 @@ function styleFor(block: GridBlock): Record<string, string> {
     };
   }
 
-  return { backgroundColor: hue, borderColor: hue, color: inkOf(block) };
+  return {
+    backgroundColor: hue,
+    // Not `hue`. A border the colour of what it surrounds is not a border, and
+    // two blocks of one activity type that meet read as a single long one.
+    borderColor: `color-mix(in oklab, ${hue} 60%, var(--block-edge))`,
+    color: inkOf(block),
+  };
 }
 
 /** Which blocks carry a done control: a placed task, on a grid that edits. */
@@ -868,8 +906,7 @@ const DONE_INSET = 6;
               expanded(block) ? 'z-10 shadow-md' : '',
             ]"
             :style="{
-              top: `${offsetOf(startMinOf(block))}px`,
-              height: `${drawnHeight(block)}px`,
+              ...boxOf(block),
               left: leftOf(block),
               width: widthOf(block),
               ...styleFor(block),
@@ -947,8 +984,7 @@ const DONE_INSET = 6;
             class="text-(--block-ink) focus-visible:ring-ring absolute z-10 flex items-center justify-center overflow-hidden rounded-sm bg-[color-mix(in_oklab,var(--block-ink)_20%,transparent)] hover:bg-[color-mix(in_oklab,var(--block-ink)_35%,transparent)] focus-visible:z-20 focus-visible:ring-2 focus-visible:outline-none"
             :style="{
               '--block-ink': inkOf(block),
-              top: `${offsetOf(startMinOf(block))}px`,
-              height: `${drawnHeight(block)}px`,
+              ...boxOf(block),
               right: `calc(${rightOf(block)}% + ${DONE_INSET}px)`,
               width: `${DONE_WIDTH}px`,
             }"

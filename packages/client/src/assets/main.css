@@ -107,6 +107,21 @@
    * and a global change is a redesign rather than a fix.
    */
   --ink-subtle: #475871;
+  /*
+   * The line drawn round a block, as a step down from its own fill.
+   *
+   * Two blocks of the same activity type that meet — 09:00–10:30 and then
+   * 10:30–12:00 — were one shape with one colour, and the eye read them as a
+   * single three-hour thing. A border in the fill's own colour, which is what
+   * they had, is not a border.
+   *
+   * The same deep neutral serves both surfaces, for two different reasons that
+   * happen to agree on a value: on the light one it is the page's ink, and on
+   * the dark one it is the page itself, so the edge either darkens the block or
+   * cuts it out of the background. Mixed at 60% that is ΔE 13–23 from the fill
+   * on all sixteen steps — measured — which is a line at one pixel.
+   */
+  --block-edge: oklch(0.129 0.042 264.695);
 }
 
 .dark {
@@ -267,5 +282,31 @@
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
+  }
+}
+
+@layer components {
+  /*
+   * "Nothing goes here", as a texture rather than a colour.
+   *
+   * An unavailability block was `bg-muted` drawn on a day body that is also
+   * `bg-muted` — measured in the browser, the same `oklch(0.968 0.007 247.896)`
+   * on both — so blocking out a day changed the column only where it happened
+   * to cover something lit. What a reader saw was colour *going away*, which is
+   * also what an empty calendar looks like.
+   *
+   * Hatching says it the other way round: the hours are covered, by something.
+   * It is a texture rather than a ninth hue for the reason the lanes carry
+   * their names — the palette is spoken for, and a colour that meant "closed"
+   * would be a colour that could not also mean an activity type. It needs no
+   * dark variant: the stripes are the muted ink mixed into whatever the block
+   * is filled with, so they follow the surface the same way the fill does.
+   */
+  .hatched {
+    background-image: repeating-linear-gradient(
+      45deg,
+      color-mix(in oklab, var(--muted-foreground) 30%, transparent) 0 2px,
+      transparent 2px 8px
+    );
   }
 }
