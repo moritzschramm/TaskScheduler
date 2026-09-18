@@ -51,6 +51,15 @@ export interface Schedulable {
   priority?: number;
   /** Soft preference, in minutes since local midnight. */
   preferredRange?: { startMin: MinuteOfDay; endMin: MinuteOfDay };
+  /**
+   * Soft preference, ISO 1 (Monday) … 7 (Sunday).
+   *
+   * The other axis of the same preference: the range says which hours, this
+   * says which days, and either may be given without the other. "Tuesdays" on
+   * its own prefers the whole of Tuesday; "afternoons" on its own prefers every
+   * afternoon. Both together are "Tuesday afternoons".
+   */
+  preferredWeekdays?: readonly number[];
   /** Soft. 1 (shallow) … 5 (deep), matched against a window's profile. */
   focusLevel?: number;
 }

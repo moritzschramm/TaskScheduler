@@ -23,7 +23,7 @@ import {
   type SlotContext,
   type TuningConfig,
 } from '../src/index.js';
-import { at, context, MONDAY_WINDOW, schedulable } from './support/fixtures.js';
+import { at, context, MONDAY_WINDOW, TUESDAY_WINDOW, schedulable } from './support/fixtures.js';
 
 /**
  * Golden tests for the default policy (spec §6.5), plus the modularity the
@@ -198,6 +198,75 @@ describe('stage-2 terms (spec §6.5)', () => {
     );
 
     expect(score).toBe(500_000);
+  });
+
+  it('scores a preferred weekday on its own as the whole of that day', () => {
+    // "Tuesdays" with no hours named is a complete preference (§4.4): a project
+    // worked on every Tuesday says nothing about when on a Tuesday.
+    const onTuesday = preferredMatch(
+      slotContext({
+        schedulable: schedulable({ occurrenceId: 'a', durationMin: 60, preferredWeekdays: [2] }),
+        candidate: {
+          start: TUESDAY_WINDOW.interval.start,
+          end: TUESDAY_WINDOW.interval.start + 60,
+        },
+        window: TUESDAY_WINDOW,
+      }),
+    );
+
+    expect(onTuesday).toBe(ONE);
+  });
+
+  it('scores nothing on a day the task did not ask for', () => {
+    // The same placement the previous test gave a full score to, a day earlier.
+    const onMonday = preferredMatch(
+      slotContext({
+        schedulable: schedulable({ occurrenceId: 'a', durationMin: 60, preferredWeekdays: [2] }),
+      }),
+    );
+
+    expect(onMonday).toBe(0);
+  });
+
+  it('takes the two halves together, not either alone', () => {
+    // "Tuesdays in the afternoon", against a Tuesday morning. The hours are
+    // wrong even though the day is right, and a task that matched here would be
+    // one the preference had not actually constrained.
+    const tuesdayMorning = preferredMatch(
+      slotContext({
+        schedulable: schedulable({
+          occurrenceId: 'a',
+          durationMin: 60,
+          preferredRange: { startMin: 13 * 60, endMin: 17 * 60 },
+          preferredWeekdays: [2],
+        }),
+        candidate: {
+          start: TUESDAY_WINDOW.interval.start,
+          end: TUESDAY_WINDOW.interval.start + 60,
+        },
+        window: TUESDAY_WINDOW,
+      }),
+    );
+
+    // 13:00–14:00 Berlin on that Tuesday: the right day and the right hours.
+    const tuesdayAfternoon = preferredMatch(
+      slotContext({
+        schedulable: schedulable({
+          occurrenceId: 'a',
+          durationMin: 60,
+          preferredRange: { startMin: 13 * 60, endMin: 17 * 60 },
+          preferredWeekdays: [2],
+        }),
+        candidate: {
+          start: TUESDAY_WINDOW.interval.start + 4 * 60,
+          end: TUESDAY_WINDOW.interval.start + 5 * 60,
+        },
+        window: TUESDAY_WINDOW,
+      }),
+    );
+
+    expect(tuesdayMorning).toBe(0);
+    expect(tuesdayAfternoon).toBe(ONE);
   });
 
   it('rewards a matching focus profile and penalises a mismatched one', () => {

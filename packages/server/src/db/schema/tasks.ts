@@ -114,6 +114,14 @@ export const tasks = pgTable(
     /** Inheritable soft preference: minutes since local midnight, half-open. */
     preferredStartMin: integer('preferred_start_min'),
     preferredEndMin: integer('preferred_end_min'),
+    /**
+     * Which days, to the range's which hours — ISO 1 (Monday) … 7 (Sunday).
+     *
+     * Independent of the range and inheritable like it, so "Tuesdays" and
+     * "afternoons" can be said separately or together, and either can be said
+     * once on a container for everything beneath it (migration 0021).
+     */
+    preferredWeekdays: smallint('preferred_weekdays').array(),
     /** 1 (shallow) … 5 (deep), matched against a window's focus profile (§6.5). */
     focusLevel: smallint('focus_level'),
 
@@ -201,6 +209,15 @@ export const tasks = pgTable(
                or (${table.preferredStartMin} >= 0
                    and ${table.preferredEndMin} <= 1440
                    and ${table.preferredStartMin} < ${table.preferredEndMin}))`,
+    ),
+    // Non-empty when present; NULL is already how "no preference" is said.
+    // Duplicates are allowed because they are redundant rather than wrong — the
+    // command schema removes them, so nothing written through §3.2 has any.
+    check(
+      'tasks_preferred_weekdays_valid',
+      sql`${table.preferredWeekdays} is null
+          or (cardinality(${table.preferredWeekdays}) > 0
+              and ${table.preferredWeekdays} <@ array[1, 2, 3, 4, 5, 6, 7]::smallint[])`,
     ),
     // A due kind without a due date says nothing; a due date without a kind is
     // ambiguous between warn and enforce.

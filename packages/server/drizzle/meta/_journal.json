@@ -148,6 +148,13 @@
       "when": 1789600000000,
       "tag": "0020_activity_types",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789610000000,
+      "tag": "0021_preferred_weekdays",
+      "breakpoints": true
     }
   ]
 }

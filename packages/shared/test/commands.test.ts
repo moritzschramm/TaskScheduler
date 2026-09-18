@@ -87,6 +87,7 @@ describe('the command envelope (spec §7.1)', () => {
       'Redo',
       'SetAvailabilityWindows',
       'SetCalendarWindows',
+      'SetTaskParent',
       'SwapForward',
       'SwapTasks',
       'Undo',

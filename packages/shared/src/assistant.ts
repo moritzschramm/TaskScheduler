@@ -23,6 +23,7 @@ import {
   postponeRestOfDayParams,
   promoteFromBacklogParams,
   setAvailabilityWindowsParams,
+  setTaskParentParams,
   swapForwardParams,
   swapTasksParams,
   type CommandType,
@@ -107,6 +108,7 @@ export const ASSISTANT_COMMANDS = [
   'DeferTask',
   'CompleteTask',
   'CancelTask',
+  'SetTaskParent',
   'ExtendTask',
   'SwapTasks',
   'SwapForward',
@@ -168,6 +170,7 @@ const PARAMS: Readonly<Record<AssistantCommandType, z.ZodObject>> = {
   DeferTask: deferTaskParams,
   CompleteTask: completeTaskParams,
   CancelTask: cancelTaskParams,
+  SetTaskParent: setTaskParentParams,
   ExtendTask: extendTaskParams,
   SwapTasks: swapTasksParams,
   SwapForward: swapForwardParams,
@@ -239,6 +242,12 @@ const DESCRIPTIONS: Readonly<Record<AssistantCommandType, string>> = {
     'Mark a task done. Pass actualEnd when the user says when they finished, so the rest ' +
     'of the day can move up.',
   CancelTask: 'Drop a task that will not be done. Not the same as completing it.',
+  SetTaskParent:
+    'Move a task, and anything already under it, to sit under another task — how work gets ' +
+    'grouped into a project after the fact. parentId null pulls it back out to the top ' +
+    'level. Nothing is deleted and nothing is retyped: the task keeps its id, its history ' +
+    'and its estimate, and inherits the new parent\u2019s activity type, priority, due date and ' +
+    'preferred time wherever it sets none of its own.',
   ExtendTask:
     "Revise a task's estimate upwards or downwards because it took longer or less time " +
     'than expected. newEstimateMin is the new total, not an increment.',

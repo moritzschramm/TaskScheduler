@@ -3,7 +3,7 @@ import type { CommandContext, HandlerOutcome } from './context.js';
 import { addAppointment, addUnavailability, editAppointment } from './handlers/appointments.js';
 import { blockOutDay, clearWeek, postponeRestOfDay } from './handlers/bulk.js';
 import { clearFloor, completeTask, deferTask, moveTask } from './handlers/manual.js';
-import { createTask, editTask } from './handlers/tasks.js';
+import { createTask, editTask, setTaskParent } from './handlers/tasks.js';
 import { cancelTask, extendTask, moveToBacklog, promoteFromBacklog } from './handlers/lifecycle.js';
 import { swapForward, swapTasks } from './handlers/swap.js';
 import { redo, undo } from './handlers/history.js';
@@ -57,6 +57,8 @@ export function dispatch(command: Command, ctx: CommandContext): Promise<Handler
       return clearWeek(command.params, ctx);
     case 'ExtendTask':
       return extendTask(command.params, ctx);
+    case 'SetTaskParent':
+      return setTaskParent(command.params, ctx);
     case 'CancelTask':
       return cancelTask(command.params, ctx);
     case 'SwapTasks':
@@ -129,6 +131,7 @@ export const COMMAND_TARGETS: Readonly<
   ClearWeek: null,
   ExtendTask: 'task',
   CancelTask: 'task',
+  SetTaskParent: 'task',
   // A swap names two tasks, so one version could only ever guard one of them —
   // and a lock that covers half of what a command touches is worse than none.
   SwapTasks: null,

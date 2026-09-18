@@ -572,6 +572,11 @@ function toSchedulable({
     ...(preferredStart === null || preferredEnd === null
       ? {}
       : { preferredRange: { startMin: preferredStart, endMin: preferredEnd } }),
+    // Independent of the range: "Tuesdays" without hours is a preference, and
+    // so is "afternoons" without days (§4.4, migration 0021).
+    ...(node.effectivePreferredWeekdays === null
+      ? {}
+      : { preferredWeekdays: node.effectivePreferredWeekdays }),
     ...(node.effectiveFocusLevel === null ? {} : { focusLevel: node.effectiveFocusLevel }),
   };
 }

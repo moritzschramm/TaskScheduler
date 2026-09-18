@@ -6,7 +6,7 @@ import {
   ONE,
   type Score,
 } from '../fixed-point.js';
-import { zoneOffsetMinutes, MINUTES_PER_DAY } from '../time.js';
+import { isoWeekdayFromDays, zoneOffsetMinutes, MINUTES_PER_DAY } from '../time.js';
 import type { Interval } from '../time.js';
 import type { OrderContext, ScoringPolicy, SlotContext } from './policy.js';
 
@@ -60,7 +60,15 @@ export function constrainedness({ schedulable, feasibleWindowMinutes }: OrderCon
 
 /**
  * **Pr — preferred match.** The fraction of the placement falling inside the
- * task's preferred time-of-day range, or 0 when it expresses no preference.
+ * task's preferred time, or 0 when it expresses no preference.
+ *
+ * "Preferred time" has two axes and either may be absent: a range says which
+ * hours of a day, a weekday set says which days. Given both, the preference is
+ * their intersection — "Tuesdays in the afternoon" is minutes that are on a
+ * Tuesday *and* in the afternoon. Given one, the other is the whole of its
+ * axis: weekdays alone prefer those days entirely, a range alone prefers those
+ * hours on every day. That is what makes the pair usable on a container, where
+ * "Tuesdays" for a project is a complete thought on its own (§4.4).
  *
  * When the task also states a focus level, the window's focus profile modulates
  * the result: a deep-focus task placed in a shallow window scores lower even if
@@ -68,13 +76,20 @@ export function constrainedness({ schedulable, feasibleWindowMinutes }: OrderCon
  */
 export function preferredMatch(context: SlotContext): Score {
   const { schedulable, candidate, calendar, window } = context;
-  const timeMatch =
-    schedulable.preferredRange === undefined
-      ? 0
-      : ratio(
-          minutesInsidePreferredRange(candidate, schedulable.preferredRange, calendar.timeZone),
-          candidate.end - candidate.start,
-        );
+  const statesTime =
+    schedulable.preferredRange !== undefined || schedulable.preferredWeekdays !== undefined;
+
+  const timeMatch = !statesTime
+    ? 0
+    : ratio(
+        minutesInsidePreferredTime(
+          candidate,
+          schedulable.preferredRange,
+          schedulable.preferredWeekdays,
+          calendar.timeZone,
+        ),
+        candidate.end - candidate.start,
+      );
 
   if (schedulable.focusLevel === undefined || window.focusLevel === undefined) {
     return timeMatch;
@@ -84,9 +99,7 @@ export function preferredMatch(context: SlotContext): Score {
   // four-level mismatch removes it.
   const focusMatch = inverseRatio(Math.abs(window.focusLevel - schedulable.focusLevel), 4);
 
-  return schedulable.preferredRange === undefined
-    ? focusMatch
-    : clampScore(Math.round((timeMatch + focusMatch) / 2));
+  return !statesTime ? focusMatch : clampScore(Math.round((timeMatch + focusMatch) / 2));
 }
 
 /**
@@ -176,26 +189,34 @@ function boundaryAfter(point: number, window: Interval, occupied: readonly Inter
 }
 
 /**
- * Minutes of the candidate falling inside a preferred *time-of-day* range.
+ * Minutes of the candidate falling inside the preferred hours, on a preferred
+ * day.
  *
- * The range is wall-clock ("mornings"), so the candidate is shifted into the
- * calendar's local frame and compared against the range on each local day it
- * touches — a placement spanning local midnight is measured against both.
+ * Both halves are wall-clock ("Tuesday", "mornings"), so the candidate is
+ * shifted into the calendar's local frame and measured against each local day
+ * it touches — a placement spanning local midnight is measured against both,
+ * and each of those days is asked its own weekday.
+ *
+ * An absent half does not narrow anything: no range means the whole day is
+ * preferred, no weekday set means every day is. Both absent never reaches here.
  *
  * The zone offset is taken once, at the candidate's start. A placement is at
  * most a few hours long, so the only case this approximates is one straddling a
- * DST transition, where the preferred-range overlap would be out by the size of
- * the shift. That is a soft scoring term, not a hard constraint, and the
- * approximation is deterministic.
+ * DST transition, where the overlap would be out by the size of the shift. That
+ * is a soft scoring term, not a hard constraint, and the approximation is
+ * deterministic.
  */
-function minutesInsidePreferredRange(
+function minutesInsidePreferredTime(
   candidate: Interval,
-  preferred: { startMin: number; endMin: number },
+  preferred: { startMin: number; endMin: number } | undefined,
+  weekdays: readonly number[] | undefined,
   timeZone: string,
 ): number {
   const offset = zoneOffsetMinutes(candidate.start, timeZone);
   const localStart = candidate.start + offset;
   const localEnd = candidate.end + offset;
+  const startMin = preferred?.startMin ?? 0;
+  const endMin = preferred?.endMin ?? MINUTES_PER_DAY;
 
   const firstDayStart = Math.floor(localStart / MINUTES_PER_DAY) * MINUTES_PER_DAY;
   const lastDayStart =
@@ -203,8 +224,13 @@ function minutesInsidePreferredRange(
 
   let inside = 0;
   for (let dayStart = firstDayStart; dayStart <= lastDayStart; dayStart += MINUTES_PER_DAY) {
-    const overlapStart = Math.max(localStart, dayStart + preferred.startMin);
-    const overlapEnd = Math.min(localEnd, dayStart + preferred.endMin);
+    if (weekdays !== undefined) {
+      const weekday = isoWeekdayFromDays(dayStart / MINUTES_PER_DAY);
+      if (!weekdays.includes(weekday)) continue;
+    }
+
+    const overlapStart = Math.max(localStart, dayStart + startMin);
+    const overlapEnd = Math.min(localEnd, dayStart + endMin);
     if (overlapEnd > overlapStart) inside += overlapEnd - overlapStart;
   }
 

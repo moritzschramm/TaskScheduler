@@ -37,6 +37,8 @@ export interface TaskTreeNode extends Record<string, unknown> {
   effectivePreferredStartMin: number | null;
   ownPreferredEndMin: number | null;
   effectivePreferredEndMin: number | null;
+  ownPreferredWeekdays: number[] | null;
+  effectivePreferredWeekdays: number[] | null;
   ownFocusLevel: number | null;
   effectiveFocusLevel: number | null;
   ownCooldownOverrideMin: number | null;
@@ -65,6 +67,8 @@ const inheritedColumns = sql`
     as effective_preferred_start_min,
   coalesce(t.preferred_end_min, p.effective_preferred_end_min)
     as effective_preferred_end_min,
+  coalesce(t.preferred_weekdays, p.effective_preferred_weekdays)
+    as effective_preferred_weekdays,
   coalesce(t.focus_level, p.effective_focus_level) as effective_focus_level,
   coalesce(t.cooldown_override_min, p.effective_cooldown_override_min)
     as effective_cooldown_override_min
@@ -94,6 +98,8 @@ const selectedColumns = sql`
   n.effective_preferred_start_min as "effectivePreferredStartMin",
   n.preferred_end_min    as "ownPreferredEndMin",
   n.effective_preferred_end_min as "effectivePreferredEndMin",
+  n.preferred_weekdays   as "ownPreferredWeekdays",
+  n.effective_preferred_weekdays as "effectivePreferredWeekdays",
   n.focus_level          as "ownFocusLevel",
   n.effective_focus_level as "effectiveFocusLevel",
   n.cooldown_override_min as "ownCooldownOverrideMin",
@@ -129,7 +135,7 @@ export async function readCalendarTaskTree(
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
         t.activity_type_id, t.priority, t.due_date, t.due_kind,
-        t.preferred_start_min, t.preferred_end_min, t.focus_level,
+        t.preferred_start_min, t.preferred_end_min, t.preferred_weekdays, t.focus_level,
         t.cooldown_override_min,
         t.activity_type_id           as effective_activity_type_id,
         t.priority              as effective_priority,
@@ -137,6 +143,7 @@ export async function readCalendarTaskTree(
         t.due_kind              as effective_due_kind,
         t.preferred_start_min   as effective_preferred_start_min,
         t.preferred_end_min     as effective_preferred_end_min,
+        t.preferred_weekdays    as effective_preferred_weekdays,
         t.focus_level           as effective_focus_level,
         t.cooldown_override_min as effective_cooldown_override_min,
         array[t.id]             as path
@@ -151,7 +158,7 @@ export async function readCalendarTaskTree(
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
         t.activity_type_id, t.priority, t.due_date, t.due_kind,
-        t.preferred_start_min, t.preferred_end_min, t.focus_level,
+        t.preferred_start_min, t.preferred_end_min, t.preferred_weekdays, t.focus_level,
         t.cooldown_override_min,
         ${inheritedColumns},
         p.path || t.id
@@ -185,13 +192,13 @@ export async function readTaskSubtree(
     -- "nearest ancestor wins" into a LIMIT 1.
     ancestry as (
       select t.id, t.parent_id, t.activity_type_id, t.priority, t.due_date, t.due_kind,
-             t.preferred_start_min, t.preferred_end_min, t.focus_level,
+             t.preferred_start_min, t.preferred_end_min, t.preferred_weekdays, t.focus_level,
              t.cooldown_override_min, 0 as steps
         from tasks t
        where t.id = ${rootTaskId}
       union all
       select a2.id, a2.parent_id, a2.activity_type_id, a2.priority, a2.due_date, a2.due_kind,
-             a2.preferred_start_min, a2.preferred_end_min, a2.focus_level,
+             a2.preferred_start_min, a2.preferred_end_min, a2.preferred_weekdays, a2.focus_level,
              a2.cooldown_override_min, a.steps + 1
         from tasks a2
         join ancestry a on a2.id = a.parent_id
@@ -211,6 +218,8 @@ export async function readTaskSubtree(
           order by steps limit 1) as effective_preferred_start_min,
         (select preferred_end_min from ancestry where preferred_end_min is not null
           order by steps limit 1) as effective_preferred_end_min,
+        (select preferred_weekdays from ancestry where preferred_weekdays is not null
+          order by steps limit 1) as effective_preferred_weekdays,
         (select focus_level from ancestry where focus_level is not null
           order by steps limit 1) as effective_focus_level,
         (select cooldown_override_min from ancestry where cooldown_override_min is not null
@@ -225,11 +234,12 @@ export async function readTaskSubtree(
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
         t.activity_type_id, t.priority, t.due_date, t.due_kind,
-        t.preferred_start_min, t.preferred_end_min, t.focus_level,
+        t.preferred_start_min, t.preferred_end_min, t.preferred_weekdays, t.focus_level,
         t.cooldown_override_min,
         s.effective_activity_type_id, s.effective_priority,
         s.effective_due_date, s.effective_due_kind,
         s.effective_preferred_start_min, s.effective_preferred_end_min,
+        s.effective_preferred_weekdays,
         s.effective_focus_level, s.effective_cooldown_override_min,
         s.root_path as path
       from tasks t
@@ -243,7 +253,7 @@ export async function readTaskSubtree(
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
         t.activity_type_id, t.priority, t.due_date, t.due_kind,
-        t.preferred_start_min, t.preferred_end_min, t.focus_level,
+        t.preferred_start_min, t.preferred_end_min, t.preferred_weekdays, t.focus_level,
         t.cooldown_override_min,
         ${inheritedColumns},
         p.path || t.id

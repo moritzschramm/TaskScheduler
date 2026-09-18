@@ -1,7 +1,16 @@
+import { eq } from 'drizzle-orm';
 import { lockTask, type CommandContext, type HandlerOutcome } from '../context.js';
-import { createInitialOccurrence, requireCalendar, retirePendingOccurrences } from '../entities.js';
+import {
+  createInitialOccurrence,
+  pendingOccurrenceId,
+  requireActive,
+  requireCalendar,
+  retirePendingOccurrences,
+} from '../entities.js';
+import { PreconditionFailedError } from '../errors.js';
 import { insertRow, updateRow } from '../journal.js';
-import type { CreateTaskParams, EditTaskParams } from '@ambitime/shared';
+import { tasks } from '../../db/schema/index.js';
+import type { CreateTaskParams, EditTaskParams, SetTaskParentParams } from '@ambitime/shared';
 import type { NewTask } from '../../db/schema/index.js';
 
 /**
@@ -35,6 +44,7 @@ export async function createTask(
     dueKind: params.dueDate?.kind,
     preferredStartMin: params.preferredRange?.startMin,
     preferredEndMin: params.preferredRange?.endMin,
+    preferredWeekdays: params.preferredWeekdays,
     focusLevel: params.focusLevel,
     cooldownOverrideMin: params.cooldownOverrideMin,
     sequenceId: params.sequenceId,
@@ -106,8 +116,104 @@ export async function editTask(
     values.preferredStartMin = patch.preferredRange?.startMin ?? null;
     values.preferredEndMin = patch.preferredRange?.endMin ?? null;
   }
+  // Not paired with the range: either half of "Tuesdays in the afternoon" can
+  // be cleared without touching the other (migration 0021).
+  if (patch.preferredWeekdays !== undefined) {
+    values.preferredWeekdays = patch.preferredWeekdays;
+  }
 
   await updateRow(ctx, 'tasks', task.id, values);
 
   return { calendarIds: [task.calendarId] };
+}
+
+/**
+ * `SetTaskParent(task, parent)` — move a task and its subtree (spec §4.4).
+ *
+ * Almost all of this is already in the database. Migration 0004's
+ * `tasks_enforce_hierarchy` fires on UPDATE as well as INSERT, so the cycle
+ * check and the depth cap apply to a move without being restated here, and
+ * `tasks_resync_subtree_depth` re-depths the descendants that travel with it —
+ * a move that would push any of them past depth 5 is rejected by the
+ * `tasks_depth_range` CHECK. The deferred due-date trigger re-checks the
+ * subtree at commit, which is what catches a task moving under a container that
+ * is due sooner than it is.
+ *
+ * What is left is the *occurrences*, and it is the half a database constraint
+ * cannot express. A task is a unit of demand only while it is a leaf (§4.4), so
+ * a move changes two other tasks' minds about themselves:
+ *
+ * - the new parent has stopped being a leaf, and its pending occurrence would
+ *   otherwise sit in the schedule competing with its own children for time;
+ * - the old parent may have become one again, and it lost its occurrence when
+ *   it first gained a child. Without a new one it would be a task with an
+ *   estimate, no children, and nothing anywhere representing it — invisible to
+ *   the solver *and* to the "not being scheduled" list, which is the worst of
+ *   both.
+ *
+ * Within one calendar only. A task carries its own `calendar_id`, so moving
+ * across calendars means rewriting the subtree's and re-deriving two schedules
+ * — a different, larger command, and not one anybody has asked for.
+ */
+export async function setTaskParent(
+  params: SetTaskParentParams,
+  ctx: CommandContext,
+): Promise<HandlerOutcome> {
+  const task = await lockTask(ctx, params.taskId);
+  requireActive(task);
+
+  if (params.parentId === task.id) {
+    throw new PreconditionFailedError('A task cannot be its own parent');
+  }
+
+  const previousParentId = task.parentId;
+  if (params.parentId === previousParentId) return { calendarIds: [task.calendarId] };
+
+  if (params.parentId !== null) {
+    const parent = await lockTask(ctx, params.parentId);
+    requireActive(parent);
+
+    if (parent.calendarId !== task.calendarId) {
+      throw new PreconditionFailedError(
+        `Task ${task.id} and task ${parent.id} are in different planners; a task moves within one`,
+      );
+    }
+  }
+
+  await updateRow(ctx, 'tasks', task.id, { parentId: params.parentId });
+
+  if (params.parentId !== null) await retirePendingOccurrences(ctx, params.parentId);
+  if (previousParentId !== null) await restoreLeafOccurrence(ctx, previousParentId);
+
+  return { calendarIds: [task.calendarId] };
+}
+
+/**
+ * Gives a task its occurrence back if the move left it childless.
+ *
+ * Only then: a parent that still has other children is still a container, and a
+ * recurring one gets its occurrences from the generator per period rather than
+ * from here (§8.2). The existing-occurrence check is not defensive — a task
+ * whose children were all cancelled rather than moved still has none, since
+ * `retirePendingOccurrences` deletes — but it costs one query and makes the
+ * function safe to call from anywhere that ends up in this state.
+ */
+async function restoreLeafOccurrence(ctx: CommandContext, taskId: string): Promise<void> {
+  const [child] = await ctx.tx
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(eq(tasks.parentId, taskId))
+    .limit(1);
+  if (child) return;
+
+  const [parent] = await ctx.tx
+    .select({ status: tasks.status, recurrencePeriod: tasks.recurrencePeriod })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  if (!parent || parent.status !== 'active' || parent.recurrencePeriod !== null) return;
+
+  if ((await pendingOccurrenceId(ctx, taskId)) === undefined) {
+    await createInitialOccurrence(ctx, taskId);
+  }
 }

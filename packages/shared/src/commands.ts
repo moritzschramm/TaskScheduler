@@ -63,6 +63,27 @@ const preferredRange = z
   });
 
 /**
+ * The days a task would rather be done on — ISO 1 (Monday) … 7 (Sunday).
+ *
+ * The other half of "always Tuesdays in the afternoon". `preferredRange` says
+ * *when in a day*, this says *which days*, and the two are independent: a task
+ * may prefer Tuesdays at any hour, or afternoons on any day, or both. Neither
+ * is a hard constraint — the availability windows of §4.3 remain the only thing
+ * that decides where a task *may* go, and this only decides what it scores
+ * (§6.5's `Pr`). A preferred Tuesday that is full still means Wednesday.
+ *
+ * Sorted and de-duplicated on the way in, so `{2, 2, 4}` and `{4, 2}` are one
+ * value rather than three. The set is what was meant; the order somebody typed
+ * it in is not, and a stored difference with no meaning is a difference the
+ * optimistic client and the server can disagree about.
+ */
+const preferredWeekdays = z
+  .array(z.int().min(1).max(7))
+  .min(1)
+  .max(7)
+  .transform((days) => [...new Set(days)].sort((a, b) => a - b));
+
+/**
  * A task's recurrence — a **demand** rule, not a datetime rule (spec §8.2).
  *
  * "Exercise 3× per week" says how much of something a period should contain; it
@@ -91,6 +112,7 @@ const taskAttributes = {
   priority: z.int(),
   dueDate,
   preferredRange,
+  preferredWeekdays,
   /** 1 (shallow) … 5 (deep), matched against a window's focus profile (§6.5). */
   focusLevel: z.int().min(1).max(5),
   cooldownOverrideMin: z.int().nonnegative(),
@@ -109,6 +131,7 @@ export const createTaskParams = z.object({
   priority: taskAttributes.priority.optional(),
   dueDate: taskAttributes.dueDate.optional(),
   preferredRange: taskAttributes.preferredRange.optional(),
+  preferredWeekdays: taskAttributes.preferredWeekdays.optional(),
   focusLevel: taskAttributes.focusLevel.optional(),
   cooldownOverrideMin: taskAttributes.cooldownOverrideMin.optional(),
   recurrence: recurrence.optional(),
@@ -131,6 +154,7 @@ export const editTaskParams = z.object({
     priority: taskAttributes.priority.nullable().optional(),
     dueDate: taskAttributes.dueDate.nullable().optional(),
     preferredRange: taskAttributes.preferredRange.nullable().optional(),
+    preferredWeekdays: taskAttributes.preferredWeekdays.nullable().optional(),
     focusLevel: taskAttributes.focusLevel.nullable().optional(),
     cooldownOverrideMin: taskAttributes.cooldownOverrideMin.nullable().optional(),
     /**
@@ -300,6 +324,24 @@ export const extendTaskParams = z.object({
 
 /** Spec §7.3. Frees the task's footprint without pretending it was done. */
 export const cancelTaskParams = z.object({ taskId: uuid });
+
+/**
+ * `SetTaskParent(task, parent)` — move a task, and everything under it,
+ * somewhere else in the tree (spec §4.4).
+ *
+ * Structure was write-once until now: `parentId` could be given at creation and
+ * never changed, so a person had to know a piece of work belonged with others
+ * *before* writing it down. That is the wrong way round. The ordinary motion is
+ * to jot five things, notice three of them are one job, and group them — and
+ * with no way to reparent, the only way to do it was to delete and retype,
+ * which throws away the task's id, its history and wherever it was placed.
+ *
+ * `null` moves it back out to a root. The schema underneath was always ready
+ * for this: migration 0004's `tasks_enforce_hierarchy` fires on UPDATE as well
+ * as INSERT and rejects a cycle or a depth over five, and
+ * `tasks_resync_subtree_depth` re-depths the descendants that travel with it.
+ */
+export const setTaskParentParams = z.object({ taskId: uuid, parentId: uuid.nullable() });
 
 /**
  * Spec §7.3. Exchange two tasks' time positions, if each fits where the other
@@ -622,6 +664,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   command('ClearWeek', clearWeekParams),
   command('ExtendTask', extendTaskParams),
   command('CancelTask', cancelTaskParams),
+  command('SetTaskParent', setTaskParentParams),
   command('SwapTasks', swapTasksParams),
   command('SwapForward', swapForwardParams),
   command('PromoteFromBacklog', promoteFromBacklogParams),
@@ -662,6 +705,7 @@ export type BlockOutDayParams = z.infer<typeof blockOutDayParams>;
 export type ClearWeekParams = z.infer<typeof clearWeekParams>;
 export type ExtendTaskParams = z.infer<typeof extendTaskParams>;
 export type CancelTaskParams = z.infer<typeof cancelTaskParams>;
+export type SetTaskParentParams = z.infer<typeof setTaskParentParams>;
 export type SwapTasksParams = z.infer<typeof swapTasksParams>;
 export type SwapForwardParams = z.infer<typeof swapForwardParams>;
 export type PromoteFromBacklogParams = z.infer<typeof promoteFromBacklogParams>;

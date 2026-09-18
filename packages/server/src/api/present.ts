@@ -155,6 +155,8 @@ export function presentTaskNode(node: TaskTreeNode): TaskNode {
     effectivePreferredStartMin: node.effectivePreferredStartMin,
     ownPreferredEndMin: node.ownPreferredEndMin,
     effectivePreferredEndMin: node.effectivePreferredEndMin,
+    ownPreferredWeekdays: node.ownPreferredWeekdays,
+    effectivePreferredWeekdays: node.effectivePreferredWeekdays,
     ownFocusLevel: node.ownFocusLevel,
     effectiveFocusLevel: node.effectiveFocusLevel,
     ownCooldownOverrideMin: node.ownCooldownOverrideMin,
