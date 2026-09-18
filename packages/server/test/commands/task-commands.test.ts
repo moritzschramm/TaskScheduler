@@ -4,7 +4,7 @@ import { PreconditionFailedError } from '../../src/commands/index.js';
 import {
   appointments,
   availabilityWindows,
-  categories,
+  activityTypes,
   taskOccurrences,
   tasks,
 } from '../../src/db/schema/index.js';
@@ -51,7 +51,7 @@ describe('creating tasks', () => {
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         ...params,
       },
@@ -111,15 +111,15 @@ describe('creating tasks', () => {
     ]);
   });
 
-  it('reports a task with no category the same way', async () => {
-    const outcome = await create('Uncategorised', { categoryId: undefined });
+  it('reports a task with no activity type the same way', async () => {
+    const outcome = await create('Uncategorised', { activityTypeId: undefined });
 
     expect(outcome.schedules[0]!.unschedulable).toEqual([
-      expect.objectContaining({ reason: 'no_category' }),
+      expect.objectContaining({ reason: 'no_activity_type' }),
     ]);
   });
 
-  it('inherits a parent’s category rather than requiring its own', async () => {
+  it('inherits a parent’s activity type rather than requiring its own', async () => {
     await create('Umbrella', { estimatedDurationMin: undefined });
     const [parent] = await world.read((tx) =>
       tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.title, 'Umbrella')).limit(1),
@@ -127,7 +127,7 @@ describe('creating tasks', () => {
 
     const outcome = await create('Inheriting child', {
       parentId: parent!.id,
-      categoryId: undefined,
+      activityTypeId: undefined,
     });
 
     expect(outcome.schedules[0]!.placements).toHaveLength(1);
@@ -158,7 +158,7 @@ describe('editing tasks', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Subject',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         ...params,
       },
@@ -197,28 +197,28 @@ describe('editing tasks', () => {
     expect(row).toEqual({ dueDate: null, dueKind: null });
   });
 
-  it('re-places a task into its new category’s windows (spec §7.6)', async () => {
+  it('re-places a task into its new activity type’s windows (spec §7.6)', async () => {
     const taskId = await seed();
     const errands = await world.read(async (tx) => {
-      const [category] = await tx
-        .insert(categories)
+      const [activityType] = await tx
+        .insert(activityTypes)
         .values({ tenantId: world.tenantId, name: 'Errands', defaultCooldownMin: 0 })
-        .returning({ id: categories.id });
+        .returning({ id: activityTypes.id });
       // Errands only happen on Tuesday afternoons.
       await tx.insert(availabilityWindows).values({
         tenantId: world.tenantId,
         calendarId: world.calendarId,
-        categoryId: category!.id,
+        activityTypeId: activityType!.id,
         weekday: 2,
         startMin: 14 * 60,
         endMin: 16 * 60,
       });
-      return category!.id;
+      return activityType!.id;
     });
 
     const outcome = await world.run({
       type: 'EditTask',
-      params: { taskId, patch: { categoryId: errands } },
+      params: { taskId, patch: { activityTypeId: errands } },
     });
 
     // Tuesday 2026-03-24, 14:00 Berlin = 13:00 UTC.
@@ -235,7 +235,7 @@ describe('editing tasks', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Downstream',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     });
@@ -284,7 +284,7 @@ describe('appointments as hard blocks (spec §7.4)', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Deep work',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 120,
       },
     });
@@ -315,7 +315,7 @@ describe('appointments as hard blocks (spec §7.4)', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Deep work',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 120,
       },
     });
@@ -349,7 +349,7 @@ describe('appointments as hard blocks (spec §7.4)', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Deep work',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     });
@@ -383,7 +383,7 @@ describe('appointments as hard blocks (spec §7.4)', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Deep work',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 120,
       },
     });
@@ -451,7 +451,7 @@ describe('a child cannot be due after its container', () => {
         calendarId: world.calendarId,
         title: 'Write the docs',
         parentId,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         dueDate: due('2026-04-03T17:00:00Z'),
       },
@@ -493,7 +493,7 @@ describe('a child cannot be due after its container', () => {
           calendarId: world.calendarId,
           title: 'Write the docs',
           parentId,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           estimatedDurationMin: 60,
           dueDate: due('2026-03-27T17:00:00Z'),
         },

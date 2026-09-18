@@ -2,6 +2,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { commands } from '../db/schema/index.js';
 import { UNDO_HISTORY_DEPTH } from './tuning.js';
 import type { CommandContext } from './context.js';
+import { readJournal } from './journal.js';
 import type { CommandJournal } from './journal.js';
 
 /**
@@ -116,7 +117,7 @@ export async function readHistory(
       seq: row.seq,
       type: row.type,
       groupId: row.groupId,
-      journal: (row.inverse as CommandJournal | null) ?? EMPTY_JOURNAL,
+      journal: readJournal(row.inverse) ?? EMPTY_JOURNAL,
     };
 
     // Doing something new is what discards the redo stack — the branch of

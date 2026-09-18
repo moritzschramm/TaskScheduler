@@ -30,7 +30,7 @@ const {
   view,
   tasks,
   backlog,
-  categories,
+  activityTypes,
   calendar,
   zone,
   editing,
@@ -84,7 +84,7 @@ async function quickAdd(draft: QuickAddDraft): Promise<boolean> {
       calendarId,
       title: draft.title,
       estimatedDurationMin: draft.estimatedDurationMin,
-      ...(draft.categoryId === null ? {} : { categoryId: draft.categoryId }),
+      ...(draft.activityTypeId === null ? {} : { activityTypeId: draft.activityTypeId }),
       ...(draft.priority === null ? {} : { priority: draft.priority }),
       ...(due === null ? {} : { dueDate: { date: due, kind: 'soft' as const } }),
     },
@@ -112,7 +112,7 @@ async function quickAdd(draft: QuickAddDraft): Promise<boolean> {
     <template v-if="view && calendar">
       <!--
         Repeated from Schedule on purpose. This is the screen where the fix
-        lives — a missing category or estimate is a field on the editor below —
+        lives — a missing activity type or estimate is a field on the editor below —
         so naming the task where it can be opened is worth the duplication.
       -->
       <section
@@ -143,7 +143,7 @@ async function quickAdd(draft: QuickAddDraft): Promise<boolean> {
       <div class="grid gap-8 lg:grid-cols-[2fr_1fr]">
         <TaskListPanel
           :tasks="tasks"
-          :categories="categories"
+          :activity-types="activityTypes"
           :selected-id="editing.kind === 'task' ? (editing.task?.id ?? null) : null"
           :quick-add="quickAdd"
           editable
@@ -170,7 +170,7 @@ async function quickAdd(draft: QuickAddDraft): Promise<boolean> {
           :task="editing.task"
           :parent="editing.parent"
           :calendar-id="calendar.id"
-          :categories="categories"
+          :activity-types="activityTypes"
           :time-zone="zone"
           :submit="submit"
           @cancel="editing = { kind: 'none' }"

@@ -11,7 +11,7 @@ import type {
   CalendarConfiguration,
   CalendarSummary,
   CapacityCell,
-  Category,
+  ActivityType,
   CommandRequest,
   CommandResult,
   FixedBlock,
@@ -77,9 +77,9 @@ const selectedId = ref<string | null>(null);
 const view = ref<ScheduleView | null>(null);
 const backlog = ref<BacklogEntry[]>([]);
 const tasks = ref<TaskNode[]>([]);
-const categories = ref<Category[]>([]);
+const activityTypes = ref<ActivityType[]>([]);
 /**
- * Held whole, not just its categories: the grid shades the hours the calendar
+ * Held whole, not just its activity types: the grid shades the hours the calendar
  * is open, and the rules for those live here rather than on the schedule.
  */
 const configuration = ref<CalendarConfiguration | null>(null);
@@ -408,10 +408,10 @@ const openWindows = computed<ResolvedWindow[]>(() =>
 /**
  * §6.7's reasons for a task the solver was never offered, in words. A missing
  * window is a fact about the calendar and is fixed once in settings; a missing
- * category or estimate is a fact about one task and is fixed in its editor.
+ * activity type or estimate is a fact about one task and is fixed in its editor.
  */
 const REASONS: Record<string, MessageKey> = {
-  no_category: 'schedule.reason.noCategory',
+  no_activity_type: 'schedule.reason.noActivityType',
   no_duration: 'schedule.reason.noDuration',
 };
 
@@ -433,8 +433,8 @@ const unschedulable = computed(() =>
 /**
  * True when the engine resolves no window at all across the week on screen.
  *
- * Read from what the engine returns rather than counted from the categories,
- * because those are not the same question: a calendar can have categories whose
+ * Read from what the engine returns rather than counted from the activity types,
+ * because those are not the same question: a calendar can have activity types whose
  * windows are all empty, or a working window that clips every one of them away,
  * or a week-type override that closes the week — and in all three the answer to
  * "can anything be scheduled here" is still no.
@@ -573,7 +573,7 @@ async function load({ silent = false } = {}): Promise<void> {
     ]);
 
     configuration.value = config;
-    categories.value = config.categories;
+    activityTypes.value = config.activityTypes;
     history.value = log;
     engineContext.value = context;
     notifications.value = signals;
@@ -611,7 +611,7 @@ function predict(request: CommandRequest): ScheduledBlock[] | null {
     return {
       taskId: schedulable?.taskId ?? occurrenceId,
       title: task?.title ?? '…',
-      categoryId: schedulable?.categoryId ?? null,
+      activityTypeId: schedulable?.activityTypeId ?? null,
     };
   });
 
@@ -871,7 +871,7 @@ export interface Workspace {
   view: Ref<ScheduleView | null>;
   backlog: Ref<BacklogEntry[]>;
   tasks: Ref<TaskNode[]>;
-  categories: Ref<Category[]>;
+  activityTypes: Ref<ActivityType[]>;
   configuration: Ref<CalendarConfiguration | null>;
   history: Ref<HistoryView | null>;
   notifications: Ref<Notification[]>;
@@ -944,7 +944,7 @@ export function useWorkspace(): Workspace {
     view,
     backlog,
     tasks,
-    categories,
+    activityTypes,
     configuration,
     history,
     notifications,
@@ -1015,7 +1015,7 @@ export function resetWorkspace(): void {
   view.value = null;
   backlog.value = [];
   tasks.value = [];
-  categories.value = [];
+  activityTypes.value = [];
   configuration.value = null;
   history.value = null;
   notifications.value = [];

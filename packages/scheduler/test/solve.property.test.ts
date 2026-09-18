@@ -50,7 +50,7 @@ const schedulableArbitrary = fc
     occurrenceId: `occ-${String(spec.index).padStart(3, '0')}`,
     taskId: `task-${spec.index}`,
     calendarId: 'cal-1',
-    categoryId: 'cat-work',
+    activityTypeId: 'cat-work',
     durationMin: spec.durationMin,
     cooldownMin: spec.cooldownMin,
     ...(spec.priority === undefined ? {} : { priority: spec.priority }),
@@ -235,7 +235,7 @@ describe('capacity degrades to the backlog', () => {
           occurrenceId: `occ-${String(i).padStart(3, '0')}`,
           taskId: `task-${i}`,
           calendarId: 'cal-1',
-          categoryId: 'cat-work',
+          activityTypeId: 'cat-work',
           durationMin: 60,
           cooldownMin: 0,
         }));
@@ -264,7 +264,7 @@ describe('capacity degrades to the backlog', () => {
               occurrenceId: 'a',
               taskId: 'task-a',
               calendarId: 'cal-1',
-              categoryId: 'cat-work',
+              activityTypeId: 'cat-work',
               durationMin: 120,
               cooldownMin: 0,
               dueDate: at('2026-03-23T08:00:00Z') + dueOffset,
@@ -305,7 +305,7 @@ function permute<T>(items: readonly T[], seed: readonly number[]): T[] {
 /**
  * Sequence scenarios (spec §6.2 rule 5).
  *
- * Members share a category, so these exercise real placement rather than the
+ * Members share an activity type, so these exercise real placement rather than the
  * degenerate "no window could ever hold this" path — that one is covered by
  * hand in `sequences.test.ts`, where the expected diagnosis can be named.
  */
@@ -347,7 +347,7 @@ const sequenceScenarioArbitrary = fc
           occurrenceId: `${sequenceId}-m${memberIndex}`,
           taskId: `${sequenceId}-t${memberIndex}`,
           calendarId: 'cal-1',
-          categoryId: 'cat-work',
+          activityTypeId: 'cat-work',
           durationMin: memberSpec.durationMin,
           cooldownMin: memberSpec.cooldownMin,
           sequenceId,
@@ -362,7 +362,7 @@ const sequenceScenarioArbitrary = fc
         occurrenceId: `lone-${index}`,
         taskId: `lone-t${index}`,
         calendarId: 'cal-1',
-        categoryId: 'cat-work',
+        activityTypeId: 'cat-work',
         durationMin: spec.durationMin,
         cooldownMin: spec.cooldownMin,
       });

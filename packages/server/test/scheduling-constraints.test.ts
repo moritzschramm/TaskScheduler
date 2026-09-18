@@ -9,7 +9,7 @@ import {
   createAppointment,
   createAvailabilityWindow,
   createCalendar,
-  createCategory,
+  createActivityType,
   createTask,
   createTaskChain,
   tstzrangeLiteral,
@@ -444,13 +444,13 @@ describe('scheduling-domain constraints', () => {
     it('rejects an availability window running past midnight', async () => {
       // A window crossing midnight is modelled as two rows, which keeps every
       // comparison in the engine plain integer arithmetic.
-      const categoryId = await createCategory(handle.db, tenantId, 'Work');
+      const activityTypeId = await createActivityType(handle.db, tenantId, 'Work');
 
       const state = await captureSqlState(() =>
         createAvailabilityWindow(handle.db, {
           tenantId,
           calendarId,
-          categoryId,
+          activityTypeId,
           weekday: 1,
           startMin: 600,
           endMin: 1500,
@@ -461,13 +461,13 @@ describe('scheduling-domain constraints', () => {
     });
 
     it('rejects an availability window on a weekday outside 1–7', async () => {
-      const categoryId = await createCategory(handle.db, tenantId, 'Work');
+      const activityTypeId = await createActivityType(handle.db, tenantId, 'Work');
 
       const state = await captureSqlState(() =>
         createAvailabilityWindow(handle.db, {
           tenantId,
           calendarId,
-          categoryId,
+          activityTypeId,
           weekday: 0,
           startMin: 540,
           endMin: 600,

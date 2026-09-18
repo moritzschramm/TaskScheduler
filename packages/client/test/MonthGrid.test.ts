@@ -24,7 +24,7 @@ function task(n: number, day: string): ScheduledBlock {
     occurrenceId: `occ-${day}-${n}`,
     taskId: `task-${day}-${n}`,
     title: `Task ${n}`,
-    categoryId: null,
+    activityTypeId: null,
     start: `${day}T09:00:00.000Z`,
     end: `${day}T10:00:00.000Z`,
     cooldownMin: 0,

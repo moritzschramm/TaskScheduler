@@ -39,7 +39,7 @@ describe('the cache holds nothing the source does not imply', () => {
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 90,
         ...params,
       },
@@ -162,7 +162,7 @@ describe('the estimated week tracks the backlog (spec §6.1)', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Overflowing',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     });
@@ -192,7 +192,7 @@ describe('the estimated week tracks the backlog (spec §6.1)', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Stable',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     });
@@ -209,7 +209,7 @@ describe('the estimated week tracks the backlog (spec §6.1)', () => {
         params: {
           calendarId: world.calendarId,
           title,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           estimatedDurationMin: 30,
         },
       });

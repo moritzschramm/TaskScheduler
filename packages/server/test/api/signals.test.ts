@@ -56,7 +56,7 @@ describe('signals from a re-derive', () => {
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         ...extra,
       },

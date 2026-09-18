@@ -43,7 +43,7 @@ export const de: Messages = {
   nav: {
     schedule: 'Plan',
     tasks: 'Aufgaben',
-    categories: 'Aktivitätsarten',
+    activityTypes: 'Aktivitätsarten',
   },
 
   verify: {
@@ -150,7 +150,7 @@ export const de: Messages = {
       other: '{count} Aufgaben werden nicht eingeplant',
     },
     reason: {
-      noCategory: 'braucht eine Aktivitätsart, bevor ein Zeitfenster greifen kann',
+      noActivityType: 'braucht eine Aktivitätsart, bevor ein Zeitfenster greifen kann',
       noDuration: 'braucht eine Schätzung, bevor es etwas einzuplanen gibt',
     },
   },
@@ -277,7 +277,7 @@ export const de: Messages = {
     removeBlock: 'Block entfernen',
   },
 
-  categories: {
+  activityTypes: {
     color: 'Farbe',
     colorOf: 'Farbe von {name}',
     noColor: 'Keine Farbe (ältere Art)',
@@ -313,7 +313,7 @@ export const de: Messages = {
       'Überschneidungen sind erlaubt: Die Planung nimmt die Aufgabe, die für die Stunde besser passt.',
     title: 'Planbare Zeiten',
     lead: 'Die Stunden, in die diese Art von Tätigkeit gelegt werden darf. Eine besondere Woche ersetzt für ihre Tage die üblichen Zeiten, statt sie zu ergänzen.',
-    needCategory: 'Lege zuerst eine Aktivitätsart an.',
+    needActivityType: 'Lege zuerst eine Aktivitätsart an.',
     activityType: 'Aktivitätsart',
     specialWeek: 'Besondere Woche',
     ordinaryNote:
@@ -437,6 +437,11 @@ export const de: Messages = {
       CreateCalendar: 'Planer angelegt',
       ConfigureCalendar: 'Planer eingerichtet',
       SetCalendarWindows: 'Planer-Zeitfenster gesetzt',
+      CreateActivityType: 'Aktivitätsart angelegt',
+      EditActivityType: 'Aktivitätsart bearbeitet',
+      DeleteActivityType: 'Aktivitätsart gelöscht',
+      // Siehe `en.ts`: Befehle aus der Zeit vor Migration 0020 stehen unter
+      // ihrem damaligen Namen im Protokoll.
       CreateCategory: 'Aktivitätsart angelegt',
       EditCategory: 'Aktivitätsart bearbeitet',
       DeleteCategory: 'Aktivitätsart gelöscht',
@@ -603,9 +608,9 @@ export const de: Messages = {
       PostponeRestOfDay: 'Den Rest von {day} auf spätere Tage verschieben',
       BlockOutDay: '{day} blockieren',
       ClearWeek: 'Die Woche ab {day} blockieren',
-      CreateCategory: 'Neuer Aktivitätstyp „{name}“',
-      EditCategory: '{what} ändern',
-      DeleteCategory: 'Aktivitätstyp {what} samt Zeiten löschen',
+      CreateActivityType: 'Neuer Aktivitätstyp „{name}“',
+      EditActivityType: '{what} ändern',
+      DeleteActivityType: 'Aktivitätstyp {what} samt Zeiten löschen',
       SetAvailabilityWindows: 'Festlegen, wann {what} geplant werden darf',
       SetAvailabilityWindowsIn: 'Festlegen, wann {what} während {week} geplant werden darf',
       CreateWeekTypeOverride: 'Neue Sonderwoche „{name}“',
@@ -629,7 +634,7 @@ export const de: Messages = {
       removed: 'Entfällt',
       title: 'Titel',
       notes: 'Notizen',
-      categoryId: 'Aktivitätstyp',
+      activityTypeId: 'Aktivitätstyp',
       estimatedDurationMin: 'Schätzung (Minuten)',
       priority: 'Priorität',
       dueDate: 'Fällig',

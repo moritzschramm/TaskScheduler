@@ -43,7 +43,7 @@ describe('the single write path', () => {
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: durationMin,
       },
     });
@@ -162,7 +162,7 @@ describe('optimistic locking (spec §5.4)', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Locked',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     });

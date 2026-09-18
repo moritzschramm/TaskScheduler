@@ -10,7 +10,7 @@ import { useWorkspace } from '@/lib/workspace';
  * so three times in three slightly different wordings would be three chances
  * to drift.
  */
-const { calendars, categories, error, diverged, notice, loading } = useWorkspace();
+const { calendars, activityTypes, error, diverged, notice, loading } = useWorkspace();
 
 const { t } = useI18n();
 </script>
@@ -38,15 +38,15 @@ const { t } = useI18n();
   <p v-else-if="loading" class="text-muted-foreground text-sm">{{ t('app.loading') }}</p>
 
   <!--
-    A new account can schedule nothing until a category has hours, and a
+    A new account can schedule nothing until an activity type has hours, and a
     planner alone gets it no closer — so that, not the planner, is what the
-    first screen asks for. It stays up until there is a category, because an
-    account with a planner and no categories is in exactly the same position
+    first screen asks for. It stays up until there is an activity type, because an
+    account with a planner and no activity types is in exactly the same position
     as one with neither.
   -->
   <!--
     No `data-testid` here: a fallthrough attribute overrides the component's
     own, and this one would have replaced the name the component answers to.
   -->
-  <GettingStarted v-else-if="calendars.length === 0 || categories.length === 0" />
+  <GettingStarted v-else-if="calendars.length === 0 || activityTypes.length === 0" />
 </template>

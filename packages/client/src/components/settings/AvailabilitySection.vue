@@ -11,7 +11,7 @@ import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
 const { t } = useI18n();
 
 /**
- * When each category may be scheduled in this planner (spec §4.3).
+ * When each activity type may be scheduled in this planner (spec §4.3).
  *
  * Two selectors address one set: the **activity type**, and the **special
  * week** — the default set, or the replacement set belonging to one of them.
@@ -34,7 +34,7 @@ const props = defineProps<{
   submit: (request: CommandRequest) => Promise<boolean>;
 }>();
 
-const categoryId = ref('');
+const activityTypeId = ref('');
 /** `''` addresses the default set; otherwise a special week's id. */
 const weekTypeId = ref('');
 const rules = ref<WindowRule[]>([]);
@@ -49,7 +49,7 @@ const autosave = useAutosave();
  * windows alone would put the server's copy back over an edit in progress, one
  * round trip behind the user.
  */
-const address = computed(() => `${categoryId.value}|${weekTypeId.value}`);
+const address = computed(() => `${activityTypeId.value}|${weekTypeId.value}`);
 /** True while `rules` is being filled from the server, not by a person. */
 let seeding = false;
 const seededAddress = ref<string | null>(null);
@@ -70,17 +70,19 @@ const overlaps = computed(() =>
   overlappingRules({
     rules: rules.value,
     availability: props.configuration.availability,
-    categories: props.configuration.categories,
-    categoryId: categoryId.value,
+    activityTypes: props.configuration.activityTypes,
+    activityTypeId: activityTypeId.value,
     weekTypeOverrideId: weekTypeId.value === '' ? null : weekTypeId.value,
   }),
 );
 
 watch(
-  () => props.configuration.categories,
-  (categories) => {
-    const stillThere = categories.some((category) => category.id === categoryId.value);
-    if (!stillThere) categoryId.value = categories[0]?.id ?? '';
+  () => props.configuration.activityTypes,
+  (activityTypes) => {
+    const stillThere = activityTypes.some(
+      (activityType) => activityType.id === activityTypeId.value,
+    );
+    if (!stillThere) activityTypeId.value = activityTypes[0]?.id ?? '';
   },
   { immediate: true },
 );
@@ -106,7 +108,7 @@ watch(
     rules.value = availability
       .filter(
         (window) =>
-          window.categoryId === categoryId.value &&
+          window.activityTypeId === activityTypeId.value &&
           (window.weekTypeOverrideId ?? '') === weekTypeId.value,
       )
       .map(({ weekday, startMin, endMin, focusLevel }) => ({
@@ -129,7 +131,7 @@ watch(rules, () => !seeding && edited(), { flush: 'sync' });
  * Writes the set as it now stands.
  *
  * The whole week goes every time, because that is what the command means: §4.3
- * describes a category as owning "the set", and `SetAvailabilityWindows`
+ * describes an activity type as owning "the set", and `SetAvailabilityWindows`
  * replaces it. So adding one range and removing another are the same call, and
  * there is no partial state in between for a failure to leave behind.
  *
@@ -141,14 +143,14 @@ function edited(): void {
   unsent.value = true;
 
   autosave.save('availability', async () => {
-    if (categoryId.value === '' || readOnly.value) return;
+    if (activityTypeId.value === '' || readOnly.value) return;
     if (rules.value.some((rule) => rule.startMin >= rule.endMin)) return;
 
     await props.submit({
       type: 'SetAvailabilityWindows',
       params: {
         calendarId: props.configuration.calendar.id,
-        categoryId: categoryId.value,
+        activityTypeId: activityTypeId.value,
         ...(weekTypeId.value === '' ? {} : { weekTypeOverrideId: weekTypeId.value }),
         windows: rules.value.map(({ weekday, startMin, endMin, focusLevel }) => ({
           weekday,
@@ -179,26 +181,26 @@ function edited(): void {
       </p>
     </header>
 
-    <p v-if="configuration.categories.length === 0" class="text-muted-foreground text-sm">
-      {{ t('hours.needCategory') }}
+    <p v-if="configuration.activityTypes.length === 0" class="text-muted-foreground text-sm">
+      {{ t('hours.needActivityType') }}
     </p>
 
     <template v-else>
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1">
-          <Label for="availability-category">{{ t('hours.activityType') }}</Label>
+          <Label for="availability-activity-type">{{ t('hours.activityType') }}</Label>
           <Select
-            id="availability-category"
-            v-model="categoryId"
+            id="availability-activity-type"
+            v-model="activityTypeId"
             :disabled="readOnly"
-            data-testid="availability-category"
+            data-testid="availability-activity-type"
           >
             <option
-              v-for="category in configuration.categories"
-              :key="category.id"
-              :value="category.id"
+              v-for="activityType in configuration.activityTypes"
+              :key="activityType.id"
+              :value="activityType.id"
             >
-              {{ category.name }}
+              {{ activityType.name }}
             </option>
           </Select>
         </div>

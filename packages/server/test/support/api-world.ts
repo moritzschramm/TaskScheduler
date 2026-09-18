@@ -10,7 +10,7 @@ import type { CommandRequest, CreatedEntity } from '@ambitime/shared';
  *
  * The M6 world builds its state by inserting rows and calls `applyCommand`
  * directly, which is right for testing the command layer. This one goes through
- * the API for **everything**, its own calendar and category included: a request
+ * the API for **everything**, its own calendar and activity type included: a request
  * is what a client will actually send,
  * and the parts M9 adds — session to context, validation, error mapping,
  * presentation — only exist on that path.
@@ -26,7 +26,7 @@ export interface ApiWorld {
   userId: string;
   tenantId: string;
   calendarId: string;
-  categoryId: string;
+  activityTypeId: string;
   get: (path: string) => Promise<Response>;
   command: (body: CommandRequest) => Promise<Response>;
   /** The parsed body of a command that is expected to succeed. */
@@ -82,16 +82,16 @@ export async function createApiWorld(db: Database, at: string = MONDAY_0900): Pr
     await run({ type: 'CreateCalendar', params: { name: 'Primary', timezone: TIME_ZONE } }),
     'calendar',
   );
-  const categoryId = created(
-    await run({ type: 'CreateCategory', params: { name: 'Work', defaultCooldownMin: 0 } }),
-    'category',
+  const activityTypeId = created(
+    await run({ type: 'CreateActivityType', params: { name: 'Work', defaultCooldownMin: 0 } }),
+    'activity_type',
   );
 
   await run({
     type: 'SetAvailabilityWindows',
     params: {
       calendarId,
-      categoryId,
+      activityTypeId,
       windows: [1, 2, 3, 4, 5].map((weekday) => ({
         weekday,
         startMin: 9 * 60,
@@ -106,7 +106,7 @@ export async function createApiWorld(db: Database, at: string = MONDAY_0900): Pr
     userId: session.userId,
     tenantId,
     calendarId,
-    categoryId,
+    activityTypeId,
     get,
     command,
     run,

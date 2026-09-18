@@ -8,7 +8,7 @@ const { t } = useI18n();
 /**
  * One inheritable property of spec §4.4, in all three of its states.
  *
- * Priority, due date, preferred range, focus, category and cooldown may be set
+ * Priority, due date, preferred range, focus, activity type and cooldown may be set
  * on any node and are inherited by descendants, nearest ancestor wins. So a
  * property is in exactly one of three states, and a form offering only a value
  * box could express two of them:

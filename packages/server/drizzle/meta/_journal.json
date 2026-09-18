@@ -141,6 +141,13 @@
       "when": 1789590000000,
       "tag": "0019_assistant_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789600000000,
+      "tag": "0020_activity_types",
+      "breakpoints": true
     }
   ]
 }

@@ -19,7 +19,7 @@ import {
   availabilityWindows,
   calendars,
   calendarWindows,
-  categories,
+  activityTypes,
   sequences,
   taskOccurrences,
   tasks,
@@ -49,7 +49,7 @@ import type { Transaction } from '../db/client.js';
 export interface UnschedulableTask {
   taskId: string;
   occurrenceId: string;
-  reason: 'no_category' | 'no_duration';
+  reason: 'no_activity_type' | 'no_duration';
 }
 
 export interface ScheduleContextResult {
@@ -145,7 +145,7 @@ export async function loadScheduleContext({
 
 /**
  * The calendar's working window (spec §9.1) — when the scheduler may place at
- * all, as distinct from when a category is available.
+ * all, as distinct from when an activity type is available.
  *
  * Returns `undefined` for a calendar with no rows, because a working window
  * that was never configured restricts nothing. Reading zero rows as "no working
@@ -180,7 +180,7 @@ async function loadAvailabilityRules(
     .select({
       id: availabilityWindows.id,
       calendarId: availabilityWindows.calendarId,
-      categoryId: availabilityWindows.categoryId,
+      activityTypeId: availabilityWindows.activityTypeId,
       weekTypeOverrideId: availabilityWindows.weekTypeOverrideId,
       weekday: availabilityWindows.weekday,
       startMin: availabilityWindows.startMin,
@@ -193,7 +193,7 @@ async function loadAvailabilityRules(
   return rows.map((row) => ({
     id: row.id,
     calendarId: row.calendarId,
-    categoryId: row.categoryId,
+    activityTypeId: row.activityTypeId,
     weekday: row.weekday,
     startMin: row.startMin,
     endMin: row.endMin,
@@ -418,7 +418,7 @@ async function loadDemand(
           eq(taskOccurrences.status, 'pending'),
         ),
       ),
-    loadCategoryCooldowns(tx),
+    loadActivityTypeCooldowns(tx),
   ]);
 
   const nodes = new Map(tree.map((node) => [node.id, node]));
@@ -435,9 +435,9 @@ async function loadDemand(
     // the task is not hard to place, it is not yet described well enough to place.
     // Reporting them separately is what lets a UI say "this needs an estimate"
     // rather than "the week is full".
-    const categoryId = node.effectiveCategoryId;
-    if (categoryId === null) {
-      unschedulable.push({ ...identify(row), reason: 'no_category' });
+    const activityTypeId = node.effectiveActivityTypeId;
+    if (activityTypeId === null) {
+      unschedulable.push({ ...identify(row), reason: 'no_activity_type' });
       continue;
     }
 
@@ -452,7 +452,7 @@ async function loadDemand(
         row,
         node,
         calendarId,
-        categoryId,
+        activityTypeId,
         durationMin,
         cooldowns,
         calendarTimeZone,
@@ -463,10 +463,10 @@ async function loadDemand(
   return { schedulables, unschedulable };
 }
 
-async function loadCategoryCooldowns(tx: Transaction): Promise<Map<string, number>> {
+async function loadActivityTypeCooldowns(tx: Transaction): Promise<Map<string, number>> {
   const rows = await tx
-    .select({ id: categories.id, defaultCooldownMin: categories.defaultCooldownMin })
-    .from(categories);
+    .select({ id: activityTypes.id, defaultCooldownMin: activityTypes.defaultCooldownMin })
+    .from(activityTypes);
 
   return new Map(rows.map((row) => [row.id, row.defaultCooldownMin]));
 }
@@ -479,7 +479,7 @@ interface SchedulableInput {
   row: DemandRow;
   node: TaskTreeNode;
   calendarId: string;
-  categoryId: string;
+  activityTypeId: string;
   durationMin: number;
   cooldowns: ReadonlyMap<string, number>;
   /** The zone a period's local dates are resolved in (spec §5.1). */
@@ -516,7 +516,7 @@ function toSchedulable({
   row,
   node,
   calendarId,
-  categoryId,
+  activityTypeId,
   durationMin,
   cooldowns,
   calendarTimeZone,
@@ -556,11 +556,11 @@ function toSchedulable({
     occurrenceId: row.occurrenceId,
     taskId: row.taskId,
     calendarId,
-    categoryId,
+    activityTypeId,
     durationMin,
-    // The task's own override, else the category default (§6.2 rule 3). The
+    // The task's own override, else the activity type default (§6.2 rule 3). The
     // engine is given the effective value; it does not know inheritance exists.
-    cooldownMin: node.effectiveCooldownOverrideMin ?? cooldowns.get(categoryId) ?? 0,
+    cooldownMin: node.effectiveCooldownOverrideMin ?? cooldowns.get(activityTypeId) ?? 0,
     // Inward: a deadline never moves later than what is stored.
     ...(due === undefined ? {} : { dueDate: due, dueKind }),
     // Inward again: a not-before never moves earlier than the user asked.

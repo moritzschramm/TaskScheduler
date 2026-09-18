@@ -48,29 +48,29 @@
    * own selected step and the grid is written against a role. These are the
    * reference categorical palette's light column, unchanged.
    */
-  --category-blue: #2a78d6;
-  --category-orange: #eb6834;
-  --category-aqua: #1baf7a;
-  --category-yellow: #eda100;
-  --category-magenta: #e87ba4;
-  --category-green: #008300;
-  --category-violet: #4a3aa7;
-  --category-red: #e34948;
+  --activity-type-blue: #2a78d6;
+  --activity-type-orange: #eb6834;
+  --activity-type-aqua: #1baf7a;
+  --activity-type-yellow: #eda100;
+  --activity-type-magenta: #e87ba4;
+  --activity-type-green: #008300;
+  --activity-type-violet: #4a3aa7;
+  --activity-type-red: #e34948;
   /*
    * The fill of a placed block, which is a different job from the lane's wash
-   * and so a different step — see `CATEGORY_BLOCK_STEPS`. Each is the nearest
+   * and so a different step — see `ACTIVITY_TYPE_BLOCK_STEPS`. Each is the nearest
    * lightness to its lane hue that carries 12px text at 5:1 *and* stands 3:1
    * clear of the column behind it, so a block reads as the same colour as the
    * hours it sits in and as an object on top of them.
    */
-  --category-block-blue: #1e6ecb;
-  --category-block-orange: #e86631;
-  --category-block-aqua: #00a16e;
-  --category-block-yellow: #c08100;
-  --category-block-magenta: #d56a93;
-  --category-block-green: #008200;
-  --category-block-violet: #4a3aa7;
-  --category-block-red: #ed5250;
+  --activity-type-block-blue: #1e6ecb;
+  --activity-type-block-orange: #e86631;
+  --activity-type-block-aqua: #00a16e;
+  --activity-type-block-yellow: #c08100;
+  --activity-type-block-magenta: #d56a93;
+  --activity-type-block-green: #008200;
+  --activity-type-block-violet: #4a3aa7;
+  --activity-type-block-red: #ed5250;
   /*
    * And which of the two inks each is written in.
    *
@@ -79,14 +79,14 @@
    * connects to a pale yellow lane. A hue that is already dark takes the light
    * ink; a hue that is already light takes the dark one.
    */
-  --category-ink-blue: #ffffff;
-  --category-ink-orange: oklch(0.208 0.042 265.755);
-  --category-ink-aqua: oklch(0.208 0.042 265.755);
-  --category-ink-yellow: oklch(0.208 0.042 265.755);
-  --category-ink-magenta: oklch(0.208 0.042 265.755);
-  --category-ink-green: #ffffff;
-  --category-ink-violet: #ffffff;
-  --category-ink-red: oklch(0.208 0.042 265.755);
+  --activity-type-ink-blue: #ffffff;
+  --activity-type-ink-orange: oklch(0.208 0.042 265.755);
+  --activity-type-ink-aqua: oklch(0.208 0.042 265.755);
+  --activity-type-ink-yellow: oklch(0.208 0.042 265.755);
+  --activity-type-ink-magenta: oklch(0.208 0.042 265.755);
+  --activity-type-ink-green: #ffffff;
+  --activity-type-ink-violet: #ffffff;
+  --activity-type-ink-red: oklch(0.208 0.042 265.755);
   /*
    * `--muted-foreground`, corrected — a quiet grey that actually passes.
    *
@@ -161,36 +161,36 @@
    * The same eight hues stepped for the dark surface — selected as a set, not
    * an automatic lightening of the light column.
    */
-  --category-blue: #3987e5;
-  --category-orange: #d95926;
-  --category-aqua: #199e70;
-  --category-yellow: #c98500;
-  --category-magenta: #d55181;
-  --category-green: #008300;
-  --category-violet: #9085e9;
-  --category-red: #e66767;
+  --activity-type-blue: #3987e5;
+  --activity-type-orange: #d95926;
+  --activity-type-aqua: #199e70;
+  --activity-type-yellow: #c98500;
+  --activity-type-magenta: #d55181;
+  --activity-type-green: #008300;
+  --activity-type-violet: #9085e9;
+  --activity-type-red: #e66767;
   /*
    * The same two rules on the dark surface, and here they agree on one answer:
    * a block has to be *lighter* than the page to be a block at all, and nothing
    * light enough for that carries white text. Four of the eight are the lane
    * step untouched.
    */
-  --category-block-blue: #3b89e7;
-  --category-block-orange: #e1602e;
-  --category-block-aqua: #199e70;
-  --category-block-yellow: #c98500;
-  --category-block-magenta: #de5988;
-  --category-block-green: #2e9c2a;
-  --category-block-violet: #9085e9;
-  --category-block-red: #e66767;
-  --category-ink-blue: oklch(0.208 0.042 265.755);
-  --category-ink-orange: oklch(0.208 0.042 265.755);
-  --category-ink-aqua: oklch(0.208 0.042 265.755);
-  --category-ink-yellow: oklch(0.208 0.042 265.755);
-  --category-ink-magenta: oklch(0.208 0.042 265.755);
-  --category-ink-green: oklch(0.208 0.042 265.755);
-  --category-ink-violet: oklch(0.208 0.042 265.755);
-  --category-ink-red: oklch(0.208 0.042 265.755);
+  --activity-type-block-blue: #3b89e7;
+  --activity-type-block-orange: #e1602e;
+  --activity-type-block-aqua: #199e70;
+  --activity-type-block-yellow: #c98500;
+  --activity-type-block-magenta: #de5988;
+  --activity-type-block-green: #2e9c2a;
+  --activity-type-block-violet: #9085e9;
+  --activity-type-block-red: #e66767;
+  --activity-type-ink-blue: oklch(0.208 0.042 265.755);
+  --activity-type-ink-orange: oklch(0.208 0.042 265.755);
+  --activity-type-ink-aqua: oklch(0.208 0.042 265.755);
+  --activity-type-ink-yellow: oklch(0.208 0.042 265.755);
+  --activity-type-ink-magenta: oklch(0.208 0.042 265.755);
+  --activity-type-ink-green: oklch(0.208 0.042 265.755);
+  --activity-type-ink-violet: oklch(0.208 0.042 265.755);
+  --activity-type-ink-red: oklch(0.208 0.042 265.755);
   /* Worst of the same 24 combinations: 4.60, against yellow in today's column. */
   --ink-subtle: #9badc5;
 }

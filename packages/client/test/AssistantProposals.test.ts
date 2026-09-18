@@ -22,7 +22,7 @@ const HOLIDAY = '01890000-0000-7000-8000-0000000000fa';
 /** Monday to Wednesday, 09:00–17:00, as the ordinary set for Work. */
 const CURRENT = [1, 2, 3].map((weekday) => ({
   id: `w${weekday}`,
-  categoryId: WORK,
+  activityTypeId: WORK,
   weekTypeOverrideId: null,
   weekday,
   startMin: 540,
@@ -33,7 +33,7 @@ const CURRENT = [1, 2, 3].map((weekday) => ({
 const subject: Subject = {
   taskTitles: new Map([[TASK, 'Invoices']]),
   blockTitles: new Map([[BLOCK, 'Dentist']]),
-  categoryNames: new Map([[WORK, 'Work']]),
+  activityTypeNames: new Map([[WORK, 'Work']]),
   weekNames: new Map([[HOLIDAY, 'Christmas']]),
   availability: CURRENT,
   zone: 'Europe/Berlin',
@@ -97,7 +97,7 @@ describe('turning a model’s call into a proposal', () => {
       call('CreateTask', {
         title: 'Invoices',
         estimatedDurationMin: 45,
-        categoryId: WORK,
+        activityTypeId: WORK,
         dueDate: { date: '2026-09-18T17:00:00+02:00', kind: 'hard' },
       }),
       CALENDAR,
@@ -183,7 +183,7 @@ describe('turning a model’s call into a proposal', () => {
     // accurately, and nobody reads it and notices.
     const proposal = toProposal(
       call('SetAvailabilityWindows', {
-        categoryId: WORK,
+        activityTypeId: WORK,
         windows: [
           { weekday: 1, startMin: 540, endMin: 1020 },
           { weekday: 2, startMin: 540, endMin: 1020 },
@@ -201,7 +201,7 @@ describe('turning a model’s call into a proposal', () => {
   it('says nothing was removed when nothing was', () => {
     const proposal = toProposal(
       call('SetAvailabilityWindows', {
-        categoryId: WORK,
+        activityTypeId: WORK,
         windows: [
           ...[1, 2, 3].map((weekday) => ({ weekday, startMin: 540, endMin: 1020 })),
           { weekday: 4, startMin: 540, endMin: 1020 },
@@ -219,7 +219,7 @@ describe('turning a model’s call into a proposal', () => {
     // decision rather than as a form somebody failed to fill in.
     const proposal = toProposal(
       call('SetAvailabilityWindows', {
-        categoryId: WORK,
+        activityTypeId: WORK,
         weekTypeOverrideId: HOLIDAY,
         windows: [],
       }),
@@ -234,14 +234,18 @@ describe('turning a model’s call into a proposal', () => {
   });
 
   it('names the consequence of a delete in the line itself', () => {
-    const category = toProposal(call('DeleteCategory', { categoryId: WORK }), CALENDAR, subject);
+    const activityType = toProposal(
+      call('DeleteActivityType', { activityTypeId: WORK }),
+      CALENDAR,
+      subject,
+    );
     const week = toProposal(
       call('DeleteWeekTypeOverride', { weekTypeOverrideId: HOLIDAY }),
       CALENDAR,
       subject,
     );
 
-    expect(category.headline).toBe('Delete the activity type “Work”, and its hours');
+    expect(activityType.headline).toBe('Delete the activity type “Work”, and its hours');
     expect(week.headline).toContain('“Christmas”');
     expect(week.headline).toContain('the hours set up for it');
   });

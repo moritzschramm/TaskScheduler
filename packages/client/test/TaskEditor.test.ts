@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils';
 import axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
 import TaskEditor from '@/components/tasks/TaskEditor.vue';
-import type { Category, CommandRequest, TaskNode } from '@ambitime/shared';
+import type { ActivityType, CommandRequest, TaskNode } from '@ambitime/shared';
 
 /**
  * Spec §4.4's inheritance, as a form.
@@ -13,7 +13,7 @@ import type { Category, CommandRequest, TaskNode } from '@ambitime/shared';
  * value, a `null`, or nothing at all.
  */
 
-const CATEGORIES: Category[] = [
+const ACTIVITY_TYPES: ActivityType[] = [
   {
     id: '018f0000-0000-7000-8000-0000000000c1',
     name: 'Work',
@@ -46,8 +46,8 @@ function task(overrides: Partial<TaskNode> = {}): TaskNode {
     // the form refuses to produce: no window applies to it, so the solver is
     // never offered it at all (§6.2 rule 1). Tests about the *other* inherited
     // properties should not have to keep re-establishing that.
-    ownCategoryId: '018f0000-0000-7000-8000-0000000000c1',
-    effectiveCategoryId: '018f0000-0000-7000-8000-0000000000c1',
+    ownActivityTypeId: '018f0000-0000-7000-8000-0000000000c1',
+    effectiveActivityTypeId: '018f0000-0000-7000-8000-0000000000c1',
     ownPriority: null,
     effectivePriority: null,
     ownDueDate: null,
@@ -72,7 +72,7 @@ function task(overrides: Partial<TaskNode> = {}): TaskNode {
 function editor(props: {
   task: TaskNode | null;
   parent?: TaskNode | null;
-  categories?: Category[];
+  activityTypes?: ActivityType[];
 }) {
   const submit = vi.fn<(request: CommandRequest) => Promise<boolean>>().mockResolvedValue(true);
 
@@ -81,11 +81,11 @@ function editor(props: {
       task: props.task,
       parent: props.parent ?? null,
       calendarId: '018f0000-0000-7000-8000-0000000000ca',
-      categories: props.categories ?? CATEGORIES,
+      activityTypes: props.activityTypes ?? ACTIVITY_TYPES,
       timeZone: 'Europe/Berlin',
       submit,
     },
-    // The empty-categories hint links to where they are made; the form is
+    // The empty-activity-types hint links to where they are made; the form is
     // mounted here without a router.
     global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
   });
@@ -105,8 +105,8 @@ describe('the task editor', () => {
       depth: 2,
       ownPriority: null,
       effectivePriority: 7,
-      ownCategoryId: null,
-      effectiveCategoryId: CATEGORIES[0]!.id,
+      ownActivityTypeId: null,
+      effectiveActivityTypeId: ACTIVITY_TYPES[0]!.id,
     });
 
     const { wrapper } = editor({ task: child });
@@ -117,14 +117,14 @@ describe('the task editor', () => {
     expect(priority.find('[data-testid="task-priority"]').exists()).toBe(false);
     expect(priority.find('[data-testid="inherited-value"]').text()).toContain('7');
 
-    // Category has no override toggle — it is required, so "unset" is not a
+    // Activity type has no override toggle — it is required, so "unset" is not a
     // state a task may be in — and inheriting is the first option instead,
     // named after the parent rather than showing a raw id.
-    const inheritedOption = wrapper.find('[data-testid="task-category"] option[value=""]');
+    const inheritedOption = wrapper.find('[data-testid="task-activity-type"] option[value=""]');
     expect(inheritedOption.text()).toContain('Work');
-    expect((wrapper.find('[data-testid="task-category"]').element as HTMLSelectElement).value).toBe(
-      '',
-    );
+    expect(
+      (wrapper.find('[data-testid="task-activity-type"]').element as HTMLSelectElement).value,
+    ).toBe('');
   });
 
   it('says so when nothing supplies a value', () => {
@@ -331,9 +331,9 @@ describe('the task editor', () => {
 });
 
 /**
- * Every task needs a category (spec §4.4, §6.2 rule 1).
+ * Every task needs an activity type (spec §4.4, §6.2 rule 1).
  *
- * Not a nicety: a task with no *effective* category matches no availability
+ * Not a nicety: a task with no *effective* activity type matches no availability
  * window, so it is never offered to the solver — it does not schedule badly, it
  * disappears. The form used to allow it and offered "None" as a choice, which
  * is how a calendar ends up empty with nothing to explain why.
@@ -342,23 +342,23 @@ describe('the task editor', () => {
  * has to keep working, or the mechanism is unusable exactly where it is most
  * useful: a subtask under a categorised parent is already covered.
  */
-describe('a task cannot be saved without a category', () => {
-  it('starts a root task on the first category rather than on nothing', async () => {
+describe('a task cannot be saved without an activity type', () => {
+  it('starts a root task on the first activity type rather than on nothing', async () => {
     // An empty box that refuses to save is a worse first impression than a
     // sensible default the user can change, and there is no meaningful
     // alternative to pick from when only one answer is valid.
     const { wrapper, submit } = editor({ task: null });
 
-    expect((wrapper.find('[data-testid="task-category"]').element as HTMLSelectElement).value).toBe(
-      CATEGORIES[0]!.id,
-    );
+    expect(
+      (wrapper.find('[data-testid="task-activity-type"]').element as HTMLSelectElement).value,
+    ).toBe(ACTIVITY_TYPES[0]!.id);
 
     await wrapper.find('[data-testid="task-title"]').setValue('Write the report');
     await wrapper.find('[data-testid="save-task"]').trigger('click');
 
     expect(submit.mock.calls.at(-1)?.[0]).toMatchObject({
       type: 'CreateTask',
-      params: { categoryId: CATEGORIES[0]!.id },
+      params: { activityTypeId: ACTIVITY_TYPES[0]!.id },
     });
   });
 
@@ -366,21 +366,21 @@ describe('a task cannot be saved without a category', () => {
     const { wrapper, submit } = editor({ task: null });
 
     await wrapper.find('[data-testid="task-title"]').setValue('Go for a run');
-    await wrapper.find('[data-testid="task-category"]').setValue(CATEGORIES[1]!.id);
+    await wrapper.find('[data-testid="task-activity-type"]').setValue(ACTIVITY_TYPES[1]!.id);
     await wrapper.find('[data-testid="save-task"]').trigger('click');
 
     expect(submit.mock.calls.at(-1)?.[0]).toMatchObject({
       type: 'CreateTask',
-      params: { categoryId: CATEGORIES[1]!.id },
+      params: { activityTypeId: ACTIVITY_TYPES[1]!.id },
     });
   });
 
   it('takes an inherited one as satisfying the rule', async () => {
-    // A subtask under a categorised parent already has an effective category,
+    // A subtask under a categorised parent already has an effective activity type,
     // and demanding its own would defeat §4.4 in its commonest case.
     const parent = task({
-      ownCategoryId: CATEGORIES[1]!.id,
-      effectiveCategoryId: CATEGORIES[1]!.id,
+      ownActivityTypeId: ACTIVITY_TYPES[1]!.id,
+      effectiveActivityTypeId: ACTIVITY_TYPES[1]!.id,
     });
     const { wrapper, submit } = editor({ task: null, parent });
 
@@ -388,26 +388,26 @@ describe('a task cannot be saved without a category', () => {
     expect(wrapper.find('[data-testid="save-task"]').attributes('disabled')).toBeUndefined();
 
     await wrapper.find('[data-testid="save-task"]').trigger('click');
-    // Sent without a category of its own: inheriting is the point.
-    expect(submit.mock.calls.at(-1)?.[0]).not.toHaveProperty('params.categoryId');
+    // Sent without an activity type of its own: inheriting is the point.
+    expect(submit.mock.calls.at(-1)?.[0]).not.toHaveProperty('params.activityTypeId');
   });
 
   it('offers no way to choose "none"', async () => {
     const { wrapper } = editor({ task: null });
 
-    const options = wrapper.findAll('[data-testid="task-category"] option');
+    const options = wrapper.findAll('[data-testid="task-activity-type"] option');
     const selectable = options.filter((option) => option.attributes('disabled') === undefined);
 
-    expect(selectable).toHaveLength(CATEGORIES.length);
+    expect(selectable).toHaveLength(ACTIVITY_TYPES.length);
     expect(selectable.map((option) => option.attributes('value'))).toEqual(
-      CATEGORIES.map((category) => category.id),
+      ACTIVITY_TYPES.map((activityType) => activityType.id),
     );
   });
 
-  it('says where categories come from when there are none', async () => {
-    const { wrapper } = editor({ task: null, categories: [] });
+  it('says where activity types come from when there are none', async () => {
+    const { wrapper } = editor({ task: null, activityTypes: [] });
 
-    expect(wrapper.find('[data-testid="no-categories-yet"]').text()).toContain(
+    expect(wrapper.find('[data-testid="no-activity-types-yet"]').text()).toContain(
       'cannot be scheduled',
     );
     expect(wrapper.find('[data-testid="save-task"]').attributes('disabled')).toBeDefined();
@@ -502,11 +502,11 @@ describe('the override control', () => {
     expect(toggle.text()).toBe('Clear');
   });
 
-  it('is gone from the category, which is not optional', () => {
+  it('is gone from the activity type, which is not optional', () => {
     const { wrapper } = editor({ task: null });
 
     expect(
-      wrapper.find('[data-testid="field-category"] [data-testid="override-toggle"]').exists(),
+      wrapper.find('[data-testid="field-activity-type"] [data-testid="override-toggle"]').exists(),
     ).toBe(false);
   });
 });

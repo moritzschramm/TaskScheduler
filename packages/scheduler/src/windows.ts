@@ -70,7 +70,7 @@ export interface ResolveWindowsInput {
 /**
  * Produces every window instance overlapping the horizon, clipped to it.
  *
- * Output is sorted by a total order (start, end, calendar, category, rule id) so
+ * Output is sorted by a total order (start, end, calendar, activity type, rule id) so
  * two runs over the same input agree exactly — including which window the
  * validator reports a task as sitting in.
  */
@@ -130,7 +130,7 @@ export function resolveWindows({
           resolved.push({
             ruleId: rule.id,
             calendarId: rule.calendarId,
-            categoryId: rule.categoryId,
+            activityTypeId: rule.activityTypeId,
             interval: { start: clippedStart, end: clippedEnd },
             ...(rule.focusLevel === undefined ? {} : { focusLevel: rule.focusLevel }),
           });
@@ -214,21 +214,21 @@ export const compareResolvedWindows = chain<ResolvedWindow>(
   byInt((w) => w.interval.start),
   byInt((w) => w.interval.end),
   byId((w) => w.calendarId),
-  byId((w) => w.categoryId),
+  byId((w) => w.activityTypeId),
   byId((w) => w.ruleId),
 );
 
 /**
- * The windows a schedulable is eligible for: same calendar, same category.
- * Category membership is what spec §6.2 rule 1 turns on.
+ * The windows a schedulable is eligible for: same calendar, same activity type.
+ * Activity type membership is what spec §6.2 rule 1 turns on.
  */
 export function eligibleWindows(
   windows: readonly ResolvedWindow[],
   calendarId: string,
-  categoryId: string,
+  activityTypeId: string,
 ): ResolvedWindow[] {
   return windows.filter(
-    (window) => window.calendarId === calendarId && window.categoryId === categoryId,
+    (window) => window.calendarId === calendarId && window.activityTypeId === activityTypeId,
   );
 }
 
@@ -242,7 +242,7 @@ export function windowContaining(
   );
 }
 
-/** Total minutes of window time available to a category, for capacity work in M5. */
+/** Total minutes of window time available to an activity type, for capacity work in M5. */
 export function totalWindowMinutes(windows: readonly ResolvedWindow[]): number {
   return windows.reduce((sum, window) => sum + (window.interval.end - window.interval.start), 0);
 }

@@ -82,7 +82,7 @@ export const appointments = pgTable(
     /**
      * Non-compressible time reserved after the block (§6.2 rule 3).
      *
-     * The same thing a category's default and a task's override express, for
+     * The same thing an activity type's default and a task's override express, for
      * the case they never covered: the twenty minutes it takes to get back from
      * a meeting across town. Part of the footprint the solver keeps clear, and
      * not part of the block — the block still ends when it ends, which is what

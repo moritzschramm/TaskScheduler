@@ -221,34 +221,37 @@ describe('seed via the API, render the client', () => {
     await loadSession();
 
     const router = createAppRouter(createMemoryHistory());
-    // Categories moved off Settings: they decide whether anything can be
+    // Activity types moved off Settings: they decide whether anything can be
     // scheduled at all, which is not a preference.
-    await router.push('/categories');
+    await router.push('/activity-types');
     await router.isReady();
 
     const wrapper = (mounted = mount(App, { global: { plugins: [router] } }));
-    await waitFor(() => wrapper.find('[data-testid="categories-section"]').exists());
+    await waitFor(() => wrapper.find('[data-testid="activity-types-section"]').exists());
 
-    // A category, created through the form. Its id comes back on the command,
+    // An activity type, created through the form. Its id comes back on the command,
     // which is what lets the page select it without re-reading and guessing.
-    await wrapper.find('[data-testid="new-category-name"]').setValue('Exercise');
-    await wrapper.find('[data-testid="new-category-cooldown"]').setValue('20');
-    await wrapper.find('[data-testid="add-category"]').trigger('click');
-    await waitFor(() => wrapper.findAll('[data-testid="category-row"]').length === 2);
+    await wrapper.find('[data-testid="new-activity-type-name"]').setValue('Exercise');
+    await wrapper.find('[data-testid="new-activity-type-cooldown"]').setValue('20');
+    await wrapper.find('[data-testid="add-activity-type"]').trigger('click');
+    await waitFor(() => wrapper.findAll('[data-testid="activity-type-row"]').length === 2);
 
     // Read off the inputs, not the row's text: the names live in field values,
     // and the form was re-seeded from the server's answer rather than kept.
     const names = wrapper
-      .findAll('[data-testid="category-name"]')
+      .findAll('[data-testid="activity-type-name"]')
       .map((input) => (input.element as HTMLInputElement).value);
     expect(names).toContain('Exercise');
-    expect(wrapper.find('[data-testid="new-category-name"]').element).toHaveProperty('value', '');
+    expect(wrapper.find('[data-testid="new-activity-type-name"]').element).toHaveProperty(
+      'value',
+      '',
+    );
 
     // A working window covering Tuesday afternoons only. Naming one weekday
     // makes every other weekday unworkable (§9.1), which is the whole
     // difference between "unset" and "empty".
     //
-    // On Settings, and folded away: it is an optional ceiling over the category
+    // On Settings, and folded away: it is an optional ceiling over the activity type
     // hours rather than a second copy of them, so it opens only when asked for.
     await router.push('/settings');
     await waitFor(() => wrapper.find('[data-testid="calendar-section"]').exists());
@@ -308,7 +311,7 @@ describe('seed via the API, render the client', () => {
    */
   it('builds a task tree and overrides an inherited property', async () => {
     const email = `tree-${Date.now()}@example.test`;
-    const { calendarId, categoryId } = await seed(email);
+    const { calendarId, activityTypeId } = await seed(email);
 
     await signIn(email, PASSWORD);
     await loadSession();
@@ -324,9 +327,9 @@ describe('seed via the API, render the client', () => {
     await wrapper.find('[data-testid="add-root-task"]').trigger('click');
     await flushPromises();
     await wrapper.find('[data-testid="task-title"]').setValue('Ship the thing');
-    // Required now: a task with no effective category matches no availability
+    // Required now: a task with no effective activity type matches no availability
     // window and is never offered to the solver at all (§6.2 rule 1).
-    await wrapper.find('[data-testid="task-category"]').setValue(categoryId);
+    await wrapper.find('[data-testid="task-activity-type"]').setValue(activityTypeId);
     await wrapper
       .find('[data-testid="field-priority"] [data-testid="override-toggle"]')
       .trigger('click');
@@ -399,7 +402,7 @@ describe('seed via the API, render the client', () => {
 
   it('refuses a subtask due after its container, in the form', async () => {
     const email = `due-${Date.now()}@example.test`;
-    const { categoryId } = await seed(email);
+    const { activityTypeId } = await seed(email);
 
     await signIn(email, PASSWORD);
     await loadSession();
@@ -414,7 +417,7 @@ describe('seed via the API, render the client', () => {
     await wrapper.find('[data-testid="add-root-task"]').trigger('click');
     await flushPromises();
     await wrapper.find('[data-testid="task-title"]').setValue('Ship the thing');
-    await wrapper.find('[data-testid="task-category"]').setValue(categoryId);
+    await wrapper.find('[data-testid="task-activity-type"]').setValue(activityTypeId);
     await wrapper
       .find('[data-testid="field-due"] [data-testid="override-toggle"]')
       .trigger('click');
@@ -855,7 +858,7 @@ describe('seed via the API, render the client', () => {
 
     it('shows a hard-due alert above a soft-due warning, and dismisses them', async () => {
       const email = `signals-${Date.now()}@example.test`;
-      const { calendarId, categoryId, command } = await seed(email);
+      const { calendarId, activityTypeId, command } = await seed(email);
 
       // Neither can finish by 09:30 Berlin from a 09:00 start, so both are at
       // risk in exactly the same way and only `due_kind` differs.
@@ -865,7 +868,7 @@ describe('seed via the API, render the client', () => {
           params: {
             calendarId,
             title: `${kind} deadline`,
-            categoryId,
+            activityTypeId,
             estimatedDurationMin: 60,
             dueDate: { date: '2026-03-23T08:30:00Z', kind },
           },
@@ -890,11 +893,11 @@ describe('seed via the API, render the client', () => {
       expect(wrapper.find('[data-testid="no-signals"]').exists()).toBe(true);
     });
 
-    it('shows the per-category utilization indicator (§6.6)', async () => {
+    it('shows the per-activity-type utilization indicator (§6.6)', async () => {
       const email = `capacity-${Date.now()}@example.test`;
-      const { calendarId, categoryId, command } = await seed(email);
+      const { calendarId, activityTypeId, command } = await seed(email);
 
-      // Far more than one week of the category's windows can hold, and all of
+      // Far more than one week of the activity type's windows can hold, and all of
       // it *due* that week — which is what makes the week overcommitted rather
       // than merely full. Demand counts the week a task is due as well as the
       // week it landed in (§6.6), so work pushed out still counts against the
@@ -906,7 +909,7 @@ describe('seed via the API, render the client', () => {
           params: {
             calendarId,
             title: `Bulk ${index}`,
-            categoryId,
+            activityTypeId,
             estimatedDurationMin: 480,
             dueDate: { date: '2026-03-27T16:00:00Z', kind: 'soft' },
           },
@@ -930,11 +933,11 @@ describe('seed via the API, render the client', () => {
 
     it('surfaces the chronic-postponement signal (§6.6)', async () => {
       const email = `chronic-${Date.now()}@example.test`;
-      const { calendarId, categoryId, command } = await seed(email);
+      const { calendarId, activityTypeId, command } = await seed(email);
 
       const created = (await command({
         type: 'CreateTask',
-        params: { calendarId, title: 'Keeps slipping', categoryId, estimatedDurationMin: 60 },
+        params: { calendarId, title: 'Keeps slipping', activityTypeId, estimatedDurationMin: 60 },
       })) as CommandBody;
       const taskId = created.created.find((row) => row.entity === 'task')!.id;
 
@@ -1318,7 +1321,7 @@ describe('seed via the API, render the client', () => {
   });
 
   describe('registering', () => {
-    // Longer than the default: registering, then setting up a category and
+    // Longer than the default: registering, then setting up an activity type and
     // its hours, is four round trips to a real database.
     it('creates an account from the sign-up form and gets to a calendar', async () => {
       const email = `newcomer-${Date.now()}@example.test`;
@@ -1344,12 +1347,12 @@ describe('seed via the API, render the client', () => {
       // §4.2's triggers gave them a personal tenant without sign-up asking.
       expect(wrapper.find('[data-testid="active-context"]').text()).toBe('Personal');
 
-      // Nothing can be scheduled yet, and what is missing is a category with
+      // Nothing can be scheduled yet, and what is missing is an activity type with
       // hours — not a planner, which on its own gets them no closer. So that is
       // what the first screen asks for, in place.
       await waitFor(() => wrapper.find('[data-testid="getting-started"]').exists());
 
-      await wrapper.find('[data-testid="first-category-name"]').setValue('Work');
+      await wrapper.find('[data-testid="first-activity-type-name"]').setValue('Work');
       await wrapper.find('[data-testid="first-start"]').setValue('09:00');
       await wrapper.find('[data-testid="first-end"]').setValue('17:00');
       await wrapper.find('[data-testid="begin"]').trigger('click');
@@ -1458,12 +1461,12 @@ describe('seed via the API, render the client', () => {
    * A calendar nobody has configured yet — which is every calendar, for a while.
    *
    * The report was "nothing is shown in the calendar", and it was accurate: a
-   * task with no category is one the solver is never offered, so it appeared on
+   * task with no activity type is one the solver is never offered, so it appeared on
    * no grid and in no backlog, and the screen said "everything fits inside the
    * horizon" while holding it. The server had been reporting `unschedulable`
    * since M9 and the client had never read the field.
    *
-   * Seeded deliberately without `seed()`: its category and windows are exactly
+   * Seeded deliberately without `seed()`: its activity type and windows are exactly
    * what the state under test is missing.
    */
   describe('a calendar with nothing set up', () => {
@@ -1502,7 +1505,7 @@ describe('seed via the API, render the client', () => {
       });
       const calendarId = created.created.find((row) => row.entity === 'calendar')!.id;
 
-      // No category and no estimate: one task that cannot be placed for each
+      // No activity type and no estimate: one task that cannot be placed for each
       // of the two reasons the loader distinguishes.
       await command({
         type: 'CreateTask',
@@ -1634,7 +1637,7 @@ async function waitFor(ready: () => boolean, timeoutMs = 5_000): Promise<void> {
 
 /**
  * Everything through the API, exactly as a client would — the calendar,
- * category and availability windows included.
+ * activity type and availability windows included.
  *
  * Until M11 there was no command for those three and this function reached into
  * the tables for them. It no longer needs to, and the returned ids come from
@@ -1683,16 +1686,16 @@ async function seed(email: string): Promise<Seeded> {
     'calendar',
   );
 
-  const categoryId = idOf(
-    await command({ type: 'CreateCategory', params: { name: 'Work', defaultCooldownMin: 0 } }),
-    'category',
+  const activityTypeId = idOf(
+    await command({ type: 'CreateActivityType', params: { name: 'Work', defaultCooldownMin: 0 } }),
+    'activity_type',
   );
 
   await command({
     type: 'SetAvailabilityWindows',
     params: {
       calendarId,
-      categoryId,
+      activityTypeId,
       windows: [1, 2, 3, 4, 5].map((weekday) => ({
         weekday,
         startMin: 9 * 60,
@@ -1713,12 +1716,12 @@ async function seed(email: string): Promise<Seeded> {
 
   await command({
     type: 'CreateTask',
-    params: { calendarId, title: 'Tuesday work', categoryId, estimatedDurationMin: 60 },
+    params: { calendarId, title: 'Tuesday work', activityTypeId, estimatedDurationMin: 60 },
   });
 
   const created = await command({
     type: 'CreateTask',
-    params: { calendarId, title: 'Much later', categoryId, estimatedDurationMin: 60 },
+    params: { calendarId, title: 'Much later', activityTypeId, estimatedDurationMin: 60 },
   });
 
   const blocks = created.schedules[0]!.blocks;
@@ -1736,13 +1739,13 @@ async function seed(email: string): Promise<Seeded> {
     },
   });
 
-  return { cookie, calendarId, categoryId, command };
+  return { cookie, calendarId, activityTypeId, command };
 }
 
 interface Seeded {
   cookie: string;
   calendarId: string;
-  categoryId: string;
+  activityTypeId: string;
   /** Issues further commands as the seeded user, before the client signs in. */
   command: (body: unknown) => Promise<CommandBody>;
 }

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useI18n } from '@/i18n';
 import type {
-  Category,
+  ActivityType,
   CompletedBlock,
   FixedBlock,
   ScheduledBlock,
@@ -13,7 +13,7 @@ import {
   assignLanes,
   blocksForDay,
   DEFAULT_SCALE,
-  categoryLanesForDay,
+  activityTypeLanesForDay,
   clipBand,
   dragOffsetMinutes,
   movedStartMin,
@@ -59,9 +59,9 @@ const props = withDefaults(
      *
      * Supplies each lane's name and colour. Empty falls back to the single
      * neutral band the grid drew before colours existed, which is also what a
-     * screen with no categories should show.
+     * screen with no activity types should show.
      */
-    categories?: readonly Category[];
+    activityTypes?: readonly ActivityType[];
     /**
      * The date ranges whose rules replace the default set (§4.3).
      *
@@ -86,7 +86,7 @@ const props = withDefaults(
   }>(),
   {
     windows: () => [],
-    categories: () => [],
+    activityTypes: () => [],
     completedBlocks: () => [],
     specialWeeks: () => [],
     today: null,
@@ -425,7 +425,7 @@ const columns = computed(() =>
     open: openBandsForDay(day, props.timeZone, props.windows)
       .map((band) => clipBand(band, props.dayStartMin, props.dayEndMin))
       .filter((band): band is DayBand => band !== null),
-    lanes: categoryLanesForDay(day, props.timeZone, props.windows)
+    lanes: activityTypeLanesForDay(day, props.timeZone, props.windows)
       .map((lane) => {
         const clipped = clipBand(lane, props.dayStartMin, props.dayEndMin);
         return clipped === null ? null : { ...lane, ...clipped };
@@ -435,12 +435,12 @@ const columns = computed(() =>
 );
 
 /** Name and colour for a lane, by the id the window carried. */
-const categoryById = computed(
-  () => new Map(props.categories.map((category) => [category.id, category])),
+const activityTypeById = computed(
+  () => new Map(props.activityTypes.map((activityType) => [activityType.id, activityType])),
 );
 
-function nameOf(categoryId: string): string {
-  return categoryById.value.get(categoryId)?.name ?? '';
+function nameOf(activityTypeId: string): string {
+  return activityTypeById.value.get(activityTypeId)?.name ?? '';
 }
 
 /**
@@ -450,9 +450,9 @@ function nameOf(categoryId: string): string {
  * so the fill stays a wash the block on top of it can be read against, while
  * the left edge below carries the hue at the chroma it was selected at.
  */
-function hueOf(categoryId: string): string | null {
-  const color = categoryById.value.get(categoryId)?.color ?? null;
-  return color === null ? null : `var(--category-${color})`;
+function hueOf(activityTypeId: string): string | null {
+  const color = activityTypeById.value.get(activityTypeId)?.color ?? null;
+  return color === null ? null : `var(--activity-type-${color})`;
 }
 
 function offsetOf(minute: number): number {
@@ -630,13 +630,13 @@ function classesFor(block: GridBlock): string {
  * 0018. None of them is worth a fourth appearance on the grid.
  */
 function slotOf(block: GridBlock): string | null {
-  if (block.categoryId === null) return null;
-  return categoryById.value.get(block.categoryId)?.color ?? null;
+  if (block.activityTypeId === null) return null;
+  return activityTypeById.value.get(block.activityTypeId)?.color ?? null;
 }
 
 function blockHueOf(block: GridBlock): string | null {
   const slot = slotOf(block);
-  return slot === null ? null : `var(--category-block-${slot})`;
+  return slot === null ? null : `var(--activity-type-block-${slot})`;
 }
 
 /**
@@ -650,7 +650,7 @@ function blockHueOf(block: GridBlock): string | null {
  */
 function inkOf(block: GridBlock): string {
   const slot = slotOf(block);
-  return slot === null ? 'var(--primary-foreground)' : `var(--category-ink-${slot})`;
+  return slot === null ? 'var(--primary-foreground)' : `var(--activity-type-ink-${slot})`;
 }
 
 /** The hue half of a block's appearance; `{}` where `classesFor` covers it. */
@@ -854,28 +854,28 @@ const DONE_INSET = 6;
           -->
           <div
             v-for="lane in column.lanes"
-            :key="`lane-${lane.categoryId}-${lane.startMin}`"
+            :key="`lane-${lane.activityTypeId}-${lane.startMin}`"
             class="absolute overflow-hidden"
-            :class="hueOf(lane.categoryId) === null ? 'bg-muted-foreground/[0.06]' : ''"
+            :class="hueOf(lane.activityTypeId) === null ? 'bg-muted-foreground/[0.06]' : ''"
             :style="{
               top: `${offsetOf(lane.startMin)}px`,
               height: `${heightOfBand(lane)}px`,
               left: `${lane.offset * 100}%`,
               width: `${lane.width * 100}%`,
-              ...(hueOf(lane.categoryId) === null
+              ...(hueOf(lane.activityTypeId) === null
                 ? {}
                 : {
-                    backgroundColor: `color-mix(in oklab, ${hueOf(lane.categoryId)} 14%, transparent)`,
-                    borderLeft: `3px solid ${hueOf(lane.categoryId)}`,
+                    backgroundColor: `color-mix(in oklab, ${hueOf(lane.activityTypeId)} 14%, transparent)`,
+                    borderLeft: `3px solid ${hueOf(lane.activityTypeId)}`,
                   }),
             }"
-            data-testid="category-lane"
-            :data-category-id="lane.categoryId"
+            data-testid="activity-type-lane"
+            :data-activity-type-id="lane.activityTypeId"
             :data-start-min="lane.startMin"
-            :title="nameOf(lane.categoryId)"
+            :title="nameOf(lane.activityTypeId)"
           >
             <span class="truncate px-1 text-[0.65rem] leading-4 text-(--ink-subtle)">
-              {{ nameOf(lane.categoryId) }}
+              {{ nameOf(lane.activityTypeId) }}
             </span>
           </div>
 
@@ -914,7 +914,7 @@ const DONE_INSET = 6;
             }"
             :data-lane="block.lanes > 1 ? `${block.lane}/${block.lanes}` : undefined"
             :data-testid="`block-${block.kind}`"
-            :data-category-id="block.categoryId ?? undefined"
+            :data-activity-type-id="block.activityTypeId ?? undefined"
             :data-title="block.title"
             :data-start-min="startMinOf(block)"
             :data-end-min="block.endMin"

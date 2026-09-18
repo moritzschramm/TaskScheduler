@@ -210,7 +210,7 @@ function subject() {
         block.title === '' ? t('assistant.plan.untitledBlock') : block.title,
       ]),
     ),
-    categoryNames: new Map(workspace.categories.value.map((c) => [c.id, c.name])),
+    activityTypeNames: new Map(workspace.activityTypes.value.map((c) => [c.id, c.name])),
     weekNames: new Map(
       (workspace.configuration.value?.weekTypeOverrides ?? []).map((week) => [week.id, week.name]),
     ),

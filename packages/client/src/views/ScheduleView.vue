@@ -41,7 +41,7 @@ const { t, plural } = useI18n();
  */
 const {
   view,
-  categories,
+  activityTypes,
   notifications,
   capacity,
   calendar,
@@ -212,7 +212,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           {{ t('schedule.noWindowsBody') }}
         </p>
         <Button as-child size="sm" data-testid="set-up-availability">
-          <RouterLink to="/categories">{{ t('schedule.noWindowsAction') }}</RouterLink>
+          <RouterLink to="/activity-types">{{ t('schedule.noWindowsAction') }}</RouterLink>
         </Button>
       </section>
 
@@ -249,7 +249,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
         :fixed-blocks="view.fixedBlocks"
         :completed-blocks="showTasks ? view.completedBlocks : []"
         :windows="openWindows"
-        :categories="categories"
+        :activity-types="activityTypes"
         :special-weeks="configuration?.weekTypeOverrides ?? []"
         :day-start-min="dayStartMin"
         :day-end-min="dayEndMin"
@@ -279,7 +279,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           :blocks="showTasks ? view.schedule.blocks : []"
           :fixed-blocks="view.fixedBlocks"
           :completed-blocks="showTasks ? view.completedBlocks : []"
-          :categories="categories"
+          :activity-types="activityTypes"
           :special-weeks="configuration?.weekTypeOverrides ?? []"
           :today="today"
           :horizon-end="horizonEnd"
@@ -330,7 +330,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
 
       <div class="grid gap-8 lg:grid-cols-[2fr_1fr]">
         <NotificationCentre :notifications="notifications" :submit="submit" />
-        <CapacityPanel :cells="capacity" :categories="categories" />
+        <CapacityPanel :cells="capacity" :activity-types="activityTypes" />
       </div>
 
       <!--
@@ -350,7 +350,7 @@ function swapCandidates(taskId: string): ScheduledBlock[] {
           :task="editing.task"
           :parent="editing.parent"
           :calendar-id="calendar.id"
-          :categories="categories"
+          :activity-types="activityTypes"
           :time-zone="zone"
           :default-preferred="slotRange"
           :submit="submit"

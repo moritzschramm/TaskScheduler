@@ -21,7 +21,7 @@ const block: ScheduledBlock = {
   occurrenceId: 'occ-1',
   taskId: 'task-1',
   title: 'Write the report',
-  categoryId: 'cat-1',
+  activityTypeId: 'cat-1',
   start: '2026-03-24T08:00:00.000Z',
   end: '2026-03-24T09:00:00.000Z',
   cooldownMin: 0,
@@ -130,7 +130,7 @@ describe('WeekGrid', () => {
 const OPEN_MONDAY: ResolvedWindow = {
   ruleId: 'rule-1',
   calendarId: 'cal-1',
-  categoryId: 'cat-1',
+  activityTypeId: 'cat-1',
   // 09:00–17:00 Berlin, on the Monday of the week under test.
   interval: {
     start: toInstant('2026-03-23T08:00:00.000Z'),

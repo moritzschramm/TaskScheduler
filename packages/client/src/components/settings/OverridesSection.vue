@@ -168,7 +168,7 @@ async function remove(id: string, version: number): Promise<void> {
               v-if="drafts.get(override.id)"
               v-model="drafts.get(override.id)!.name"
               :disabled="readOnly"
-              :aria-label="t('categories.nameOf', { name: override.name })"
+              :aria-label="t('activityTypes.nameOf', { name: override.name })"
               data-testid="override-name"
               @input="edited(override.id)"
             />
@@ -199,7 +199,7 @@ async function remove(id: string, version: number): Promise<void> {
                 variant="ghost"
                 size="sm"
                 :disabled="readOnly || busy || autosave.busy.value"
-                :aria-label="t('categories.deleteNamed', { name: override.name })"
+                :aria-label="t('activityTypes.deleteNamed', { name: override.name })"
                 data-testid="delete-override"
                 @click="remove(override.id, override.version)"
               >

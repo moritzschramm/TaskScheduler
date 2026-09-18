@@ -287,8 +287,8 @@ describe('backlog and infeasibility (spec §6.1, §6.7)', () => {
     expect(validateSchedule(ctx, result.placements).valid).toBe(true);
   });
 
-  it('reports a category with no windows as a configuration problem', () => {
-    const task = schedulable({ occurrenceId: 'a', categoryId: 'cat-exercise' });
+  it('reports an activity type with no windows as a configuration problem', () => {
+    const task = schedulable({ occurrenceId: 'a', activityTypeId: 'cat-exercise' });
 
     const result = solve(context({ schedulables: [task] }));
 
@@ -387,7 +387,7 @@ describe('diagnostics (spec §6.5 post-placement pass, §11)', () => {
   });
 
   it('reports a backlogged task informationally with its reason', () => {
-    const task = schedulable({ occurrenceId: 'a', categoryId: 'cat-exercise' });
+    const task = schedulable({ occurrenceId: 'a', activityTypeId: 'cat-exercise' });
 
     const result = solve(context({ schedulables: [task] }));
 

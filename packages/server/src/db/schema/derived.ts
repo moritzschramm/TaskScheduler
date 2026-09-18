@@ -53,7 +53,7 @@ export const placements = pgTable(
     /**
      * The cooldown reserved after `during`. Stored rather than re-derived so
      * the cache records the full footprint the solver reserved (§6.2 rule 3),
-     * even if the category default changes afterwards.
+     * even if the activity type default changes afterwards.
      */
     cooldownMin: integer('cooldown_min').notNull().default(0),
 

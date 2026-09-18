@@ -46,7 +46,7 @@ const { history, refreshHistory, submit } = useWorkspace();
 const primary = computed(() => [
   { to: '/', label: t('nav.schedule'), testId: 'nav-schedule' },
   { to: '/tasks', label: t('nav.tasks'), testId: 'nav-tasks' },
-  { to: '/categories', label: t('nav.categories'), testId: 'nav-categories' },
+  { to: '/activity-types', label: t('nav.activityTypes'), testId: 'nav-activity-types' },
 ]);
 
 // Presence is a fact about a signed-in page being open (§11), so the beat

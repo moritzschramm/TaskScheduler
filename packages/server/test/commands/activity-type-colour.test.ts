@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { CATEGORY_COLORS } from '@ambitime/shared';
-import { categories } from '../../src/db/schema/index.js';
+import { ACTIVITY_TYPE_COLORS } from '@ambitime/shared';
+import { activityTypes } from '../../src/db/schema/index.js';
 import { resetDomainTables, setupTestDatabase } from '../support/database.js';
 import { createWorld, type World } from '../support/world.js';
 import type { DatabaseHandle } from '../../src/db/client.js';
@@ -32,22 +32,26 @@ describe('activity type colours', () => {
 
   const colourOf = async (id: string): Promise<string | null> => {
     const [row] = await world.read((tx) =>
-      tx.select({ color: categories.color }).from(categories).where(eq(categories.id, id)).limit(1),
+      tx
+        .select({ color: activityTypes.color })
+        .from(activityTypes)
+        .where(eq(activityTypes.id, id))
+        .limit(1),
     );
     return row?.color ?? null;
   };
 
   const create = async (name: string, color?: string): Promise<string> => {
     const outcome = await world.run({
-      type: 'CreateCategory',
+      type: 'CreateActivityType',
       params: { name, ...(color === undefined ? {} : { color }) },
     } as never);
-    return outcome.created.find((row) => row.entity === 'category')!.id;
+    return outcome.created.find((row) => row.entity === 'activity_type')!.id;
   };
 
   it('assigns slots in order, so nobody has to choose', async () => {
-    // The fixture's own category is inserted directly and has no colour, which
-    // is also what every category looked like before this existed — so the
+    // The fixture's own activity type is inserted directly and has no colour, which
+    // is also what every activity type looked like before this existed — so the
     // first one created through the command takes the first slot, and a
     // colourless row is skipped rather than counted.
     const first = await create('Exercise');
@@ -66,8 +70,8 @@ describe('activity type colours', () => {
     // rather than carrying on from where the count had reached.
     const first = await create('Exercise');
     await world.run({
-      type: 'EditCategory',
-      params: { categoryId: first, patch: { color: 'red' } },
+      type: 'EditActivityType',
+      params: { activityTypeId: first, patch: { color: 'red' } },
     } as never);
 
     expect(await colourOf(await create('Errands'))).toBe('blue');
@@ -77,7 +81,7 @@ describe('activity type colours', () => {
     // A ninth type shares blue with the first. The alternative was no colour,
     // which puts that type's hours on the grid as a grey lane — and grey is
     // what unavailable time looks like everywhere else (§4.3).
-    for (let index = 0; index < CATEGORY_COLORS.length; index += 1) {
+    for (let index = 0; index < ACTIVITY_TYPE_COLORS.length; index += 1) {
       await create(`Type ${index}`);
     }
 
@@ -91,8 +95,8 @@ describe('activity type colours', () => {
     // before every type had a colour can carry a null.
     const id = await create('Exercise');
     await world.run({
-      type: 'EditCategory',
-      params: { categoryId: id, patch: { color: null } },
+      type: 'EditActivityType',
+      params: { activityTypeId: id, patch: { color: null } },
     } as never);
 
     expect(await colourOf(id)).toBeNull();

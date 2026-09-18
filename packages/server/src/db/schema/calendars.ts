@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { CategoryColor } from '@ambitime/shared';
+import type { ActivityTypeColor } from '@ambitime/shared';
 import {
   check,
   date,
@@ -110,15 +110,15 @@ export const calendarWindows = pgTable(
  * A kind of activity — work, exercise, wellness, household (spec §4.3).
  * Tenant-scoped, and owns the default cooldown for its tasks.
  */
-export const categories = pgTable(
-  'categories',
+export const activityTypes = pgTable(
+  'activity_types',
   {
     id: primaryKeyColumn(),
     tenantId: uuid('tenant_id')
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-    /** Non-compressible gap reserved after each task of this category (§6.2). */
+    /** Non-compressible gap reserved after each task of this activity type (§6.2). */
     defaultCooldownMin: integer('default_cooldown_min').notNull().default(0),
     /**
      * Which palette slot the grid draws this type's hours in (§4.3).
@@ -127,17 +127,17 @@ export const categories = pgTable(
      * light and a dark surface. Null is a real state: the slots do not cycle,
      * so a ninth activity type has none. See `@ambitime/shared`'s palette.
      */
-    color: text('color').$type<CategoryColor>(),
+    color: text('color').$type<ActivityTypeColor>(),
     version: versionColumn(),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
   (table) => [
-    unique('categories_id_tenant_key').on(table.id, table.tenantId),
-    unique('categories_tenant_name_key').on(table.tenantId, table.name),
-    check('categories_cooldown_non_negative', sql`${table.defaultCooldownMin} >= 0`),
+    unique('activity_types_id_tenant_key').on(table.id, table.tenantId),
+    unique('activity_types_tenant_name_key').on(table.tenantId, table.name),
+    check('activity_types_cooldown_non_negative', sql`${table.defaultCooldownMin} >= 0`),
     check(
-      'categories_color_is_a_palette_slot',
+      'activity_types_color_is_a_palette_slot',
       sql`${table.color} is null or ${table.color} in ('blue', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'violet', 'red')`,
     ),
   ],
@@ -184,7 +184,7 @@ export const weekTypeOverrides = pgTable(
 );
 
 /**
- * A per-weekday time range during which a category's tasks may be placed within
+ * A per-weekday time range during which an activity type's tasks may be placed within
  * a calendar (spec §4.3).
  *
  * `focusLevel` is the "window focus profile" the task's own `focus_level` is
@@ -198,7 +198,7 @@ export const availabilityWindows = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
     calendarId: uuid('calendar_id').notNull(),
-    categoryId: uuid('category_id').notNull(),
+    activityTypeId: uuid('activity_type_id').notNull(),
     /** NULL = part of the default set; set = part of that override's set. */
     weekTypeOverrideId: uuid('week_type_override_id'),
     /** ISO-8601 weekday: 1 = Monday … 7 = Sunday. */
@@ -218,9 +218,9 @@ export const availabilityWindows = pgTable(
       name: 'availability_windows_calendar_same_tenant_fk',
     }).onDelete('cascade'),
     foreignKey({
-      columns: [table.categoryId, table.tenantId],
-      foreignColumns: [categories.id, categories.tenantId],
-      name: 'availability_windows_category_same_tenant_fk',
+      columns: [table.activityTypeId, table.tenantId],
+      foreignColumns: [activityTypes.id, activityTypes.tenantId],
+      name: 'availability_windows_activity_type_same_tenant_fk',
     }).onDelete('cascade'),
     foreignKey({
       columns: [table.weekTypeOverrideId, table.tenantId],
@@ -243,8 +243,8 @@ export type Calendar = typeof calendars.$inferSelect;
 export type NewCalendar = typeof calendars.$inferInsert;
 export type CalendarWindow = typeof calendarWindows.$inferSelect;
 export type NewCalendarWindow = typeof calendarWindows.$inferInsert;
-export type Category = typeof categories.$inferSelect;
-export type NewCategory = typeof categories.$inferInsert;
+export type ActivityType = typeof activityTypes.$inferSelect;
+export type NewActivityType = typeof activityTypes.$inferInsert;
 export type WeekTypeOverride = typeof weekTypeOverrides.$inferSelect;
 export type NewWeekTypeOverride = typeof weekTypeOverrides.$inferInsert;
 export type AvailabilityWindow = typeof availabilityWindows.$inferSelect;

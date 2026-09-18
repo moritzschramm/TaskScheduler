@@ -20,7 +20,7 @@ import type { CommandContext } from './context.js';
  * A recurring task is a **demand rule**, not a datetime rule: "exercise 3× per
  * week" says how much a period should contain and nothing about when. So this
  * spawns occurrences per period and stops — where each one goes is the
- * scheduler's business, placed flexibly within its category like any other
+ * scheduler's business, placed flexibly within its activity type like any other
  * demand. Nothing here computes a time.
  *
  * That separation is the point of §8: an appointment's recurrence expands a

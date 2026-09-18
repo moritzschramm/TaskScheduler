@@ -34,7 +34,7 @@
  * colours that are distinct for everyone, without choosing anything.
  */
 
-export const CATEGORY_COLORS = [
+export const ACTIVITY_TYPE_COLORS = [
   'blue',
   'orange',
   'aqua',
@@ -45,7 +45,7 @@ export const CATEGORY_COLORS = [
   'red',
 ] as const;
 
-export type CategoryColor = (typeof CATEGORY_COLORS)[number];
+export type ActivityTypeColor = (typeof ACTIVITY_TYPE_COLORS)[number];
 
 export interface ColorSteps {
   /** The step selected for the light surface. */
@@ -54,7 +54,7 @@ export interface ColorSteps {
   dark: string;
 }
 
-export const CATEGORY_COLOR_STEPS: Readonly<Record<CategoryColor, ColorSteps>> = {
+export const ACTIVITY_TYPE_COLOR_STEPS: Readonly<Record<ActivityTypeColor, ColorSteps>> = {
   blue: { light: '#2a78d6', dark: '#3987e5' },
   orange: { light: '#eb6834', dark: '#d95926' },
   aqua: { light: '#1baf7a', dark: '#199e70' },
@@ -77,14 +77,14 @@ export const CATEGORY_COLOR_STEPS: Readonly<Record<CategoryColor, ColorSteps>> =
  * Always answers. Every activity type has a colour; see the note above for why
  * "none" turned out to be the worse of the two things a ninth type could say.
  */
-export function nextCategoryColor(taken: readonly (string | null)[]): CategoryColor {
-  const used = new Map<CategoryColor, number>(CATEGORY_COLORS.map((color) => [color, 0]));
+export function nextActivityTypeColor(taken: readonly (string | null)[]): ActivityTypeColor {
+  const used = new Map<ActivityTypeColor, number>(ACTIVITY_TYPE_COLORS.map((color) => [color, 0]));
   for (const value of taken) {
-    if (isCategoryColor(value)) used.set(value, (used.get(value) ?? 0) + 1);
+    if (isActivityTypeColor(value)) used.set(value, (used.get(value) ?? 0) + 1);
   }
 
-  let fewest: CategoryColor = CATEGORY_COLORS[0];
-  for (const color of CATEGORY_COLORS) {
+  let fewest: ActivityTypeColor = ACTIVITY_TYPE_COLORS[0];
+  for (const color of ACTIVITY_TYPE_COLORS) {
     if ((used.get(color) ?? 0) < (used.get(fewest) ?? 0)) fewest = color;
   }
 
@@ -92,8 +92,8 @@ export function nextCategoryColor(taken: readonly (string | null)[]): CategoryCo
 }
 
 /** Whether a stored value is still one of the slots. */
-export function isCategoryColor(value: unknown): value is CategoryColor {
-  return typeof value === 'string' && (CATEGORY_COLORS as readonly string[]).includes(value);
+export function isActivityTypeColor(value: unknown): value is ActivityTypeColor {
+  return typeof value === 'string' && (ACTIVITY_TYPE_COLORS as readonly string[]).includes(value);
 }
 
 /**
@@ -124,7 +124,7 @@ export function isCategoryColor(value: unknown): value is CategoryColor {
  * it, and dark yellow is *brown* — the same hue angle, and not a colour anybody
  * looking at a pale yellow lane would connect to it. Letting each slot take
  * whichever of the two inks it wants costs a rule and buys back the palette.
- * See `CATEGORY_BLOCK_INK`.
+ * See `ACTIVITY_TYPE_BLOCK_INK`.
  *
  * **What it measures.** Against its own lane wash, every block separates by
  * ΔE 30+ (OKLab ×100) — the separation the fill is for. Against each other,
@@ -134,7 +134,7 @@ export function isCategoryColor(value: unknown): value is CategoryColor {
  * groups and the word names. Nothing here asks a reader to tell two hues apart
  * to know what a block is.
  */
-export const CATEGORY_BLOCK_STEPS: Readonly<Record<CategoryColor, ColorSteps>> = {
+export const ACTIVITY_TYPE_BLOCK_STEPS: Readonly<Record<ActivityTypeColor, ColorSteps>> = {
   blue: { light: '#1e6ecb', dark: '#3b89e7' },
   orange: { light: '#e86631', dark: '#e1602e' },
   aqua: { light: '#00a16e', dark: '#199e70' },
@@ -164,7 +164,7 @@ export const BLOCK_INK = {
  * light (yellow, magenta) each need, and forcing one answer on both is what
  * turned yellow brown.
  */
-export const CATEGORY_BLOCK_INK: Readonly<Record<CategoryColor, ColorSteps>> = {
+export const ACTIVITY_TYPE_BLOCK_INK: Readonly<Record<ActivityTypeColor, ColorSteps>> = {
   blue: { light: BLOCK_INK.light, dark: BLOCK_INK.dark },
   orange: { light: BLOCK_INK.dark, dark: BLOCK_INK.dark },
   aqua: { light: BLOCK_INK.dark, dark: BLOCK_INK.dark },

@@ -65,7 +65,7 @@ const LIST_LIMIT = 120;
 
 export function renderSnapshot(input: SnapshotInput): string {
   const lines: string[] = [];
-  const names = new Map(input.configuration?.categories.map((c) => [c.id, c.name]) ?? []);
+  const names = new Map(input.configuration?.activityTypes.map((c) => [c.id, c.name]) ?? []);
   const titles = new Map(input.tasks.map((task) => [task.id, task.title]));
 
   lines.push('# The schedule, as the user is looking at it');
@@ -117,19 +117,19 @@ function localDateOf(iso: string, zone: string): string {
 function activityTypes({ configuration, locale }: SnapshotInput): string[] {
   if (configuration === null) return [];
 
-  return configuration.categories.map((category) => {
+  return configuration.activityTypes.map((activityType) => {
     // The hours are what decides whether a task can be scheduled at all, so
     // they travel with the type rather than in a section of their own — "no
     // window on a Saturday" is the answer to half the questions this gets.
     // They are also the *whole* set, because `SetAvailabilityWindows` replaces
     // a set rather than adding to it: a caller working from a partial list
     // would delete the part it could not see.
-    const windows = hoursFor(configuration, category.id, null, locale);
+    const windows = hoursFor(configuration, activityType.id, null, locale);
     const cooldown =
-      category.defaultCooldownMin > 0 ? `, ${category.defaultCooldownMin}m cooldown` : '';
+      activityType.defaultCooldownMin > 0 ? `, ${activityType.defaultCooldownMin}m cooldown` : '';
 
     return (
-      `- ${category.id} "${category.name}"${cooldown} — ` +
+      `- ${activityType.id} "${activityType.name}"${cooldown} — ` +
       (windows === null ? 'no hours set, so nothing is ever placed in it' : windows)
     );
   });
@@ -138,7 +138,7 @@ function activityTypes({ configuration, locale }: SnapshotInput): string[] {
 /** One address's whole set, in reading order, or `null` when it is empty. */
 function hoursFor(
   configuration: CalendarConfiguration,
-  categoryId: string,
+  activityTypeId: string,
   weekTypeOverrideId: string | null,
   locale: string,
 ): string | null {
@@ -147,7 +147,8 @@ function hoursFor(
   const windows = configuration.availability
     .filter(
       (window) =>
-        window.categoryId === categoryId && window.weekTypeOverrideId === weekTypeOverrideId,
+        window.activityTypeId === activityTypeId &&
+        window.weekTypeOverrideId === weekTypeOverrideId,
     )
     .sort((a, b) => a.weekday - b.weekday || a.startMin - b.startMin)
     .map(
@@ -177,10 +178,10 @@ function specialWeeks({ configuration, locale }: SnapshotInput): string[] {
       `- ${override.id} "${override.name}" from ${override.startDate} up to but not ` +
       `including ${override.endDate}. During it these hours replace the ordinary ones:`;
 
-    const sets = configuration.categories.map((category) => {
-      const windows = hoursFor(configuration, category.id, override.id, locale);
+    const sets = configuration.activityTypes.map((activityType) => {
+      const windows = hoursFor(configuration, activityType.id, override.id, locale);
       return (
-        `  - "${category.name}": ` +
+        `  - "${activityType.name}": ` +
         (windows ?? 'nothing, so it is not available at all during this week')
       );
     });
@@ -221,7 +222,7 @@ function placements({ schedule, zone }: SnapshotInput, names: Map<string, string
       (block: ScheduledBlock) =>
         `- ${stamp(block.start, zone)}–${formatMinuteOfDay(minuteOfDay(block.end, zone))} ` +
         `"${block.title}" (task ${block.taskId}` +
-        `${block.categoryId === null ? '' : `, ${names.get(block.categoryId) ?? 'unknown type'}`}` +
+        `${block.activityTypeId === null ? '' : `, ${names.get(block.activityTypeId) ?? 'unknown type'}`}` +
         `${block.cooldownMin > 0 ? `, ${block.cooldownMin}m cooldown after` : ''})`,
     );
 }
@@ -258,8 +259,8 @@ function describeTask(
 ): string {
   const facts: string[] = [];
 
-  if (task.effectiveCategoryId !== null) {
-    facts.push(names.get(task.effectiveCategoryId) ?? 'unknown type');
+  if (task.effectiveActivityTypeId !== null) {
+    facts.push(names.get(task.effectiveActivityTypeId) ?? 'unknown type');
   }
 
   facts.push(task.estimatedDurationMin === null ? 'no estimate' : `${task.estimatedDurationMin}m`);
@@ -314,7 +315,7 @@ function unusable({ schedule }: SnapshotInput, titles: Map<string, string>): str
   if (schedule === null) return [];
 
   const reasons: Record<string, string> = {
-    no_category: 'has no activity type, so there are no hours it may be placed in',
+    no_activity_type: 'has no activity type, so there are no hours it may be placed in',
     no_duration: 'has no estimate, so there is nothing to place',
   };
 
@@ -340,7 +341,7 @@ function capacity({ capacity: cells }: SnapshotInput, names: Map<string, string>
       cell.utilization === null ? 'no hours at all' : `${Math.round(cell.utilization * 100)}% used`;
 
     return (
-      `- ${names.get(cell.categoryId) ?? cell.categoryId}, week of ${cell.weekStart}: ` +
+      `- ${names.get(cell.activityTypeId) ?? cell.activityTypeId}, week of ${cell.weekStart}: ` +
       `${used} (${cell.status}), ${cell.supplyMin}m available against ${cell.demandMin}m of work`
     );
   });

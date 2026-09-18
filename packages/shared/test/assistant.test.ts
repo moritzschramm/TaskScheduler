@@ -32,9 +32,9 @@ describe('the tools offered to a model', () => {
     // The line is a screen: the week, the work, and the hours the work may
     // happen in are all things somebody describes in sentences every day.
     for (const on of [
-      'CreateCategory',
-      'EditCategory',
-      'DeleteCategory',
+      'CreateActivityType',
+      'EditActivityType',
+      'DeleteActivityType',
       'SetAvailabilityWindows',
       'CreateWeekTypeOverride',
       'EditWeekTypeOverride',

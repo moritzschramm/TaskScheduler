@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CATEGORY_COLORS } from './palette.js';
+import { ACTIVITY_TYPE_COLORS } from './palette.js';
 import {
   addAppointmentParams,
   addUnavailabilityParams,
@@ -9,14 +9,14 @@ import {
   completeTaskParams,
   configureCalendarParams,
   createCalendarParams,
-  createCategoryParams,
+  createActivityTypeParams,
   createTaskParams,
   createWeekTypeOverrideParams,
   deferTaskParams,
-  deleteCategoryParams,
+  deleteActivityTypeParams,
   deleteWeekTypeOverrideParams,
   editAppointmentParams,
-  editCategoryParams,
+  editActivityTypeParams,
   editTaskParams,
   editWeekTypeOverrideParams,
   extendTaskParams,
@@ -106,9 +106,9 @@ export const commandRequestSchema = z.discriminatedUnion('type', [
   request('CreateCalendar', createCalendarParams),
   request('ConfigureCalendar', configureCalendarParams),
   request('SetCalendarWindows', setCalendarWindowsParams),
-  request('CreateCategory', createCategoryParams),
-  request('EditCategory', editCategoryParams),
-  request('DeleteCategory', deleteCategoryParams),
+  request('CreateActivityType', createActivityTypeParams),
+  request('EditActivityType', editActivityTypeParams),
+  request('DeleteActivityType', deleteActivityTypeParams),
   request('SetAvailabilityWindows', setAvailabilityWindowsParams),
   request('CreateWeekTypeOverride', createWeekTypeOverrideParams),
   request('EditWeekTypeOverride', editWeekTypeOverrideParams),
@@ -134,7 +134,7 @@ export const scheduledBlockSchema = z.object({
   occurrenceId: uuid,
   taskId: uuid,
   title: z.string(),
-  categoryId: uuid.nullable(),
+  activityTypeId: uuid.nullable(),
   start: instant,
   end: instant,
   /** Non-compressible gap reserved after the block (§6.2 rule 3). */
@@ -190,7 +190,7 @@ export const diagnosticSchema = z.object({
 
 export const capacityCellSchema = z.object({
   calendarId: uuid,
-  categoryId: uuid,
+  activityTypeId: uuid,
   weekStart: civilDate,
   supplyMin: z.int().nonnegative(),
   demandMin: z.int().nonnegative(),
@@ -207,13 +207,13 @@ export const capacityCellSchema = z.object({
  * A task the solver was never offered, and why (§6.7).
  *
  * Distinct from a diagnostic: a diagnostic explains a scheduling outcome, this
- * explains an absence. A task with no category or no estimate is not competing
+ * explains an absence. A task with no activity type or no estimate is not competing
  * for time badly — it is not competing at all, and the fix is data entry.
  */
 export const unschedulableSchema = z.object({
   taskId: uuid,
   occurrenceId: uuid,
-  reason: z.enum(['no_category', 'no_duration']),
+  reason: z.enum(['no_activity_type', 'no_duration']),
 });
 
 export const scheduleSchema = z.object({
@@ -241,12 +241,12 @@ export const calendarListSchema = z.object({ calendars: z.array(calendarSummaryS
  * (spec §4.3, §9.1).
  *
  * One response rather than five endpoints because the pieces are only
- * meaningful together: an availability window names a category and a week-type
+ * meaningful together: an availability window names an activity type and a week-type
  * override, and a screen that fetched them separately would render ids until
  * the last request landed.
  *
  * The whole document is the tenant's configuration as it bears on **one**
- * calendar. Categories are tenant-scoped and so appear whole; windows and
+ * calendar. Activity types are tenant-scoped and so appear whole; windows and
  * overrides are per-calendar and are filtered to this one.
  */
 export const weekdayRuleSchema = z.object({
@@ -264,13 +264,13 @@ export const calendarWindowSchema = weekdayRuleSchema.extend({
 
 export const availabilityWindowSchema = weekdayRuleSchema.extend({
   id: uuid,
-  categoryId: uuid,
+  activityTypeId: uuid,
   /** `null` = part of the default set; set = part of that override's set. */
   weekTypeOverrideId: uuid.nullable(),
   focusLevel: z.int().min(1).max(5).nullable(),
 });
 
-export const categorySchema = z.object({
+export const activityTypeSchema = z.object({
   id: uuid,
   name: z.string(),
   defaultCooldownMin: z.int().nonnegative(),
@@ -281,7 +281,7 @@ export const categorySchema = z.object({
    * activity type gets none, because the eight slots do not cycle. It draws in
    * the neutral shade every open hour used to have.
    */
-  color: z.enum(CATEGORY_COLORS).nullable(),
+  color: z.enum(ACTIVITY_TYPE_COLORS).nullable(),
   version: z.int().positive(),
 });
 
@@ -303,7 +303,7 @@ export const calendarConfigurationSchema = z.object({
   }),
   /** Both of §9.1's windows, distinguished by `kind`. */
   windows: z.array(calendarWindowSchema),
-  categories: z.array(categorySchema),
+  activityTypes: z.array(activityTypeSchema),
   availability: z.array(availabilityWindowSchema),
   weekTypeOverrides: z.array(weekTypeOverrideSchema),
 });
@@ -311,7 +311,7 @@ export const calendarConfigurationSchema = z.object({
 export type WeekdayRule = z.infer<typeof weekdayRuleSchema>;
 export type CalendarWindow = z.infer<typeof calendarWindowSchema>;
 export type AvailabilityWindow = z.infer<typeof availabilityWindowSchema>;
-export type Category = z.infer<typeof categorySchema>;
+export type ActivityType = z.infer<typeof activityTypeSchema>;
 export type WeekTypeOverrideEntry = z.infer<typeof weekTypeOverrideSchema>;
 export type CalendarConfiguration = z.infer<typeof calendarConfigurationSchema>;
 
@@ -328,7 +328,7 @@ export const completedBlockSchema = z.object({
   occurrenceId: uuid,
   taskId: uuid,
   title: z.string(),
-  categoryId: uuid.nullable(),
+  activityTypeId: uuid.nullable(),
   /** Where it sat when it was finished — half-open, like every interval. */
   start: instant,
   end: instant,
@@ -344,7 +344,7 @@ export const scheduleResponseSchema = z.object({
   /** What was done, still drawn where it was done. */
   completedBlocks: z.array(completedBlockSchema),
   /**
-   * Utilization per (category, week), from the very same solve (§6.6).
+   * Utilization per (activity type, week), from the very same solve (§6.6).
    *
    * Carried here rather than fetched beside it. Capacity is a reading *of* a
    * schedule — supply against the demand that was placed in it — so computing
@@ -388,8 +388,8 @@ export const taskNodeSchema = z.object({
   /** The optimistic lock an editor sends back with its patch (spec §5.4). */
   version: z.int().positive(),
   estimatedDurationMin: z.int().nullable(),
-  ownCategoryId: uuid.nullable(),
-  effectiveCategoryId: uuid.nullable(),
+  ownActivityTypeId: uuid.nullable(),
+  effectiveActivityTypeId: uuid.nullable(),
   ownPriority: z.int().nullable(),
   effectivePriority: z.int().nullable(),
   ownDueDate: instant.nullable(),
@@ -531,9 +531,9 @@ export const attentionItemSchema = z.object({
  * Something the command brought into existence.
  *
  * Ids are minted by Postgres (`uuidv7()`, §5.1), so a client that has just
- * created a category cannot know its id — and it needs one immediately, to hang
+ * created an activity type cannot know its id — and it needs one immediately, to hang
  * availability windows off. Re-reading and matching on the name would be a
- * guess: two categories can be renamed into and out of each other between two
+ * guess: two activity types can be renamed into and out of each other between two
  * requests, and the client would attach windows to the wrong one.
  *
  * `entity` is the API's vocabulary rather than the schema's table names, for
@@ -546,7 +546,7 @@ export const createdEntitySchema = z.object({
     'appointment',
     'calendar',
     'calendar_window',
-    'category',
+    'activity_type',
     'availability_window',
     'week_type_override',
     'notification',

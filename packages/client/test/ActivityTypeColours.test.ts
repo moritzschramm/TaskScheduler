@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import CategoriesSection from '@/components/settings/CategoriesSection.vue';
+import ActivityTypesSection from '@/components/settings/ActivityTypesSection.vue';
 import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
 
 /**
@@ -11,13 +11,13 @@ import type { CalendarConfiguration, CommandRequest } from '@ambitime/shared';
  * on the new one, "take the colour away" on an existing one — and only the
  * first of those is something anybody wants.
  */
-function section(categories: CalendarConfiguration['categories']) {
+function section(activityTypes: CalendarConfiguration['activityTypes']) {
   const submit = vi.fn<(request: CommandRequest) => Promise<boolean>>().mockResolvedValue(true);
 
-  const wrapper = mount(CategoriesSection, {
+  const wrapper = mount(ActivityTypesSection, {
     props: {
       // The section reads nothing else off the configuration.
-      configuration: { categories } as CalendarConfiguration,
+      configuration: { activityTypes } as CalendarConfiguration,
       submit,
     },
   });
@@ -36,7 +36,7 @@ const work = {
 describe('picking a colour for an activity type', () => {
   it('offers no way to take one away', () => {
     const options = section([work])
-      .wrapper.find('[data-testid="category-color"]')
+      .wrapper.find('[data-testid="activity-type-color"]')
       .findAll('option')
       .map((option) => option.attributes('value'));
 
@@ -48,7 +48,7 @@ describe('picking a colour for an activity type', () => {
     // A type made before every one of them had a colour, or one an undo put
     // back that way. The select has to be able to show its state.
     const { wrapper } = section([{ ...work, color: null }]);
-    const blank = wrapper.find('[data-testid="category-color"]').findAll('option')[0]!;
+    const blank = wrapper.find('[data-testid="activity-type-color"]').findAll('option')[0]!;
 
     expect(blank.attributes('value')).toBe('');
     expect(blank.attributes('disabled')).toBeDefined();
@@ -57,7 +57,7 @@ describe('picking a colour for an activity type', () => {
   it('leaves a colourless type alone until somebody picks one', async () => {
     const { wrapper, submit } = section([{ ...work, color: null }]);
 
-    await wrapper.find('[data-testid="category-name"]').setValue('Work things');
+    await wrapper.find('[data-testid="activity-type-name"]').setValue('Work things');
     await new Promise((resolve) => setTimeout(resolve, 600));
 
     // The patch carries the name and not a `color: null` that would rewrite
@@ -68,7 +68,7 @@ describe('picking a colour for an activity type', () => {
 
   it('says what the blank on the new-type row actually does', () => {
     const { wrapper } = section([work]);
-    const blank = wrapper.find('[data-testid="new-category-color"]').findAll('option')[0]!;
+    const blank = wrapper.find('[data-testid="new-activity-type-color"]').findAll('option')[0]!;
 
     // It has never meant "no colour": the server takes the next free slot,
     // which is how the first three types end up in the three hues that

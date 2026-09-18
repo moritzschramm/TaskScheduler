@@ -4,7 +4,7 @@ import { readCalendarTaskTree, readTaskSubtree } from '../src/tasks/task-tree.js
 import type { TaskTreeNode } from '../src/tasks/task-tree.js';
 import type { DatabaseHandle } from '../src/db/client.js';
 import { addMember, createWorkTenant, registerUser } from './support/fixtures.js';
-import { createCalendar, createCategory, createTask } from './support/scheduling-fixtures.js';
+import { createCalendar, createActivityType, createTask } from './support/scheduling-fixtures.js';
 import { resetDomainTables, setupTestDatabase } from './support/database.js';
 
 /**
@@ -17,8 +17,8 @@ describe('task tree read', () => {
   let tenantId: string;
   let userId: string;
   let calendarId: string;
-  let workCategory: string;
-  let homeCategory: string;
+  let workActivityType: string;
+  let homeActivityType: string;
 
   // Root ─ Design ─ Wireframes
   //      │        └ Mockups
@@ -50,15 +50,15 @@ describe('task tree read', () => {
     tenantId = await createWorkTenant(handle.db, 'Work');
     await addMember(handle.db, tenantId, userId, 'owner');
     calendarId = await createCalendar(handle.db, tenantId, userId);
-    workCategory = await createCategory(handle.db, tenantId, 'Work', 15);
-    homeCategory = await createCategory(handle.db, tenantId, 'Home', 5);
+    workActivityType = await createActivityType(handle.db, tenantId, 'Work', 15);
+    homeActivityType = await createActivityType(handle.db, tenantId, 'Home', 5);
 
     const base = { tenantId, calendarId, ownerId: userId };
 
     root = await createTask(handle.db, {
       ...base,
       title: 'Launch',
-      categoryId: workCategory,
+      activityTypeId: workActivityType,
       priority: 3,
       dueDate: '2026-05-01T12:00:00Z',
       dueKind: 'hard',
@@ -86,7 +86,7 @@ describe('task tree read', () => {
       ...base,
       title: 'Build',
       parentId: root,
-      categoryId: homeCategory,
+      activityTypeId: homeActivityType,
     });
     api = await createTask(handle.db, {
       ...base,
@@ -136,7 +136,7 @@ describe('task tree read', () => {
     const w = byId(nodes, wireframes);
     expect(w.ownPriority).toBeNull();
     expect(w.effectivePriority).toBe(3);
-    expect(w.effectiveCategoryId).toBe(workCategory);
+    expect(w.effectiveActivityTypeId).toBe(workActivityType);
     expect(w.effectiveFocusLevel).toBe(4);
     expect(w.effectiveCooldownOverrideMin).toBe(20);
     expect(w.effectiveDueDate).toContain('2026-05-01');
@@ -147,9 +147,9 @@ describe('task tree read', () => {
     const nodes = await readTree();
 
     // Build re-categorises its branch; API inherits Home, not the root's Work.
-    expect(byId(nodes, build).effectiveCategoryId).toBe(homeCategory);
-    expect(byId(nodes, api).effectiveCategoryId).toBe(homeCategory);
-    expect(byId(nodes, wireframes).effectiveCategoryId).toBe(workCategory);
+    expect(byId(nodes, build).effectiveActivityTypeId).toBe(homeActivityType);
+    expect(byId(nodes, api).effectiveActivityTypeId).toBe(homeActivityType);
+    expect(byId(nodes, wireframes).effectiveActivityTypeId).toBe(workActivityType);
   });
 
   it('keeps own and effective values distinguishable', async () => {
@@ -159,8 +159,8 @@ describe('task tree read', () => {
     const m = byId(nodes, mockups);
     expect(m.ownPriority).toBe(1);
     expect(m.effectivePriority).toBe(1);
-    expect(m.ownCategoryId).toBeNull();
-    expect(m.effectiveCategoryId).toBe(workCategory);
+    expect(m.ownActivityTypeId).toBeNull();
+    expect(m.effectiveActivityTypeId).toBe(workActivityType);
   });
 
   it('inherits due date and due kind together', async () => {

@@ -43,7 +43,7 @@ const props = withDefaults(
     fixedBlocks?: readonly FixedBlock[];
     completedBlocks?: readonly CompletedBlock[];
     /** Read for one thing only: which colour each activity type draws in. */
-    categories?: CalendarConfiguration['categories'];
+    activityTypes?: CalendarConfiguration['activityTypes'];
     specialWeeks?: readonly WeekTypeOverrideEntry[];
     today?: CivilDate | null;
     /** The last day anything can be scheduled on; past it, empty means nothing. */
@@ -54,7 +54,7 @@ const props = withDefaults(
     blocks: () => [],
     fixedBlocks: () => [],
     completedBlocks: () => [],
-    categories: () => [],
+    activityTypes: () => [],
     specialWeeks: () => [],
     today: null,
     horizonEnd: null,
@@ -79,12 +79,14 @@ interface DayEntry {
 
 const headings = computed(() => weekdayHeadings(props.locale, props.firstDayOfWeek));
 
-const categoryById = computed(
-  () => new Map(props.categories.map((category) => [category.id, category])),
+const activityTypeById = computed(
+  () => new Map(props.activityTypes.map((activityType) => [activityType.id, activityType])),
 );
 
-function colorOf(categoryId: string | null): string | null {
-  return categoryId === null ? null : (categoryById.value.get(categoryId)?.color ?? null);
+function colorOf(activityTypeId: string | null): string | null {
+  return activityTypeId === null
+    ? null
+    : (activityTypeById.value.get(activityTypeId)?.color ?? null);
 }
 
 /**
@@ -111,7 +113,7 @@ const byDay = computed(() => {
       key: `t-${block.occurrenceId}`,
       title: block.title,
       kind: 'task',
-      color: colorOf(block.categoryId),
+      color: colorOf(block.activityTypeId),
     });
   }
   for (const block of props.completedBlocks) {
@@ -119,7 +121,7 @@ const byDay = computed(() => {
       key: `c-${block.occurrenceId}`,
       title: block.title,
       kind: 'completed',
-      color: colorOf(block.categoryId),
+      color: colorOf(block.activityTypeId),
     });
   }
   for (const block of props.fixedBlocks) {
@@ -246,7 +248,7 @@ function classesFor(entry: DayEntry): string {
  */
 function styleFor(entry: DayEntry): Record<string, string> {
   if (entry.color === null) return {};
-  const hue = `var(--category-block-${entry.color})`;
+  const hue = `var(--activity-type-block-${entry.color})`;
   const strength = entry.kind === 'completed' ? '8%' : '20%';
   return { backgroundColor: `color-mix(in oklab, ${hue} ${strength}, transparent)` };
 }

@@ -8,7 +8,7 @@ true rather than what would be reassuring.
 
 Two things in this database cannot be recomputed:
 
-- **Source state** — tasks, appointments, calendars, categories, windows,
+- **Source state** — tasks, appointments, calendars, activity types, windows,
   settings. Everything a person typed.
 - **The command log** — the append-only record of what was done, and the row
   images that make undo possible (§12).
@@ -134,7 +134,7 @@ For a development volume, recreating it is faster and surer:
 ## Tests never touch the running database
 
 `pnpm test` truncates `users` between cases, and `users` cascades to every
-tenant, planner, category and task below it. It therefore runs against
+tenant, planner, activity type and task below it. It therefore runs against
 `ambitime_test`, which it creates on demand, and **never** falls back to
 `DATABASE_URL` — that variable names the database the application is running
 on, and the fallback deleted real data twice before it was removed. Setting

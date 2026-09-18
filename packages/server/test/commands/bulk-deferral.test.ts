@@ -40,7 +40,7 @@ describe('PostponeRestOfDay', () => {
         params: {
           calendarId: world.calendarId,
           title,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           estimatedDurationMin: 120,
         },
       });
@@ -183,7 +183,7 @@ describe('ClearWeek', () => {
         params: {
           calendarId: world.calendarId,
           title,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           estimatedDurationMin: 120,
         },
       });
@@ -211,7 +211,7 @@ describe('ClearWeek', () => {
       params: {
         calendarId: narrow.calendarId,
         title: 'Weekly ritual',
-        categoryId: narrow.categoryId,
+        activityTypeId: narrow.activityTypeId,
         estimatedDurationMin: 120,
       },
     });
@@ -269,7 +269,7 @@ describe('BlockOutDay', () => {
         params: {
           calendarId: world.calendarId,
           title,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           estimatedDurationMin: 120,
         },
       });

@@ -88,7 +88,7 @@ describe('bringing a calendar up to date', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Exercise',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         recurrence: { period: 'week', count: 1 },
       },
@@ -131,7 +131,7 @@ describe('bringing a calendar up to date', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Exercise',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         recurrence: { period: 'week', count: 2 },
       },

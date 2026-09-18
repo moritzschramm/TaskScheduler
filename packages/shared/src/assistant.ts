@@ -7,14 +7,14 @@ import {
   clearFloorParams,
   clearWeekParams,
   completeTaskParams,
-  createCategoryParams,
+  createActivityTypeParams,
   createTaskParams,
   createWeekTypeOverrideParams,
   deferTaskParams,
-  deleteCategoryParams,
+  deleteActivityTypeParams,
   deleteWeekTypeOverrideParams,
   editAppointmentParams,
-  editCategoryParams,
+  editActivityTypeParams,
   editTaskParams,
   editWeekTypeOverrideParams,
   extendTaskParams,
@@ -118,9 +118,9 @@ export const ASSISTANT_COMMANDS = [
   'PostponeRestOfDay',
   'BlockOutDay',
   'ClearWeek',
-  'CreateCategory',
-  'EditCategory',
-  'DeleteCategory',
+  'CreateActivityType',
+  'EditActivityType',
+  'DeleteActivityType',
   'SetAvailabilityWindows',
   'CreateWeekTypeOverride',
   'EditWeekTypeOverride',
@@ -179,9 +179,9 @@ const PARAMS: Readonly<Record<AssistantCommandType, z.ZodObject>> = {
   PostponeRestOfDay: postponeRestOfDayParams,
   BlockOutDay: blockOutDayParams,
   ClearWeek: clearWeekParams,
-  CreateCategory: createCategoryParams,
-  EditCategory: editCategoryParams,
-  DeleteCategory: deleteCategoryParams,
+  CreateActivityType: createActivityTypeParams,
+  EditActivityType: editActivityTypeParams,
+  DeleteActivityType: deleteActivityTypeParams,
   SetAvailabilityWindows: setAvailabilityWindowsParams,
   CreateWeekTypeOverride: createWeekTypeOverrideParams,
   EditWeekTypeOverride: editWeekTypeOverrideParams,
@@ -215,7 +215,7 @@ const DESCRIPTIONS: Readonly<Record<AssistantCommandType, string>> = {
     'Add a new task. The scheduler decides when it happens, so do not ask for a time — ' +
     'use preferredRange (minutes after local midnight) to say when it would suit, and ' +
     'dueDate with kind "hard" only when missing the date is a real failure. ' +
-    'estimatedDurationMin and categoryId are what make a task schedulable: a task with ' +
+    'estimatedDurationMin and activityTypeId are what make a task schedulable: a task with ' +
     'neither is never placed, so ask for a duration if the user did not give one. ' +
     'priority runs 1 to 5, 5 being the most important; focusLevel runs 1 (shallow) to 5 (deep). ' +
     'Use recurrence for standing demand ("three runs a week"), never for a fixed weekly meeting.',
@@ -270,13 +270,13 @@ const DESCRIPTIONS: Readonly<Record<AssistantCommandType, string>> = {
     'until somebody takes the block away. Existing appointments are left alone and reported.',
   ClearWeek:
     'Declare a whole week unavailable — the holiday action. Any date inside the week will do.',
-  CreateCategory:
+  CreateActivityType:
     'Add a kind of activity — work, exercise, errands. A new type has no hours until ' +
     'SetAvailabilityWindows gives it some, and until then nothing of that kind is ever ' +
     'scheduled, so offer to set them in the same breath. defaultCooldownMin is the gap ' +
     'reserved after every task of this kind unless the task overrides it.',
-  EditCategory: 'Rename an activity type, or change its colour or its default cooldown.',
-  DeleteCategory:
+  EditActivityType: 'Rename an activity type, or change its colour or its default cooldown.',
+  DeleteActivityType:
     'Remove an activity type. Refused while any task still belongs to it — move those ' +
     'first. Its hours go with it.',
   SetAvailabilityWindows:

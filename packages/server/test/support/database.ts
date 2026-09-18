@@ -15,7 +15,7 @@ import { runMigrations } from '../../src/db/migrate.js';
  * That variable names the database the application is *running* on, and these
  * tests truncate `users` between cases — so falling back to it meant
  * `pnpm test` silently deleting the account you had just been using, along
- * with the planner, categories and hours behind it. The fallback was there to
+ * with the planner, activity types and hours behind it. The fallback was there to
  * save a line of configuration and it cost real data twice.
  *
  * `TEST_DATABASE_URL` is still honoured, because a caller who names a database

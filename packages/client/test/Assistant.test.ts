@@ -36,7 +36,7 @@ vi.mock('@/lib/workspace', () => ({
     configuration: ref(null),
     view: ref(null),
     tasks: ref([{ id: TASK, title: 'Invoices' }]),
-    categories: ref([]),
+    activityTypes: ref([]),
     backlog: ref([]),
     capacity: ref([]),
     days: ref([]),

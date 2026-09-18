@@ -22,17 +22,22 @@ import { parseCivilDate, weekDays } from '@/lib/time';
 const BERLIN = 'Europe/Berlin';
 const WEEK = weekDays(parseCivilDate('2026-03-23'), 1);
 
-const categories = [
+const activityTypes = [
   { id: 'cat-work', name: 'Work', defaultCooldownMin: 0, color: 'blue', version: 1 },
   { id: 'cat-old', name: 'Legacy', defaultCooldownMin: 0, color: null, version: 1 },
-] as CalendarConfiguration['categories'];
+] as CalendarConfiguration['activityTypes'];
 
-function task(id: string, categoryId: string, fromHour: number, toHour: number): ScheduledBlock {
+function task(
+  id: string,
+  activityTypeId: string,
+  fromHour: number,
+  toHour: number,
+): ScheduledBlock {
   return {
     occurrenceId: `occ-${id}`,
     taskId: `task-${id}`,
     title: id,
-    categoryId,
+    activityTypeId,
     start: `2026-03-23T${String(fromHour).padStart(2, '0')}:00:00.000Z`,
     end: `2026-03-23T${String(toHour).padStart(2, '0')}:00:00.000Z`,
     cooldownMin: 0,
@@ -57,7 +62,7 @@ const wholeDay: FixedBlock = {
 
 function week(blocks: ScheduledBlock[] = [], fixedBlocks: FixedBlock[] = []) {
   return mount(WeekGrid, {
-    props: { days: WEEK, timeZone: BERLIN, blocks, fixedBlocks, categories },
+    props: { days: WEEK, timeZone: BERLIN, blocks, fixedBlocks, activityTypes },
   });
 }
 
@@ -67,13 +72,13 @@ describe('where one block stops and the next begins', () => {
       .find('[data-testid="block-task"]')
       .attributes('style');
 
-    expect(style).toContain('background-color: var(--category-block-blue)');
+    expect(style).toContain('background-color: var(--activity-type-block-blue)');
     // The border is the fill stepped down towards the page's deep neutral.
     // Written out rather than matched loosely: the mix ratio is the measured
     // part — 60% is ΔE 13 or better on all sixteen steps, and a later edit that
     // softened it would pass a `toContain('color-mix')`.
     expect(style).toContain(
-      'border-color: color-mix(in oklab, var(--category-block-blue) 60%, var(--block-edge))',
+      'border-color: color-mix(in oklab, var(--activity-type-block-blue) 60%, var(--block-edge))',
     );
   });
 

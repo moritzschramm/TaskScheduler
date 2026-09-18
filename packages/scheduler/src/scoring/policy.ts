@@ -19,7 +19,7 @@ export interface OrderContext {
   now: Instant;
   horizon: Interval;
   /**
-   * Total minutes of window this schedulable's category has in the horizon.
+   * Total minutes of window this schedulable's activity type has in the horizon.
    * Drives the most-constrained-first term.
    */
   feasibleWindowMinutes: number;

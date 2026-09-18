@@ -82,7 +82,7 @@ export function solve(context: ScheduleContext, options: SolveOptions = {}): Sol
       },
     }));
 
-  const feasibleMinutes = feasibleMinutesByCategory(windows);
+  const feasibleMinutes = feasibleMinutesByActivityType(windows);
 
   // Stage 1 — placement order: descending score, then the spec's tie-break of
   // earlier due date, higher priority, smaller id (§6.5).
@@ -95,7 +95,7 @@ export function solve(context: ScheduleContext, options: SolveOptions = {}): Sol
             schedulable: unit.composite,
             now: context.now,
             horizon,
-            feasibleWindowMinutes: feasibleMinutes.get(categoryKey(unit.composite)) ?? 0,
+            feasibleWindowMinutes: feasibleMinutes.get(activityTypeKey(unit.composite)) ?? 0,
             config,
           }),
         ),
@@ -170,14 +170,14 @@ function resolveHorizon(
   return computeHardHorizon(context.now, timeZone, config);
 }
 
-function categoryKey(schedulable: Schedulable): string {
-  return `${schedulable.calendarId} ${schedulable.categoryId}`;
+function activityTypeKey(schedulable: Schedulable): string {
+  return `${schedulable.calendarId} ${schedulable.activityTypeId}`;
 }
 
-function feasibleMinutesByCategory(windows: readonly ResolvedWindow[]): Map<string, number> {
+function feasibleMinutesByActivityType(windows: readonly ResolvedWindow[]): Map<string, number> {
   const totals = new Map<string, number>();
   for (const window of windows) {
-    const key = `${window.calendarId} ${window.categoryId}`;
+    const key = `${window.calendarId} ${window.activityTypeId}`;
     totals.set(key, (totals.get(key) ?? 0) + (window.interval.end - window.interval.start));
   }
   return totals;
@@ -209,7 +209,11 @@ function chooseSlot(
   let best: ScoredSlot | undefined;
   let bestKey: SlotKey | undefined;
 
-  for (const window of eligibleWindows(windows, schedulable.calendarId, schedulable.categoryId)) {
+  for (const window of eligibleWindows(
+    windows,
+    schedulable.calendarId,
+    schedulable.activityTypeId,
+  )) {
     const within = occupiedWithin(window.interval, occupied);
     const occupiedIntervals = within.map((block) => block.interval);
 
@@ -254,7 +258,7 @@ function compareSlotKeys(a: SlotKey, b: SlotKey): number {
 /**
  * Names why a unit could not be placed (spec §6.7).
  *
- * Distinguishing these matters: "this category has no windows", "the week is
+ * Distinguishing these matters: "this activity type has no windows", "the week is
  * full" and "no window is long enough to hold this sequence" call for entirely
  * different responses from the user.
  */
@@ -267,7 +271,7 @@ function diagnoseInfeasibility(
   if (unit.blocked !== undefined) return unit.blocked;
 
   const { composite } = unit;
-  const candidates = eligibleWindows(windows, composite.calendarId, composite.categoryId);
+  const candidates = eligibleWindows(windows, composite.calendarId, composite.activityTypeId);
   if (candidates.length === 0) return 'no_feasible_window';
 
   if (composite.manualFloor !== undefined && composite.manualFloor >= horizon.end) {
@@ -283,7 +287,7 @@ function diagnoseInfeasibility(
   }
 
   // §6.6's contiguity case, stated as an infeasibility reason (§6.7): the
-  // category may hold plenty of free minutes and still have nowhere to put an
+  // activity type may hold plenty of free minutes and still have nowhere to put an
   // uninterruptible block, because they do not come in one piece. Free spans
   // are carved per window, so a run never crosses a window boundary — rule 5
   // would not let the block cross one either.
@@ -391,7 +395,7 @@ function backlogMessage(schedulable: Schedulable, entry: BacklogEntry): string {
 
   switch (entry.reason) {
     case 'no_feasible_window':
-      return `${subject} was ${where}: category ${schedulable.categoryId} has no availability window in this horizon.`;
+      return `${subject} was ${where}: activity type ${schedulable.activityTypeId} has no availability window in this horizon.`;
     case 'hard_due_date_unreachable':
       return `${subject} was ${where}: its hard due date falls before any window it could use.`;
     case 'manual_floor_beyond_horizon':
@@ -399,8 +403,8 @@ function backlogMessage(schedulable: Schedulable, entry: BacklogEntry): string {
     case 'no_contiguous_span':
       return `${subject} was ${where}: no window is long enough to hold the whole uninterruptible block in one piece.`;
     case 'sequence_members_incompatible':
-      return `${subject} was ${where}: its members belong to different categories or calendars, so no single window can hold them.`;
+      return `${subject} was ${where}: its members belong to different activity types or calendars, so no single window can hold them.`;
     default:
-      return `${subject} was ${where}: no window in its category has enough remaining free time.`;
+      return `${subject} was ${where}: no window in its activity type has enough remaining free time.`;
   }
 }

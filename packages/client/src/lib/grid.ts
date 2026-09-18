@@ -58,7 +58,7 @@ export interface GridBlock {
    * Null for appointments and unavailability, which have no activity type at
    * all (§4.5): what a meeting costs is a property of the meeting.
    */
-  categoryId: string | null;
+  activityTypeId: string | null;
   taskId?: string;
   appointmentId?: string;
   /** True when the block began before this day, or runs past its end. */
@@ -137,9 +137,9 @@ export function dragOffsetMinutes(deltaPixels: number): number {
  * indistinguishable from a week that could not have anything placed in it — and
  * those two need very different things from the user.
  *
- * Every category's windows go into one union, because the question the grid
+ * Every activity type's windows go into one union, because the question the grid
  * asks is "could anything be scheduled here", not "could this particular kind
- * of thing". Drawing them per category would also shade an overlap twice, and
+ * of thing". Drawing them per activity type would also shade an overlap twice, and
  * with a translucent fill twice is a different colour.
  *
  * The windows are already resolved: the engine expanded the weekday rules onto
@@ -170,8 +170,8 @@ export function openBandsForDay(
 }
 
 /** One activity type's claim on a slice of a day, and where to draw it. */
-export interface CategoryLane extends DayBand {
-  categoryId: string;
+export interface ActivityTypeLane extends DayBand {
+  activityTypeId: string;
   /** Fraction of the column width this lane starts at, 0–1. */
   offset: number;
   /** Fraction of the column width it occupies. */
@@ -181,9 +181,9 @@ export interface CategoryLane extends DayBand {
 /**
  * The day's open hours, split by activity type rather than merged (spec §4.3).
  *
- * `openBandsForDay` unions every category into one shape, which answers "could
+ * `openBandsForDay` unions every activity type into one shape, which answers "could
  * anything be scheduled here". This answers the question a person actually has
- * — *what kind of thing* fits here — and needs the categories kept apart.
+ * — *what kind of thing* fits here — and needs the activity types kept apart.
  *
  * **Side by side, not stacked.** Two translucent fills over one another make a
  * third colour that is in neither palette and means nothing; the reader has to
@@ -196,12 +196,12 @@ export interface CategoryLane extends DayBand {
  * width and a stable order; across a boundary the widths change, which is the
  * visible signal that something started or stopped being possible.
  */
-export function categoryLanesForDay(
+export function activityTypeLanesForDay(
   day: CivilDate,
   timeZone: string,
   windows: readonly ResolvedWindow[],
-): CategoryLane[] {
-  const byCategory = new Map<string, DayBand[]>();
+): ActivityTypeLane[] {
+  const byActivityType = new Map<string, DayBand[]>();
 
   for (const window of windows) {
     const positioned = position(
@@ -212,24 +212,24 @@ export function categoryLanesForDay(
     );
     if (positioned === undefined) continue;
 
-    const bands = byCategory.get(window.categoryId) ?? [];
+    const bands = byActivityType.get(window.activityTypeId) ?? [];
     bands.push({ startMin: positioned.startMin, endMin: positioned.endMin });
-    byCategory.set(window.categoryId, bands);
+    byActivityType.set(window.activityTypeId, bands);
   }
 
-  // Merged within a type first: two windows of one category that touch are one
+  // Merged within a type first: two windows of one activity type that touch are one
   // stretch of availability, and a seam between them would read as a break.
-  const merged = [...byCategory.entries()]
-    .map(([categoryId, bands]) => ({ categoryId, bands: mergeBands(bands) }))
+  const merged = [...byActivityType.entries()]
+    .map(([activityTypeId, bands]) => ({ activityTypeId, bands: mergeBands(bands) }))
     // Sorted so the lane order is the same on every render and every day, which
     // is what stops a type moving sideways as you page through weeks (§6.3).
-    .sort((a, b) => a.categoryId.localeCompare(b.categoryId));
+    .sort((a, b) => a.activityTypeId.localeCompare(b.activityTypeId));
 
   const edges = [
     ...new Set(merged.flatMap(({ bands }) => bands.flatMap((b) => [b.startMin, b.endMin]))),
   ].sort((a, b) => a - b);
 
-  const lanes: CategoryLane[] = [];
+  const lanes: ActivityTypeLane[] = [];
 
   for (let index = 0; index + 1 < edges.length; index += 1) {
     const startMin = edges[index]!;
@@ -240,9 +240,9 @@ export function categoryLanesForDay(
     );
     if (present.length === 0) continue;
 
-    present.forEach(({ categoryId }, position) => {
+    present.forEach(({ activityTypeId }, position) => {
       lanes.push({
-        categoryId,
+        activityTypeId,
         startMin,
         endMin,
         offset: position / present.length,
@@ -307,7 +307,7 @@ export function windowsForWeek(
   const rules: AvailabilityRule[] = configuration.availability.map((window) => ({
     id: window.id,
     calendarId,
-    categoryId: window.categoryId,
+    activityTypeId: window.activityTypeId,
     weekday: window.weekday,
     startMin: window.startMin,
     endMin: window.endMin,
@@ -427,7 +427,7 @@ export function blocksForDay(
       cooldownMin: block.cooldownMin,
       kind: 'task',
       label: `${formatMinuteOfDay(positioned.startMin)}–${formatMinuteOfDay(positioned.endMin)}`,
-      categoryId: block.categoryId,
+      activityTypeId: block.activityTypeId,
       taskId: block.taskId,
     });
   }
@@ -445,7 +445,7 @@ export function blocksForDay(
       cooldownMin: block.cooldownMin,
       kind: block.isUnavailability ? 'unavailability' : 'appointment',
       label: `${formatMinuteOfDay(positioned.startMin)}–${formatMinuteOfDay(positioned.endMin)}`,
-      categoryId: null,
+      activityTypeId: null,
       appointmentId: block.appointmentId,
     });
   }
@@ -461,7 +461,7 @@ export function blocksForDay(
       cooldownMin: 0,
       kind: 'completed',
       label: `${formatMinuteOfDay(positioned.startMin)}–${formatMinuteOfDay(positioned.endMin)}`,
-      categoryId: block.categoryId,
+      activityTypeId: block.activityTypeId,
       taskId: block.taskId,
     });
   }

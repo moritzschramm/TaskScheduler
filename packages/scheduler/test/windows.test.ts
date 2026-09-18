@@ -9,7 +9,7 @@ const utc = [{ id: 'cal-1', timeZone: 'UTC' }];
 const mondayRule: AvailabilityRule = {
   id: 'r-mon',
   calendarId: 'cal-1',
-  categoryId: 'cat-work',
+  activityTypeId: 'cat-work',
   weekday: 1,
   startMin: 9 * 60,
   endMin: 12 * 60,
@@ -74,7 +74,7 @@ describe('availability window resolution', () => {
     expect(windows[0]?.interval.start).toBe(at('2026-03-23T21:30:00Z'));
   });
 
-  it('drops rules for other calendars and keeps the category on the result', () => {
+  it('drops rules for other calendars and keeps the activity type on the result', () => {
     const windows = resolveWindows({
       horizon: { start: at('2026-03-23T00:00:00Z'), end: at('2026-03-24T00:00:00Z') },
       calendars: utc,
@@ -83,7 +83,7 @@ describe('availability window resolution', () => {
 
     expect(windows).toHaveLength(1);
     expect(windows[0]?.ruleId).toBe('r-mon');
-    expect(windows[0]?.categoryId).toBe('cat-work');
+    expect(windows[0]?.activityTypeId).toBe('cat-work');
   });
 
   it('carries the focus level through for the scoring term in M4', () => {
@@ -236,7 +236,7 @@ describe('availability window resolution', () => {
     const holidayRule: AvailabilityRule = {
       id: 'r-holiday',
       calendarId: 'cal-1',
-      categoryId: 'cat-work',
+      activityTypeId: 'cat-work',
       weekTypeOverrideId: 'ovr-holiday',
       weekday: 1,
       startMin: 14 * 60,

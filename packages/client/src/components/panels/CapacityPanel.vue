@@ -2,24 +2,24 @@
 import { computed } from 'vue';
 import { useI18n } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
-import type { CapacityCell, Category } from '@ambitime/shared';
+import type { CapacityCell, ActivityType } from '@ambitime/shared';
 
 /**
- * The per-category utilization indicator of spec §6.6.
+ * The per-activity-type utilization indicator of spec §6.6.
  *
  * §6.6 asks for capacity to be "surfaced as the backlog notification plus a
- * per-category utilization indicator" — two things, and this is the second. It
+ * per-activity-type utilization indicator" — two things, and this is the second. It
  * is deliberately *not* a notification: the enum of §11 has no capacity type,
  * because overcommitment is a standing condition rather than an event, and the
  * thing it produces that you can act on is the backlog entry, which already
  * notifies.
  *
- * The **contiguity check** gets its own line. A category can hold far more
+ * The **contiguity check** gets its own line. An activity type can hold far more
  * minutes than a sequence needs and still have nowhere to put it, because the
  * minutes come in fragments — a bar at 60% that cannot fit the one thing you
  * care about is a misleading bar.
  */
-const props = defineProps<{ cells: CapacityCell[]; categories: Category[] }>();
+const props = defineProps<{ cells: CapacityCell[]; activityTypes: ActivityType[] }>();
 
 /**
  * The weeks in view, earliest first.
@@ -43,8 +43,9 @@ function weekLabel(weekStart: string): string {
 const named = computed(() =>
   props.cells.map((cell) => ({
     ...cell,
-    categoryName:
-      props.categories.find((category) => category.id === cell.categoryId)?.name ?? 'Unknown',
+    activityTypeName:
+      props.activityTypes.find((activityType) => activityType.id === cell.activityTypeId)?.name ??
+      'Unknown',
     percent: cell.utilization === null ? null : Math.round(cell.utilization * 100),
     weekLabel: weekLabel(cell.weekStart),
   })),
@@ -80,14 +81,14 @@ const { t } = useI18n();
     <ul v-else class="space-y-2.5">
       <li
         v-for="cell in named"
-        :key="`${cell.categoryId}-${cell.weekStart}`"
+        :key="`${cell.activityTypeId}-${cell.weekStart}`"
         class="space-y-1 text-sm"
         data-testid="capacity-cell"
         :data-status="cell.status"
-        :data-category="cell.categoryId"
+        :data-activity-type="cell.activityTypeId"
       >
         <div class="flex items-baseline justify-between gap-2">
-          <span>{{ cell.categoryName }}</span>
+          <span>{{ cell.activityTypeName }}</span>
           <span class="text-muted-foreground text-xs tabular-nums">
             {{ cell.weekLabel }}
           </span>

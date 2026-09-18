@@ -1,10 +1,10 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { nextCategoryColor } from '@ambitime/shared';
+import { nextActivityTypeColor } from '@ambitime/shared';
 import {
   availabilityWindows,
   calendars,
   calendarWindows,
-  categories,
+  activityTypes,
   tasks,
   weekTypeOverrides,
 } from '../../db/schema/index.js';
@@ -14,28 +14,28 @@ import { deleteWhere, insertRow, updateRow } from '../journal.js';
 import type {
   ConfigureCalendarParams,
   CreateCalendarParams,
-  CreateCategoryParams,
+  CreateActivityTypeParams,
   CreateWeekTypeOverrideParams,
-  DeleteCategoryParams,
+  DeleteActivityTypeParams,
   DeleteWeekTypeOverrideParams,
-  EditCategoryParams,
+  EditActivityTypeParams,
   EditWeekTypeOverrideParams,
   SetAvailabilityWindowsParams,
   SetCalendarWindowsParams,
 } from '@ambitime/shared';
 import type {
   Calendar,
-  Category,
+  ActivityType,
   NewAvailabilityWindow,
   NewCalendar,
   NewCalendarWindow,
-  NewCategory,
+  NewActivityType,
   NewWeekTypeOverride,
   WeekTypeOverride,
 } from '../../db/schema/index.js';
 
 /**
- * Configuration — the calendars, categories and windows tasks are scheduled
+ * Configuration — the calendars, activity types and windows tasks are scheduled
  * *within* (spec §4.3, §9.1).
  *
  * These go through the command layer for the same reason everything else does
@@ -138,17 +138,17 @@ export async function setCalendarWindows(
   return { calendarIds: params.kind === 'working' ? [calendar.id] : [] };
 }
 
-export async function createCategory(
-  params: CreateCategoryParams,
+export async function createActivityType(
+  params: CreateActivityTypeParams,
   ctx: CommandContext,
 ): Promise<HandlerOutcome> {
   // The next free slot when the caller named none, so the first activity types
   // get distinct colours without anybody choosing (§4.3). Read here rather than
   // defaulted in the schema because it depends on the other rows.
-  const taken = await ctx.tx.select({ color: categories.color }).from(categories);
-  const color = params.color ?? nextCategoryColor(taken.map((row) => row.color));
+  const taken = await ctx.tx.select({ color: activityTypes.color }).from(activityTypes);
+  const color = params.color ?? nextActivityTypeColor(taken.map((row) => row.color));
 
-  const values: NewCategory = {
+  const values: NewActivityType = {
     tenantId: ctx.tenantId,
     name: params.name,
     color,
@@ -158,22 +158,22 @@ export async function createCategory(
   };
 
   await named(
-    () => insertRow(ctx, 'categories', values),
-    `A category called "${params.name}" already exists`,
+    () => insertRow(ctx, 'activity_types', values),
+    `An activity type called "${params.name}" already exists`,
   );
 
-  // A brand-new category has no windows and no tasks, so no calendar's
+  // A brand-new activity type has no windows and no tasks, so no calendar's
   // schedule can have changed. Nothing to derive.
   return { calendarIds: [] };
 }
 
-export async function editCategory(
-  params: EditCategoryParams,
+export async function editActivityType(
+  params: EditActivityTypeParams,
   ctx: CommandContext,
 ): Promise<HandlerOutcome> {
-  const category = await lockCategory(ctx, params.categoryId);
+  const activityType = await lockActivityType(ctx, params.activityTypeId);
   const { patch } = params;
-  const values: Partial<NewCategory> = {};
+  const values: Partial<NewActivityType> = {};
 
   if (patch.name !== undefined) values.name = patch.name;
   if (patch.defaultCooldownMin !== undefined) values.defaultCooldownMin = patch.defaultCooldownMin;
@@ -183,64 +183,68 @@ export async function editCategory(
   if (Object.keys(values).length === 0) return { calendarIds: [] };
 
   await named(
-    () => updateRow(ctx, 'categories', category.id, values),
-    `A category called "${patch.name ?? category.name}" already exists`,
+    () => updateRow(ctx, 'activity_types', activityType.id, values),
+    `An activity type called "${patch.name ?? activityType.name}" already exists`,
   );
 
   // Only the cooldown reaches the engine (§6.2 rule 4). A colour is a fact
-  // about drawing and reaches it even less; renaming a category
+  // about drawing and reaches it even less; renaming an activity type
   // changes a label, and re-deriving every calendar that uses it to discover
   // that nothing moved would be work nobody asked for.
   return {
     calendarIds:
-      patch.defaultCooldownMin === undefined ? [] : await usingCategory(ctx, category.id),
+      patch.defaultCooldownMin === undefined ? [] : await usingActivityType(ctx, activityType.id),
   };
 }
 
 /**
- * Removes a category and the availability windows that belonged to it.
+ * Removes an activity type and the availability windows that belonged to it.
  *
  * **Refused while any task still uses it.** The database would happily
  * `ON DELETE SET NULL` those tasks, which is the right shape for a cascade but
- * the wrong answer for a person: a task with no category matches no window and
+ * the wrong answer for a person: a task with no activity type matches no window and
  * silently stops being schedulable (§6.2 rule 1). Better to say so and let them
  * move the tasks.
  *
  * The windows are deleted here rather than left to the cascade, because a
  * cascade happens inside the database and the journal never sees it — undo
- * would restore the category and none of its windows (§12).
+ * would restore the activity type and none of its windows (§12).
  */
-export async function deleteCategory(
-  params: DeleteCategoryParams,
+export async function deleteActivityType(
+  params: DeleteActivityTypeParams,
   ctx: CommandContext,
 ): Promise<HandlerOutcome> {
-  const category = await lockCategory(ctx, params.categoryId);
+  const activityType = await lockActivityType(ctx, params.activityTypeId);
 
   const [inUse] = await ctx.tx
     .select({ count: sql<number>`count(*)::int` })
     .from(tasks)
-    .where(eq(tasks.categoryId, category.id));
+    .where(eq(tasks.activityTypeId, activityType.id));
 
   if ((inUse?.count ?? 0) > 0) {
     throw new PreconditionFailedError(
-      `Category "${category.name}" still has ${inUse?.count} task(s); move them to another category first`,
+      `Activity type "${activityType.name}" still has ${inUse?.count} task(s); move them to another activity type first`,
     );
   }
 
-  const affected = await usingCategory(ctx, category.id);
+  const affected = await usingActivityType(ctx, activityType.id);
 
-  await deleteWhere(ctx, 'availability_windows', eq(availabilityWindows.categoryId, category.id));
-  await deleteWhere(ctx, 'categories', eq(categories.id, category.id));
+  await deleteWhere(
+    ctx,
+    'availability_windows',
+    eq(availabilityWindows.activityTypeId, activityType.id),
+  );
+  await deleteWhere(ctx, 'activity_types', eq(activityTypes.id, activityType.id));
 
   return { calendarIds: affected };
 }
 
 /**
- * Replaces the availability set for one (calendar, category, week-type) address
+ * Replaces the availability set for one (calendar, activity type, week-type) address
  * (spec §4.3).
  *
  * An empty `windows` array is a meaningful instruction, not a no-op: it says
- * this category is not available here at all, which during a holiday override
+ * this activity type is not available here at all, which during a holiday override
  * is exactly what a person means.
  */
 export async function setAvailabilityWindows(
@@ -248,7 +252,7 @@ export async function setAvailabilityWindows(
   ctx: CommandContext,
 ): Promise<HandlerOutcome> {
   const calendar = await lockCalendar(ctx, params.calendarId);
-  const category = await requireCategory(ctx, params.categoryId);
+  const activityType = await requireActivityType(ctx, params.activityTypeId);
   const override =
     params.weekTypeOverrideId === undefined
       ? undefined
@@ -265,7 +269,7 @@ export async function setAvailabilityWindows(
     'availability_windows',
     and(
       eq(availabilityWindows.calendarId, calendar.id),
-      eq(availabilityWindows.categoryId, category.id),
+      eq(availabilityWindows.activityTypeId, activityType.id),
       // NULL is not equal to anything, itself included, so the default set has
       // to be addressed with `IS NULL` rather than a comparison.
       override === undefined
@@ -278,7 +282,7 @@ export async function setAvailabilityWindows(
     const values: NewAvailabilityWindow = {
       tenantId: ctx.tenantId,
       calendarId: calendar.id,
-      categoryId: category.id,
+      activityTypeId: activityType.id,
       weekTypeOverrideId: override?.id ?? null,
       weekday: rule.weekday,
       startMin: rule.startMin,
@@ -347,7 +351,7 @@ export async function editWeekTypeOverride(
  * Removes an override, and with it the availability set that replaced the
  * default one for its range — which is what puts the default set back.
  *
- * Its windows are deleted explicitly for the same reason as a category's: a
+ * Its windows are deleted explicitly for the same reason as an activity type's: a
  * database cascade is invisible to the journal, and an undo that restored the
  * override without its windows would restore an override that empties its own
  * date range.
@@ -385,24 +389,24 @@ function orderRules<T extends { weekday: number; startMin: number; endMin: numbe
 }
 
 /**
- * The calendars whose schedule depends on a category: those with a window for
+ * The calendars whose schedule depends on an activity type: those with a window for
  * it, and those with a task in it.
  *
  * Both halves are needed. A calendar with windows but no tasks changes shape
- * when the category's cooldown moves; a calendar with tasks but no windows has
+ * when the activity type's cooldown moves; a calendar with tasks but no windows has
  * demand that is already unschedulable and stays that way — but its
  * diagnostics change, and diagnostics are part of the derived answer (§6.7).
  */
-async function usingCategory(ctx: CommandContext, categoryId: string): Promise<string[]> {
+async function usingActivityType(ctx: CommandContext, activityTypeId: string): Promise<string[]> {
   const [windowed, tasked] = await Promise.all([
     ctx.tx
       .selectDistinct({ calendarId: availabilityWindows.calendarId })
       .from(availabilityWindows)
-      .where(eq(availabilityWindows.categoryId, categoryId)),
+      .where(eq(availabilityWindows.activityTypeId, activityTypeId)),
     ctx.tx
       .selectDistinct({ calendarId: tasks.calendarId })
       .from(tasks)
-      .where(eq(tasks.categoryId, categoryId)),
+      .where(eq(tasks.activityTypeId, activityTypeId)),
   ]);
 
   return [...new Set([...windowed, ...tasked].map((row) => row.calendarId))];
@@ -434,17 +438,20 @@ async function lockCalendar(ctx: CommandContext, calendarId: string): Promise<Ca
   return row;
 }
 
-/** Categories are tenant-scoped rather than owned (§4.3), so no owner check. */
-async function lockCategory(ctx: CommandContext, categoryId: string): Promise<Category> {
+/** Activity types are tenant-scoped rather than owned (§4.3), so no owner check. */
+async function lockActivityType(
+  ctx: CommandContext,
+  activityTypeId: string,
+): Promise<ActivityType> {
   const [row] = await ctx.tx
     .select()
-    .from(categories)
-    .where(eq(categories.id, categoryId))
+    .from(activityTypes)
+    .where(eq(activityTypes.id, activityTypeId))
     .for('update')
     .limit(1);
 
-  if (!row) throw new EntityNotFoundError('category', categoryId);
-  checkVersion(ctx, 'category', categoryId, row.version);
+  if (!row) throw new EntityNotFoundError('activity type', activityTypeId);
+  checkVersion(ctx, 'activity type', activityTypeId, row.version);
   return row;
 }
 
@@ -465,14 +472,17 @@ async function lockWeekTypeOverride(
 }
 
 /** Referenced, not modified — so read without locking or version-checking. */
-async function requireCategory(ctx: CommandContext, categoryId: string): Promise<Category> {
+async function requireActivityType(
+  ctx: CommandContext,
+  activityTypeId: string,
+): Promise<ActivityType> {
   const [row] = await ctx.tx
     .select()
-    .from(categories)
-    .where(eq(categories.id, categoryId))
+    .from(activityTypes)
+    .where(eq(activityTypes.id, activityTypeId))
     .limit(1);
 
-  if (!row) throw new EntityNotFoundError('category', categoryId);
+  if (!row) throw new EntityNotFoundError('activity type', activityTypeId);
   return row;
 }
 

@@ -1,4 +1,4 @@
-import type { AvailabilityWindow, Category } from '@ambitime/shared';
+import type { AvailabilityWindow, ActivityType } from '@ambitime/shared';
 
 /**
  * Where two activity types claim the same hour (spec §4.3, §6.2 rule 1).
@@ -37,9 +37,9 @@ export interface OverlapInput {
   rules: readonly { weekday: number; startMin: number; endMin: number }[];
   /** Every window in the planner, including the edited type's own. */
   availability: readonly AvailabilityWindow[];
-  categories: readonly Category[];
+  activityTypes: readonly ActivityType[];
   /** The type being edited — its own windows are not a clash with itself. */
-  categoryId: string;
+  activityTypeId: string;
   /** `null` for the default set; otherwise the special week being edited. */
   weekTypeOverrideId: string | null;
 }
@@ -55,15 +55,15 @@ export interface OverlapInput {
 export function overlappingRules({
   rules,
   availability,
-  categories,
-  categoryId,
+  activityTypes,
+  activityTypeId,
   weekTypeOverrideId,
 }: OverlapInput): RuleOverlap[] {
-  const names = new Map(categories.map((category) => [category.id, category.name]));
+  const names = new Map(activityTypes.map((activityType) => [activityType.id, activityType.name]));
 
   const others = availability.filter(
     (window) =>
-      window.categoryId !== categoryId &&
+      window.activityTypeId !== activityTypeId &&
       (window.weekTypeOverrideId ?? null) === weekTypeOverrideId,
   );
 
@@ -83,7 +83,7 @@ export function overlappingRules({
         weekday: rule.weekday,
         startMin: rule.startMin,
         endMin: rule.endMin,
-        otherName: names.get(other.categoryId) ?? '',
+        otherName: names.get(other.activityTypeId) ?? '',
         sharedStartMin,
         sharedEndMin,
       });

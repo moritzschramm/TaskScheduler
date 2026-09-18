@@ -13,7 +13,7 @@ import type { Instant, Interval } from './time.js';
  * proposed schedule.
  */
 export type ViolationCode =
-  /** Rule 1: placed outside any availability window of its category. */
+  /** Rule 1: placed outside any availability window of its activity type. */
   | 'outside_availability_window'
   /** Rule 2: two placements overlap. */
   | 'placement_overlap'
@@ -70,11 +70,11 @@ export interface ValidationResult {
 /**
  * Why a task could not be placed in the hard horizon (spec §6.7). The engine
  * names the reason rather than reporting a bare failure, because the fixes
- * differ: no window at all is a configuration problem, a full category is a
+ * differ: no window at all is a configuration problem, a full activity type is a
  * capacity problem, an unreachable deadline is a planning problem.
  */
 export type InfeasibilityReason =
-  /** The task's category has no availability window in the horizon. */
+  /** The task's activity type has no availability window in the horizon. */
   | 'no_feasible_window'
   /** Windows exist, but every slot is taken by other tasks or fixed blocks. */
   | 'insufficient_remaining_capacity'
@@ -84,13 +84,13 @@ export type InfeasibilityReason =
   | 'manual_floor_beyond_horizon'
   /**
    * A sequence needs one unbroken span and no window offers one long enough
-   * (spec §6.6, §6.7). Distinct from insufficient capacity: the category may
+   * (spec §6.6, §6.7). Distinct from insufficient capacity: the activity type may
    * hold plenty of minutes, just never enough of them in a row.
    */
   | 'no_contiguous_span'
   /**
    * A sequence's members cannot share a window — they belong to different
-   * categories or calendars. A data problem, not a capacity one.
+   * activity types or calendars. A data problem, not a capacity one.
    */
   | 'sequence_members_incompatible';
 

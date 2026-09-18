@@ -17,14 +17,14 @@ const { t } = useI18n();
  * **"Planner", not "calendar", in every string a person reads.** The row is
  * still `calendars` and the API still says `calendarId` — but on screen the
  * word already meant the grid of days, so the same word for the container of
- * hours, categories and tasks was the collision. The rename is only in the
+ * hours, activity types and tasks was the collision. The rename is only in the
  * copy; nothing in the model moved.
  *
  * **No Save buttons.** Every field here writes itself once you stop changing
  * it, which is what removes the state where a planner looks renamed and is not.
  *
  * Both windows are folded away, and for the same reason: **neither is needed.**
- * The hours that actually schedule are the category's (§6.2 rule 1). The
+ * The hours that actually schedule are the activity type's (§6.2 rule 1). The
  * working window is an optional ceiling over all of them, and absent means
  * unrestricted rather than closed — while the shareable window is read by
  * nothing at all until there is a second person to share with (§9.2). Left open

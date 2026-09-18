@@ -70,7 +70,7 @@ describe('the optimistic result equals the server re-derive', () => {
         params: {
           calendarId: world.calendarId,
           title,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           estimatedDurationMin: minutes,
         },
       });

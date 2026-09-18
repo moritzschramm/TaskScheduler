@@ -45,7 +45,7 @@ describe('the per-period demand generator', () => {
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         recurrence,
         ...extra,
@@ -216,7 +216,7 @@ describe('the per-period demand generator', () => {
         calendarId: world.calendarId,
         title: 'A subtask',
         parentId,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 30,
       },
     });

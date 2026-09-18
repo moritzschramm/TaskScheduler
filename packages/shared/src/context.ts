@@ -48,7 +48,7 @@ export const schedulableSchema = z.object({
   occurrenceId: uuid,
   taskId: uuid,
   calendarId: uuid,
-  categoryId: uuid,
+  activityTypeId: uuid,
   durationMin: z.int(),
   cooldownMin: z.int(),
   dueDate: instant.optional(),
@@ -79,7 +79,7 @@ export const engineFixedBlockSchema = z.object({
 export const resolvedWindowSchema = z.object({
   ruleId: uuid,
   calendarId: uuid,
-  categoryId: uuid,
+  activityTypeId: uuid,
   interval,
   focusLevel: z.int().min(1).max(5).optional(),
 });

@@ -5,7 +5,7 @@ import type { Interval } from './time.js';
  * Interval algebra over half-open `[start, end)` ranges (spec §5.1).
  *
  * Small enough to inline, kept separate because two very different callers need
- * the same answers: the capacity report measures the *shape* of a category's
+ * the same answers: the capacity report measures the *shape* of an activity type's
  * availability (§6.6), and the solver asks whether any window is long enough to
  * hold a sequence in one piece (§6.7). Both must agree, so both use this.
  */

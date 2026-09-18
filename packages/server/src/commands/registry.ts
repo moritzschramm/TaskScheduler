@@ -12,11 +12,11 @@ import { updateSettings } from './handlers/settings.js';
 import {
   configureCalendar,
   createCalendar,
-  createCategory,
+  createActivityType,
   createWeekTypeOverride,
-  deleteCategory,
+  deleteActivityType,
   deleteWeekTypeOverride,
-  editCategory,
+  editActivityType,
   editWeekTypeOverride,
   setAvailabilityWindows,
   setCalendarWindows,
@@ -79,12 +79,12 @@ export function dispatch(command: Command, ctx: CommandContext): Promise<Handler
       return configureCalendar(command.params, ctx);
     case 'SetCalendarWindows':
       return setCalendarWindows(command.params, ctx);
-    case 'CreateCategory':
-      return createCategory(command.params, ctx);
-    case 'EditCategory':
-      return editCategory(command.params, ctx);
-    case 'DeleteCategory':
-      return deleteCategory(command.params, ctx);
+    case 'CreateActivityType':
+      return createActivityType(command.params, ctx);
+    case 'EditActivityType':
+      return editActivityType(command.params, ctx);
+    case 'DeleteActivityType':
+      return deleteActivityType(command.params, ctx);
     case 'SetAvailabilityWindows':
       return setAvailabilityWindows(command.params, ctx);
     case 'CreateWeekTypeOverride':
@@ -112,7 +112,7 @@ export function dispatch(command: Command, ctx: CommandContext): Promise<Handler
 export const COMMAND_TARGETS: Readonly<
   Record<
     CommandType,
-    'task' | 'appointment' | 'calendar' | 'category' | 'week type override' | null
+    'task' | 'appointment' | 'calendar' | 'activity type' | 'week type override' | null
   >
 > = {
   CreateTask: null,
@@ -145,10 +145,10 @@ export const COMMAND_TARGETS: Readonly<
   // The set is the unit, and a set has no version of its own — the calendar it
   // belongs to does, and that is what a stale editor would be holding.
   SetCalendarWindows: 'calendar',
-  CreateCategory: null,
-  EditCategory: 'category',
-  DeleteCategory: 'category',
-  // Addressed by calendar *and* category; the calendar is the versioned half.
+  CreateActivityType: null,
+  EditActivityType: 'activity type',
+  DeleteActivityType: 'activity type',
+  // Addressed by calendar *and* activity type; the calendar is the versioned half.
   SetAvailabilityWindows: 'calendar',
   CreateWeekTypeOverride: 'calendar',
   EditWeekTypeOverride: 'week type override',

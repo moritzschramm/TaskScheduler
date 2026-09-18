@@ -51,7 +51,7 @@ describe('what reaches the engine', () => {
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         ...params,
       },
@@ -67,7 +67,7 @@ describe('what reaches the engine', () => {
       }),
     );
 
-  it('resolves the cooldown from the category, and lets a task override it', async () => {
+  it('resolves the cooldown from the activity type, and lets a task override it', async () => {
     await create('Inherits the default');
     await create('Overrides it', { cooldownOverrideMin: 5 });
 
@@ -82,7 +82,7 @@ describe('what reaches the engine', () => {
     const [parent] = await world.read((tx) =>
       tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.title, 'Parent')).limit(1),
     );
-    await create('Child', { parentId: parent!.id, categoryId: undefined });
+    await create('Child', { parentId: parent!.id, activityTypeId: undefined });
 
     const { context: loaded } = await context();
 
@@ -90,7 +90,7 @@ describe('what reaches the engine', () => {
     expect(loaded.schedulables[0]).toMatchObject({
       priority: 5,
       focusLevel: 4,
-      categoryId: world.categoryId,
+      activityTypeId: world.activityTypeId,
     });
   });
 
@@ -126,7 +126,7 @@ describe('what reaches the engine', () => {
       await tx.insert(availabilityWindows).values({
         tenantId: world.tenantId,
         calendarId: world.calendarId,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         weekTypeOverrideId: override!.id,
         weekday: 2,
         startMin: 18 * 60,
@@ -170,7 +170,7 @@ describe('what reaches the engine', () => {
     expect(placed).toHaveLength(3);
 
     // Members abut, each gap being exactly the previous member's 30-minute
-    // category cooldown (§6.2 rules 3 and 5).
+    // activity type cooldown (§6.2 rules 3 and 5).
     for (let index = 1; index < placed.length; index += 1) {
       expect(placed[index]!.interval.start).toBe(
         placed[index - 1]!.interval.end + placed[index - 1]!.cooldownMin,

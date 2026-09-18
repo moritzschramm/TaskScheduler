@@ -255,7 +255,7 @@ describe('window resolution is deterministic', () => {
     {
       id: 'r-mon',
       calendarId: 'cal-1',
-      categoryId: 'cat-work',
+      activityTypeId: 'cat-work',
       weekday: 1,
       startMin: 540,
       endMin: 720,
@@ -263,7 +263,7 @@ describe('window resolution is deterministic', () => {
     {
       id: 'r-tue',
       calendarId: 'cal-1',
-      categoryId: 'cat-work',
+      activityTypeId: 'cat-work',
       weekday: 2,
       startMin: 540,
       endMin: 720,
@@ -271,7 +271,7 @@ describe('window resolution is deterministic', () => {
     {
       id: 'r-wed',
       calendarId: 'cal-1',
-      categoryId: 'cat-work',
+      activityTypeId: 'cat-work',
       weekday: 3,
       startMin: 600,
       endMin: 780,

@@ -36,7 +36,7 @@ describe('the task list', () => {
 
   it('returns the tree with own and effective values', async () => {
     await create('Project', {
-      categoryId: world.categoryId,
+      activityTypeId: world.activityTypeId,
       dueDate: { date: '2026-04-01T12:00:00Z', kind: 'soft' },
     });
 
@@ -56,8 +56,8 @@ describe('the task list', () => {
     const child = body.tasks[1]!;
     // The child sets neither, and gets both from its parent — which is what a
     // panel needs to show as inherited rather than as chosen here (§4.4).
-    expect(child.ownCategoryId).toBeNull();
-    expect(child.effectiveCategoryId).toBe(world.categoryId);
+    expect(child.ownActivityTypeId).toBeNull();
+    expect(child.effectiveActivityTypeId).toBe(world.activityTypeId);
     expect(child.ownDueDate).toBeNull();
     expect(child.effectiveDueDate).toBe('2026-04-01T12:00:00.000Z');
     expect(child).toMatchObject({ depth: 2, isLeaf: true, parentId });
@@ -65,7 +65,7 @@ describe('the task list', () => {
   });
 
   it('includes tasks the schedule cannot contain', async () => {
-    await create('Done', { categoryId: world.categoryId, estimatedDurationMin: 30 });
+    await create('Done', { activityTypeId: world.activityTypeId, estimatedDurationMin: 30 });
     const listed = taskListSchema.parse(
       await (await world.get(`/api/calendars/${world.calendarId}/tasks`)).json(),
     );

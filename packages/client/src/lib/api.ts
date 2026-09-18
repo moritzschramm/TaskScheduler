@@ -72,7 +72,7 @@ function describeWait(seconds: number): string {
  * The parsed body of a successful response, or a thrown `ApiError`.
  *
  * The message is the server's own: the command layer phrases its refusals for
- * the person who will read them — "A category called Work already exists" — and
+ * the person who will read them — "An activity type called Work already exists" — and
  * replacing that with a generic string at this boundary would throw away the
  * only part of the failure a user can act on (§6.7).
  */

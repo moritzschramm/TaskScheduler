@@ -4,7 +4,7 @@ import {
   availabilityWindows,
   calendars,
   calendarWindows,
-  categories,
+  activityTypes,
   notifications,
   taskOccurrences,
   tasks,
@@ -17,7 +17,7 @@ import type {
   NewAvailabilityWindow,
   NewCalendar,
   NewCalendarWindow,
-  NewCategory,
+  NewActivityType,
   NewNotification,
   NewTask,
   NewTaskOccurrence,
@@ -72,7 +72,7 @@ interface JournalInserts {
   appointments: NewAppointment;
   calendars: NewCalendar;
   calendar_windows: NewCalendarWindow;
-  categories: NewCategory;
+  activity_types: NewActivityType;
   availability_windows: NewAvailabilityWindow;
   week_type_overrides: NewWeekTypeOverride;
   notifications: NewNotification;
@@ -90,7 +90,7 @@ const JOURNALLED = {
   appointments,
   calendars,
   calendar_windows: calendarWindows,
-  categories,
+  activity_types: activityTypes,
   availability_windows: availabilityWindows,
   week_type_overrides: weekTypeOverrides,
   notifications,
@@ -149,6 +149,64 @@ export interface CommandJournal {
    * enough facts that anyone reading the log deserves to be told which.
    */
   stripped?: true;
+}
+
+/**
+ * The names an entry was written under, translated to the ones in use now.
+ *
+ * The log is append-only: `commands` has UPDATE and DELETE revoked from the
+ * application role (§12), which is the property that makes it worth trusting
+ * and also the property that makes a rename unreachable. Migration 0020 turned
+ * `categories` into `activity_types`; every entry written before it goes on
+ * saying `categories`, and `tasks` and `availability_windows` row images from
+ * before it go on carrying a `categoryId`. Nothing rewrote them, and by design
+ * nothing can.
+ *
+ * So the translation happens on the way out, at the one place a stored journal
+ * becomes a `CommandJournal` (`history.ts`). Past this function every reader
+ * sees today's vocabulary: `applyChanges` puts a row back into a table that
+ * exists, and `changedIds(changes, 'activity_types')` still finds what a
+ * `CreateCategory` issued months ago created.
+ *
+ * A rename that ever reaches a *value* rather than a name would need more than
+ * this — but ids did not move, which is exactly why 0020 renames rather than
+ * copies.
+ */
+const RENAMED_TABLES: Readonly<Record<string, JournalTable>> = {
+  categories: 'activity_types',
+};
+
+const RENAMED_COLUMNS: Readonly<Record<string, string>> = {
+  categoryId: 'activityTypeId',
+};
+
+/** A stored `inverse` column, in today's names. Null stays null. */
+export function readJournal(stored: unknown): CommandJournal | null {
+  if (stored === null || stored === undefined) return null;
+
+  const journal = stored as CommandJournal;
+  // Absent on `Undo` and `Redo`, whose own writes are not journalled, and on
+  // anything `compact.ts` has stripped.
+  if (!Array.isArray(journal.changes)) return journal;
+
+  return { ...journal, changes: journal.changes.map(current) };
+}
+
+function current(change: RowChange): RowChange {
+  return {
+    ...change,
+    table: RENAMED_TABLES[change.table] ?? change.table,
+    before: currentColumns(change.before),
+    after: currentColumns(change.after),
+  };
+}
+
+function currentColumns(image: RowImage | null): RowImage | null {
+  if (image === null) return image;
+
+  const renamed: RowImage = {};
+  for (const [key, value] of Object.entries(image)) renamed[RENAMED_COLUMNS[key] ?? key] = value;
+  return renamed;
 }
 
 /** Per-table insert types, so call sites keep their column-name checking. */

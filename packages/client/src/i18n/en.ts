@@ -29,7 +29,7 @@ export const en = {
   nav: {
     schedule: 'Schedule',
     tasks: 'Tasks',
-    categories: 'Activity types',
+    activityTypes: 'Activity types',
   },
 
   verify: {
@@ -139,7 +139,7 @@ export const en = {
       other: '{count} tasks are not being scheduled',
     },
     reason: {
-      noCategory: 'needs an activity type before a window can apply to it',
+      noActivityType: 'needs an activity type before a window can apply to it',
       noDuration: 'needs an estimate before there is anything to fit',
     },
   },
@@ -176,7 +176,7 @@ export const en = {
     noWeek: 'no week',
     reason: {
       capacity: 'No room left in the horizon',
-      noWindow: 'No availability window for its category',
+      noWindow: 'No availability window for its activity type',
       deadline: 'Its deadline falls before any free slot',
       deferred: 'Deferred past the horizon',
       noSpan: 'No single stretch long enough',
@@ -186,7 +186,7 @@ export const en = {
 
   capacity: {
     title: 'Capacity',
-    empty: 'No categories have scheduling hours in this horizon.',
+    empty: 'No activity types have scheduling hours in this horizon.',
     thisWeek: 'This week',
     nextWeek: 'Next week',
     weekOf: 'Week of {week}',
@@ -265,7 +265,7 @@ export const en = {
     removeBlock: 'Remove block',
   },
 
-  categories: {
+  activityTypes: {
     color: 'Colour',
     colorOf: 'Colour of {name}',
     noColor: 'No colour (older type)',
@@ -300,7 +300,7 @@ export const en = {
       'Overlap is allowed — the scheduler picks whichever task scores higher for the hour.',
     title: 'Scheduling hours',
     lead: 'The hours the scheduler may place this kind of thing in — not simply when you are free.',
-    needCategory: 'Add an activity type first.',
+    needActivityType: 'Add an activity type first.',
     activityType: 'Activity type',
     specialWeek: 'Special week',
     ordinaryNote:
@@ -363,7 +363,7 @@ export const en = {
       'Tasks, hours and special weeks are separate per planner, activity types are shared.',
     plannerHeading: 'Planner',
     plannerLead:
-      'One self-contained world to schedule in — its own time zone, its own hours, its own categories and tasks. Most people need only one.',
+      'One self-contained world to schedule in — its own time zone, its own hours, its own activity types and tasks. Most people need only one.',
     readOnly: 'This planner belongs to someone else, so its settings are read-only.',
     timeZone: 'Time zone',
     visibility: 'Visible to',
@@ -422,6 +422,13 @@ export const en = {
       CreateCalendar: 'Create planner',
       ConfigureCalendar: 'Configure planner',
       SetCalendarWindows: 'Set planner window',
+      CreateActivityType: 'Create activity type',
+      EditActivityType: 'Edit activity type',
+      DeleteActivityType: 'Delete activity type',
+      // The log is append-only (§12), so a command issued before migration 0020
+      // is still in it under the name it was given then. Naming those here is
+      // what keeps an old row translated rather than falling back to the
+      // prettifier, which produces English whatever the interface is set to.
       CreateCategory: 'Create activity type',
       EditCategory: 'Edit activity type',
       DeleteCategory: 'Delete activity type',
@@ -591,9 +598,9 @@ export const en = {
       PostponeRestOfDay: 'Move the rest of {day} to later days',
       BlockOutDay: 'Block out {day}',
       ClearWeek: 'Block out the week of {day}',
-      CreateCategory: 'New activity type “{name}”',
-      EditCategory: 'Change {what}',
-      DeleteCategory: 'Delete the activity type {what}, and its hours',
+      CreateActivityType: 'New activity type “{name}”',
+      EditActivityType: 'Change {what}',
+      DeleteActivityType: 'Delete the activity type {what}, and its hours',
       SetAvailabilityWindows: 'Set when {what} may be scheduled',
       SetAvailabilityWindowsIn: 'Set when {what} may be scheduled during {week}',
       CreateWeekTypeOverride: 'New special week “{name}”',
@@ -617,7 +624,7 @@ export const en = {
       removed: 'Removed',
       title: 'Title',
       notes: 'Notes',
-      categoryId: 'Activity type',
+      activityTypeId: 'Activity type',
       estimatedDurationMin: 'Estimate (minutes)',
       priority: 'Priority',
       dueDate: 'Due',

@@ -28,7 +28,7 @@ export async function createTask(
     title: params.title,
     notes: params.notes,
     parentId: params.parentId,
-    categoryId: params.categoryId,
+    activityTypeId: params.activityTypeId,
     estimatedDurationMin: params.estimatedDurationMin,
     priority: params.priority,
     dueDate: params.dueDate?.date,
@@ -74,7 +74,7 @@ export async function editTask(
   // user dropped their override and wants the ancestor's value back (§4.4).
   if (patch.title !== undefined) values.title = patch.title;
   if (patch.notes !== undefined) values.notes = patch.notes;
-  if (patch.categoryId !== undefined) values.categoryId = patch.categoryId;
+  if (patch.activityTypeId !== undefined) values.activityTypeId = patch.activityTypeId;
   if (patch.estimatedDurationMin !== undefined) {
     values.estimatedDurationMin = patch.estimatedDurationMin;
   }

@@ -19,7 +19,11 @@ import { projectCommand, type CommandRequest, type ScheduledBlock } from '@ambit
 export function optimisticBlocks(
   context: ScheduleContext,
   command: CommandRequest,
-  describe: (occurrenceId: string) => { taskId: string; title: string; categoryId: string | null },
+  describe: (occurrenceId: string) => {
+    taskId: string;
+    title: string;
+    activityTypeId: string | null;
+  },
 ): ScheduledBlock[] | null {
   const projected = projectCommand({ context, command, config: DEFAULT_TUNING });
   if (projected === null) return null;
@@ -32,7 +36,7 @@ export function optimisticBlocks(
       occurrenceId: placement.occurrenceId,
       taskId: described.taskId,
       title: described.title,
-      categoryId: described.categoryId,
+      activityTypeId: described.activityTypeId,
       start: toIso(placement.interval.start),
       end: toIso(placement.interval.end),
       cooldownMin: placement.cooldownMin,

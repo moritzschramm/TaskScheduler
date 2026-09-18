@@ -104,7 +104,7 @@ export function isFeasible(
   window: Interval,
   occupied: readonly OccupiedFootprint[],
 ): boolean {
-  // Rule 1 — inside an availability window of its category.
+  // Rule 1 — inside an availability window of its activity type.
   if (candidate.start < window.start || candidate.end > window.end) return false;
 
   // Rule 6 — never before a manual floor.

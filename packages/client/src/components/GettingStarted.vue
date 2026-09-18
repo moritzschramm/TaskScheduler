@@ -18,12 +18,12 @@ const { t } = useI18n();
  * **It used to ask for a calendar, and that was the wrong question.** A planner
  * is a container; on its own it schedules nothing, so answering it left the
  * user on an empty grid with no idea what was still missing. What is actually
- * required is a category and some hours — "a task is placed within an
- * availability window of its category" — so that is what this asks for, and the
+ * required is an activity type and some hours — "a task is placed within an
+ * availability window of its activity type" — so that is what this asks for, and the
  * planner is created underneath as a consequence rather than as a prerequisite.
  *
  * Three commands in one group (§7.5), so undo takes back the whole beginning
- * rather than leaving a planner with a category and no hours — which is exactly
+ * rather than leaving a planner with an activity type and no hours — which is exactly
  * the half-configured state this screen exists to prevent.
  */
 const { calendars, load } = useWorkspace();
@@ -84,13 +84,13 @@ async function begin(): Promise<void> {
         'calendar',
       );
 
-    const categoryId = createdId(
+    const activityTypeId = createdId(
       await runCommand({
-        type: 'CreateCategory',
+        type: 'CreateActivityType',
         groupId,
         params: { name: name.value.trim() },
       }),
-      'category',
+      'activity_type',
     );
 
     await runCommand({
@@ -98,7 +98,7 @@ async function begin(): Promise<void> {
       groupId,
       params: {
         calendarId,
-        categoryId,
+        activityTypeId,
         windows: [...days.value]
           .sort((a, b) => a - b)
           .map((weekday) => ({
@@ -133,12 +133,12 @@ async function begin(): Promise<void> {
     </header>
 
     <div class="space-y-1">
-      <Label for="first-category">{{ t('gettingStarted.nameLabel') }}</Label>
+      <Label for="first-activity-type">{{ t('gettingStarted.nameLabel') }}</Label>
       <Input
-        id="first-category"
+        id="first-activity-type"
         v-model="name"
         :placeholder="t('gettingStarted.namePlaceholder')"
-        data-testid="first-category-name"
+        data-testid="first-activity-type-name"
       />
     </div>
 

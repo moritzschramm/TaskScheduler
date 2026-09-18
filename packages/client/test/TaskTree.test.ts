@@ -24,8 +24,8 @@ function node(id: string, depth: number, overrides: Partial<TaskNode> = {}): Tas
     status: 'active',
     version: 1,
     estimatedDurationMin: 60,
-    ownCategoryId: null,
-    effectiveCategoryId: null,
+    ownActivityTypeId: null,
+    effectiveActivityTypeId: null,
     ownPriority: null,
     effectivePriority: null,
     ownDueDate: null,
@@ -161,8 +161,8 @@ describe('the quick-add row', () => {
   function panelWith(quickAdd: (draft: unknown) => Promise<boolean>) {
     return mount(TaskListPanel, {
       props: {
-        tasks: [node('t1', 1, { effectiveCategoryId: 'cat-work' })],
-        categories: [work],
+        tasks: [node('t1', 1, { effectiveActivityTypeId: 'cat-work' })],
+        activityTypes: [work],
         editable: true,
         quickAdd,
       },
@@ -181,7 +181,7 @@ describe('the quick-add row', () => {
     // The group is the activity type, so the row never has to ask for it —
     // which is the field §6.2 rule 1 makes mandatory.
     expect(quickAdd).toHaveBeenCalledWith({
-      categoryId: 'cat-work',
+      activityTypeId: 'cat-work',
       title: 'Invoices',
       estimatedDurationMin: 30,
       priority: null,

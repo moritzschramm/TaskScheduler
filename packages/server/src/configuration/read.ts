@@ -3,7 +3,7 @@ import {
   availabilityWindows,
   calendars,
   calendarWindows,
-  categories,
+  activityTypes,
   weekTypeOverrides,
 } from '../db/schema/index.js';
 import { CalendarNotFoundError } from '../schedule/load-context.js';
@@ -19,7 +19,7 @@ import type { Transaction } from '../db/client.js';
  * paying for an answer it does not display.
  *
  * Sorted here rather than in the client. The orders are the ones a person reads
- * in — weekday then time for a window, name for a category, date for an
+ * in — weekday then time for a window, name for an activity type, date for an
  * override — and putting them in the query means every consumer, including a
  * test asserting on the response, sees the same sequence (§6.3).
  */
@@ -45,7 +45,7 @@ export async function readCalendarConfiguration(
   // exist", which is the answer either way.
   if (!calendar) throw new CalendarNotFoundError(calendarId);
 
-  const [windows, tenantCategories, availability, overrides] = await Promise.all([
+  const [windows, tenantActivityTypes, availability, overrides] = await Promise.all([
     tx
       .select({
         id: calendarWindows.id,
@@ -62,23 +62,23 @@ export async function readCalendarConfiguration(
         asc(calendarWindows.startMin),
       ),
 
-    // Tenant-scoped, so not filtered by calendar: a category is available to
+    // Tenant-scoped, so not filtered by calendar: an activity type is available to
     // every calendar in the tenant, and the screen offers all of them (§4.3).
     tx
       .select({
-        id: categories.id,
-        name: categories.name,
-        defaultCooldownMin: categories.defaultCooldownMin,
-        color: categories.color,
-        version: categories.version,
+        id: activityTypes.id,
+        name: activityTypes.name,
+        defaultCooldownMin: activityTypes.defaultCooldownMin,
+        color: activityTypes.color,
+        version: activityTypes.version,
       })
-      .from(categories)
-      .orderBy(asc(categories.name)),
+      .from(activityTypes)
+      .orderBy(asc(activityTypes.name)),
 
     tx
       .select({
         id: availabilityWindows.id,
-        categoryId: availabilityWindows.categoryId,
+        activityTypeId: availabilityWindows.activityTypeId,
         weekTypeOverrideId: availabilityWindows.weekTypeOverrideId,
         weekday: availabilityWindows.weekday,
         startMin: availabilityWindows.startMin,
@@ -88,7 +88,7 @@ export async function readCalendarConfiguration(
       .from(availabilityWindows)
       .where(eq(availabilityWindows.calendarId, calendarId))
       .orderBy(
-        asc(availabilityWindows.categoryId),
+        asc(availabilityWindows.activityTypeId),
         asc(availabilityWindows.weekday),
         asc(availabilityWindows.startMin),
       ),
@@ -119,7 +119,7 @@ export async function readCalendarConfiguration(
       isOwner: calendar.ownerId === actorId,
     },
     windows,
-    categories: tenantCategories,
+    activityTypes: tenantActivityTypes,
     availability,
     weekTypeOverrides: overrides,
   };

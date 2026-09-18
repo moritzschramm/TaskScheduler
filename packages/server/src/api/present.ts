@@ -45,7 +45,7 @@ export async function presentSchedule({ tx, schedule }: PresentInput): Promise<S
         occurrenceId: placement.occurrenceId,
         taskId: schedulable?.taskId ?? '',
         title: titles.get(schedulable?.taskId ?? '') ?? '',
-        categoryId: schedulable?.categoryId ?? null,
+        activityTypeId: schedulable?.activityTypeId ?? null,
         start: toIso(placement.interval.start),
         end: toIso(placement.interval.end),
         cooldownMin: placement.cooldownMin,
@@ -96,7 +96,7 @@ export async function presentSchedule({ tx, schedule }: PresentInput): Promise<S
 export function presentCapacityCell(cell: CapacityCell) {
   return {
     calendarId: cell.calendarId,
-    categoryId: cell.categoryId,
+    activityTypeId: cell.activityTypeId,
     weekStart: cell.weekStart,
     supplyMin: cell.supplyMin,
     demandMin: cell.demandMin,
@@ -143,8 +143,8 @@ export function presentTaskNode(node: TaskTreeNode): TaskNode {
     status: node.status,
     version: node.version,
     estimatedDurationMin: node.estimatedDurationMin,
-    ownCategoryId: node.ownCategoryId,
-    effectiveCategoryId: node.effectiveCategoryId,
+    ownActivityTypeId: node.ownActivityTypeId,
+    effectiveActivityTypeId: node.effectiveActivityTypeId,
     ownPriority: node.ownPriority,
     effectivePriority: node.effectivePriority,
     ownDueDate: isoOrNull(node.ownDueDate),

@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import InheritedField from './InheritedField.vue';
 import { FOCUS_LEVELS, focusLabel } from '@/lib/focus';
 import { formatMinuteOfDay, fromLocalInput, parseMinuteOfDay, toLocalInput } from '@/lib/time';
-import type { Category, CommandRequest, TaskNode } from '@ambitime/shared';
+import type { ActivityType, CommandRequest, TaskNode } from '@ambitime/shared';
 
 const { t } = useI18n();
 
@@ -34,7 +34,7 @@ const props = defineProps<{
   /** The parent a new task is created under, or the existing task's parent. */
   parent: TaskNode | null;
   calendarId: string;
-  categories: Category[];
+  activityTypes: ActivityType[];
   timeZone: string;
   /**
    * The hour a new task was started from, as §4.4's preferred range.
@@ -61,15 +61,15 @@ interface Draft {
   notes: string;
   estimate: string;
   /**
-   * The chosen category id, or `''` meaning "whatever an ancestor supplies".
+   * The chosen activity type id, or `''` meaning "whatever an ancestor supplies".
    *
-   * Not an `{ overridden, value }` pair like its neighbours, because a category
+   * Not an `{ overridden, value }` pair like its neighbours, because an activity type
    * is not optional: §6.2 rule 1 makes it the thing that decides whether a task
    * can be placed at all, so there is no third "unset" state to express and no
    * switch is needed to reach it. Inheriting is still expressible — it is the
    * empty option, offered only when there is in fact something to inherit.
    */
-  category: string;
+  activityType: string;
   priority: { overridden: boolean; value: string };
   due: { overridden: boolean; value: string; kind: 'soft' | 'hard' };
   preferred: { overridden: boolean; start: string; end: string };
@@ -94,9 +94,10 @@ function emptyDraft(): Draft {
     notes: '',
     estimate: '',
     // Inherit where there is something to inherit; otherwise the first
-    // category, because a new task must have one and picking the only sensible
+    // activity type, because a new task must have one and picking the only sensible
     // default is better than presenting an empty box that refuses to save.
-    category: props.parent?.effectiveCategoryId == null ? (props.categories[0]?.id ?? '') : '',
+    activityType:
+      props.parent?.effectiveActivityTypeId == null ? (props.activityTypes[0]?.id ?? '') : '',
     priority: { overridden: false, value: '' },
     due: { overridden: false, value: '', kind: 'soft' },
     // Overridden when it came from a click on the grid: the user pointed at an
@@ -134,7 +135,7 @@ watch(
       estimate: task.estimatedDurationMin === null ? '' : String(task.estimatedDurationMin),
       // Its own, or empty for "inherited" — the same two states the select
       // offers, so what is on screen is what will be sent.
-      category: task.ownCategoryId ?? '',
+      activityType: task.ownActivityTypeId ?? '',
       priority: {
         overridden: task.ownPriority !== null,
         value: String(task.ownPriority ?? task.effectivePriority ?? 0),
@@ -168,8 +169,10 @@ watch(
   { immediate: true },
 );
 
-const categoryName = (id: string | null): string | null =>
-  id === null ? null : (props.categories.find((category) => category.id === id)?.name ?? id);
+const activityTypeName = (id: string | null): string | null =>
+  id === null
+    ? null
+    : (props.activityTypes.find((activityType) => activityType.id === id)?.name ?? id);
 
 /** What an ancestor supplies for each field, for the "Inherited: …" line. */
 const inherited = computed(() => {
@@ -182,7 +185,7 @@ const inherited = computed(() => {
     props.task === null ? effective : own === null ? effective : null;
 
   return {
-    category: categoryName(from(source.ownCategoryId, source.effectiveCategoryId)),
+    activityType: activityTypeName(from(source.ownActivityTypeId, source.effectiveActivityTypeId)),
     priority: from(source.ownPriority, source.effectivePriority),
     due: from(source.ownDueDate, source.effectiveDueDate),
     focus: from(source.ownFocusLevel, source.effectiveFocusLevel),
@@ -221,41 +224,43 @@ const dueConflict = computed(() => {
 });
 
 /**
- * What this task's category would be if it set none of its own (§4.4).
+ * What this task's activity type would be if it set none of its own (§4.4).
  *
- * The parent's *effective* value, so a grandparent's category binds through a
+ * The parent's *effective* value, so a grandparent's activity type binds through a
  * parent that has none — which is what nearest-ancestor-wins means.
  */
-const inheritedCategoryId = computed(() => {
+const inheritedActivityTypeId = computed(() => {
   // Creating: the container decides what a new child would fall back to.
-  if (props.parent !== null) return props.parent.effectiveCategoryId;
+  if (props.parent !== null) return props.parent.effectiveActivityTypeId;
 
   // Editing: what this task falls back to is its effective value, but only
   // where that is not its own — the same distinction `inherited` draws for
   // every other property.
   const task = props.task;
-  return task !== null && task.ownCategoryId === null ? task.effectiveCategoryId : null;
+  return task !== null && task.ownActivityTypeId === null ? task.effectiveActivityTypeId : null;
 });
 
 /**
- * Every task needs a category, but not every task needs its *own* (§4.4, §6.2).
+ * Every task needs an activity type, but not every task needs its *own* (§4.4, §6.2).
  *
- * The rule the engine enforces is that a leaf has an **effective** category,
+ * The rule the engine enforces is that a leaf has an **effective** activity type,
  * because without one no availability window applies to it and it is never
  * offered to the solver at all — it simply disappears, which is the bug this
  * form now refuses to create. Inheritance still satisfies it: a subtask under a
  * categorised parent is already covered, and demanding its own would make
  * §4.4's whole mechanism unusable in the one place it is most useful.
  */
-const effectiveCategoryId = computed(() => draft.value.category || inheritedCategoryId.value);
+const effectiveActivityTypeId = computed(
+  () => draft.value.activityType || inheritedActivityTypeId.value,
+);
 
-/** The parent's category, named, for the "same as" option. */
-const inheritedCategoryName = computed(() => categoryName(inheritedCategoryId.value));
+/** The parent's activity type, named, for the "same as" option. */
+const inheritedActivityTypeName = computed(() => activityTypeName(inheritedActivityTypeId.value));
 
 const canSave = computed(
   () =>
     draft.value.title.trim() !== '' &&
-    effectiveCategoryId.value !== null &&
+    effectiveActivityTypeId.value !== null &&
     dueConflict.value === null &&
     !busy.value,
 );
@@ -328,7 +333,7 @@ function createRequest(): CommandRequest {
       title: draft.value.title,
       ...(draft.value.notes === '' ? {} : { notes: draft.value.notes }),
       ...(props.parent === null ? {} : { parentId: props.parent.id }),
-      ...(draft.value.category === '' ? {} : { categoryId: draft.value.category }),
+      ...(draft.value.activityType === '' ? {} : { activityTypeId: draft.value.activityType }),
       ...(estimate === null ? {} : { estimatedDurationMin: estimate }),
       ...(numberOrNull(draft.value.priority) === null
         ? {}
@@ -356,7 +361,7 @@ function editRequest(): CommandRequest {
         title: draft.value.title,
         notes: draft.value.notes === '' ? null : draft.value.notes,
         // `null` clears the override and reverts to the inherited value (§4.4).
-        categoryId: draft.value.category === '' ? null : draft.value.category,
+        activityTypeId: draft.value.activityType === '' ? null : draft.value.activityType,
         estimatedDurationMin: draft.value.estimate === '' ? null : Number(draft.value.estimate),
         priority: numberOrNull(draft.value.priority),
         dueDate: dueValue(),
@@ -449,37 +454,41 @@ async function complete(): Promise<void> {
 
     <div class="grid gap-5 sm:grid-cols-2">
       <!--
-        No override toggle: a category is not one of §4.4's three-state
+        No override toggle: an activity type is not one of §4.4's three-state
         properties in practice, because "unset" is not a state a task may be
         saved in. Inheriting is still reachable — it is the first option, and it
         appears only when there is an ancestor to inherit from.
       -->
-      <div class="space-y-1.5" data-testid="field-category">
-        <Label for="task-category">{{ t('editor.activityType') }}</Label>
+      <div class="space-y-1.5" data-testid="field-activity-type">
+        <Label for="task-activity-type">{{ t('editor.activityType') }}</Label>
         <Select
-          id="task-category"
-          v-model="draft.category"
-          :aria-invalid="effectiveCategoryId === null ? 'true' : undefined"
-          data-testid="task-category"
+          id="task-activity-type"
+          v-model="draft.activityType"
+          :aria-invalid="effectiveActivityTypeId === null ? 'true' : undefined"
+          data-testid="task-activity-type"
         >
-          <option v-if="inheritedCategoryId !== null" value="">
+          <option v-if="inheritedActivityTypeId !== null" value="">
             <template v-if="parent">{{
               t('editor.sameAsParent', { title: parent.title })
             }}</template>
             <template v-else>{{ t('editor.inherited') }}</template>
-            ({{ inheritedCategoryName }})
+            ({{ inheritedActivityTypeName }})
           </option>
-          <option v-for="category in categories" :key="category.id" :value="category.id">
-            {{ category.name }}
+          <option
+            v-for="activityType in activityTypes"
+            :key="activityType.id"
+            :value="activityType.id"
+          >
+            {{ activityType.name }}
           </option>
         </Select>
         <p
-          v-if="categories.length === 0"
+          v-if="activityTypes.length === 0"
           class="text-muted-foreground text-xs"
-          data-testid="no-categories-yet"
+          data-testid="no-activity-types-yet"
         >
           {{ t('editor.noneYet') }}
-          <RouterLink class="underline underline-offset-4" to="/categories">
+          <RouterLink class="underline underline-offset-4" to="/activity-types">
             {{ t('editor.addOne') }}
           </RouterLink>
           {{ t('editor.cannotSchedule') }}

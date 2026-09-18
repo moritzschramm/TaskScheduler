@@ -29,7 +29,7 @@ function routerFor(initial: string): Router {
     routes: [
       { path: '/', name: 'schedule', component: stub },
       { path: '/tasks', name: 'tasks', component: stub },
-      { path: '/categories', name: 'categories', component: stub },
+      { path: '/activity-types', name: 'activity-types', component: stub },
       { path: '/appointments', name: 'appointments', component: stub },
       { path: '/settings', name: 'settings', component: stub },
       { path: '/history', name: 'history', component: stub },
@@ -74,7 +74,9 @@ describe('the primary navigation', () => {
       'Tasks',
       'Activity types',
     ]);
-    expect(wrapper.find('[data-testid="nav-categories"]').attributes('href')).toBe('/categories');
+    expect(wrapper.find('[data-testid="nav-activity-types"]').attributes('href')).toBe(
+      '/activity-types',
+    );
     wrapper.unmount();
   });
 
@@ -90,15 +92,15 @@ describe('the primary navigation', () => {
     // `/` is a prefix of every path, so an active-match rather than an
     // exact-match would mark Schedule current while you stood on Activity
     // types.
-    const onCategories = await shell('/categories');
+    const onActivityTypes = await shell('/activity-types');
 
     expect(
-      onCategories.find('[data-testid="nav-schedule"]').attributes('aria-current'),
+      onActivityTypes.find('[data-testid="nav-schedule"]').attributes('aria-current'),
     ).toBeUndefined();
-    expect(onCategories.find('[data-testid="nav-categories"]').attributes('aria-current')).toBe(
-      'page',
-    );
-    onCategories.unmount();
+    expect(
+      onActivityTypes.find('[data-testid="nav-activity-types"]').attributes('aria-current'),
+    ).toBe('page');
+    onActivityTypes.unmount();
   });
 
   it('has no axe violations', async () => {

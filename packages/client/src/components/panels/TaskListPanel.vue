@@ -7,7 +7,7 @@ import {
   type ColumnDef,
   type TableFeatures,
 } from '@tanstack/vue-table';
-import type { Category, TaskNode } from '@ambitime/shared';
+import type { ActivityType, TaskNode } from '@ambitime/shared';
 import type { MessageKey } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +28,7 @@ const { t } = useI18n();
  */
 export interface QuickAddDraft {
   /** The group the row belongs to; `null` is the ungrouped one. */
-  categoryId: string | null;
+  activityTypeId: string | null;
   title: string;
   estimatedDurationMin: number;
   priority: number | null;
@@ -39,8 +39,8 @@ export interface QuickAddDraft {
 const props = withDefaults(
   defineProps<{
     tasks: TaskNode[];
-    /** Names for the groups; a task's own is `effectiveCategoryId` (§4.3). */
-    categories?: Category[];
+    /** Names for the groups; a task's own is `effectiveActivityTypeId` (§4.3). */
+    activityTypes?: ActivityType[];
     selectedId?: string | null;
     editable?: boolean;
     /**
@@ -53,7 +53,7 @@ const props = withDefaults(
      */
     quickAdd?: ((draft: QuickAddDraft) => Promise<boolean>) | undefined;
   }>(),
-  { categories: () => [], selectedId: null, editable: false, quickAdd: undefined },
+  { activityTypes: () => [], selectedId: null, editable: false, quickAdd: undefined },
 );
 
 const emit = defineEmits<{ select: [task: TaskNode]; addChild: [parent: TaskNode]; addRoot: [] }>();
@@ -82,12 +82,12 @@ const MAX_DEPTH = 5;
  * **Grouped by activity type, and collapsible.** A flat list of everything is
  * the same shape as the backlog and answers the same question badly: what a
  * person wants from this screen is "how much work is there, of what kind", and
- * a category is the only division the system actually schedules by (§6.2 rule
+ * an activity type is the only division the system actually schedules by (§6.2 rule
  * 1). Every group starts open, because collapsing is a thing you do to a
  * section you have decided to ignore — never the state you should have to
  * undo before you can read the page.
  *
- * Inheritance keeps the trees whole. A subtask with no category of its own
+ * Inheritance keeps the trees whole. A subtask with no activity type of its own
  * takes its parent's (§4.4), so a group holds entire subtrees unless somebody
  * has deliberately said otherwise — and when they have, the task appears under
  * the type they gave it, which is the thing they were asking for.
@@ -129,7 +129,7 @@ const headers = computed(() => table.getHeaderGroups()[0]?.headers ?? []);
 const collapsed = ref(new Set<string>());
 
 /** The key a task with no activity type is grouped under. */
-const NO_CATEGORY = '';
+const NO_ACTIVITY_TYPE = '';
 
 const byId = computed(() => new Map(props.tasks.map((task) => [task.id, task])));
 
@@ -145,7 +145,7 @@ function indentOf(task: TaskNode, groupKey: string): number {
   let current = task.parentId === null ? undefined : byId.value.get(task.parentId);
 
   while (current !== undefined) {
-    if ((current.effectiveCategoryId ?? NO_CATEGORY) === groupKey) indent += 1;
+    if ((current.effectiveActivityTypeId ?? NO_ACTIVITY_TYPE) === groupKey) indent += 1;
     current = current.parentId === null ? undefined : byId.value.get(current.parentId);
   }
 
@@ -163,13 +163,13 @@ interface Group {
  *
  * Not alphabetical: the tree's own order is somebody's ordering of their work,
  * and re-sorting the containers around it would move the group you were reading
- * every time you renamed a category.
+ * every time you renamed an activity type.
  */
 const groups = computed<Group[]>(() => {
   const found = new Map<string, Group>();
 
   for (const row of rows.value) {
-    const key = row.original.effectiveCategoryId ?? NO_CATEGORY;
+    const key = row.original.effectiveActivityTypeId ?? NO_ACTIVITY_TYPE;
     const existing = found.get(key);
     const entry = { row, indent: indentOf(row.original, key) };
 
@@ -181,8 +181,11 @@ const groups = computed<Group[]>(() => {
 });
 
 function nameOf(key: string): string {
-  if (key === NO_CATEGORY) return t('tasks.ungrouped');
-  return props.categories.find((category) => category.id === key)?.name ?? t('tasks.unknownGroup');
+  if (key === NO_ACTIVITY_TYPE) return t('tasks.ungrouped');
+  return (
+    props.activityTypes.find((activityType) => activityType.id === key)?.name ??
+    t('tasks.unknownGroup')
+  );
 }
 
 function toggle(key: string): void {
@@ -279,7 +282,7 @@ async function add(key: string): Promise<void> {
   adding.value = key;
   try {
     const landed = await props.quickAdd({
-      categoryId: key === NO_CATEGORY ? null : key,
+      activityTypeId: key === NO_ACTIVITY_TYPE ? null : key,
       title: draft.title.trim(),
       estimatedDurationMin: numberIn(draft.estimate)!,
       priority: numberIn(draft.priority),

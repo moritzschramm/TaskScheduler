@@ -49,7 +49,7 @@ describe('the audit view', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Write the report',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     } as never);
@@ -85,7 +85,7 @@ describe('the audit view', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Write the report',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     } as never);
@@ -114,7 +114,7 @@ describe('the audit view', () => {
         params: {
           calendarId: world.calendarId,
           title,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           estimatedDurationMin: 120,
         },
       } as never);
@@ -136,7 +136,7 @@ describe('the audit view', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Older than the field',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     } as never);
@@ -156,8 +156,8 @@ describe('the audit view', () => {
   it('pages on the log’s own order, not on a timestamp', async () => {
     for (let index = 0; index < 6; index += 1) {
       await world.run({
-        type: 'CreateCategory',
-        params: { name: `Category ${index}` },
+        type: 'CreateActivityType',
+        params: { name: `Activity type ${index}` },
       } as never);
     }
 
@@ -180,7 +180,7 @@ describe('the audit view', () => {
 
   it('prunes past the retention window, and undo goes with it', async () => {
     await world.run({
-      type: 'CreateCategory',
+      type: 'CreateActivityType',
       params: { name: 'Old' },
     } as never);
 
@@ -226,7 +226,7 @@ describe('the audit view', () => {
         params: {
           calendarId: world.calendarId,
           title,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           estimatedDurationMin: 60,
         },
       } as never);
@@ -234,7 +234,7 @@ describe('the audit view', () => {
     it('drops the row images, and only those', async () => {
       for (const title of ['Alpha', 'Beta', 'Gamma']) await seed(title);
 
-      // Four: the fixture's calendar, category and hours, and Alpha's create.
+      // Four: the fixture's calendar, activity type and hours, and Alpha's create.
       // Past a window two deep, no press of undo can reach any of them.
       expect(await compact(2)).toBe(4);
 
@@ -252,7 +252,7 @@ describe('the audit view', () => {
         'CreateTask',
         'CreateTask',
         'SetAvailabilityWindows',
-        'CreateCategory',
+        'CreateActivityType',
         'CreateCalendar',
       ]);
       // What the audit view asks of a stripped entry, still answered: Alpha's

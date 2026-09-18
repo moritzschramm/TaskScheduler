@@ -23,7 +23,7 @@ import {
   taskStatus,
   visibilityScope,
 } from './scheduling-enums.js';
-import { calendars, categories } from './calendars.js';
+import { calendars, activityTypes } from './calendars.js';
 import { tenants } from './tenancy.js';
 import { users } from './identity.js';
 
@@ -60,7 +60,7 @@ export const sequences = pgTable(
 /**
  * The schedulable unit (spec §4.4).
  *
- * **Inheritance.** Category, priority, due date, preferred range/focus and
+ * **Inheritance.** Activity type, priority, due date, preferred range/focus and
  * cooldown are all nullable here on purpose: a NULL means "inherit from the
  * nearest ancestor that sets it", and setting a value locally creates an
  * override. Only leaf tasks are placed; a parent's duration and completion roll
@@ -99,7 +99,7 @@ export const tasks = pgTable(
     depth: smallint('depth').notNull().default(1),
 
     /** Inheritable. Determines which availability windows are eligible. */
-    categoryId: uuid('category_id'),
+    activityTypeId: uuid('activity_type_id'),
 
     /** Required for leaves; a parent's duration rolls up from its leaves. */
     estimatedDurationMin: integer('estimated_duration_min'),
@@ -117,7 +117,7 @@ export const tasks = pgTable(
     /** 1 (shallow) … 5 (deep), matched against a window's focus profile (§6.5). */
     focusLevel: smallint('focus_level'),
 
-    /** Inheritable; overrides the category default. Non-compressible (§6.2). */
+    /** Inheritable; overrides the activity type default. Non-compressible (§6.2). */
     cooldownOverrideMin: integer('cooldown_override_min'),
 
     sequenceId: uuid('sequence_id'),
@@ -166,9 +166,9 @@ export const tasks = pgTable(
       name: 'tasks_parent_same_tenant_fk',
     }).onDelete('cascade'),
     foreignKey({
-      columns: [table.categoryId, table.tenantId],
-      foreignColumns: [categories.id, categories.tenantId],
-      name: 'tasks_category_same_tenant_fk',
+      columns: [table.activityTypeId, table.tenantId],
+      foreignColumns: [activityTypes.id, activityTypes.tenantId],
+      name: 'tasks_activity_type_same_tenant_fk',
     }).onDelete('set null'),
     foreignKey({
       columns: [table.sequenceId, table.tenantId],

@@ -39,7 +39,7 @@ const WEEK = '2026-03-23';
 const WINDOW_MIN = 480;
 
 function cellOf(report: CapacityReport, week = WEEK): CapacityCell | undefined {
-  return report.cells.find((cell) => cell.weekStart === week && cell.categoryId === 'cat-work');
+  return report.cells.find((cell) => cell.weekStart === week && cell.activityTypeId === 'cat-work');
 }
 
 describe('interval algebra', () => {
@@ -95,7 +95,7 @@ describe('interval algebra', () => {
 });
 
 describe('supply (spec §6.6)', () => {
-  it('counts the window minutes of a category in a week', () => {
+  it('counts the window minutes of an activity type in a week', () => {
     const report = computeCapacity({ context: context({ windows: [MONDAY_WINDOW] }) });
 
     expect(cellOf(report)?.supplyMin).toBe(WINDOW_MIN);
@@ -473,7 +473,7 @@ describe('the contiguity check (spec §6.6)', () => {
     expect(cell.demandMin).toBe(240);
   });
 
-  it('holds trivially when no sequence wants the category', () => {
+  it('holds trivially when no sequence wants the activity type', () => {
     const report = computeCapacity({ context: context({ windows: [MONDAY_WINDOW] }) });
 
     expect(cellOf(report)?.longestSequenceMin).toBe(0);
@@ -482,14 +482,14 @@ describe('the contiguity check (spec §6.6)', () => {
 });
 
 describe('the report as a whole', () => {
-  it('separates categories and calendars', () => {
-    const other = { ...MONDAY_WINDOW, ruleId: 'rule-gym', categoryId: 'cat-gym' };
+  it('separates activity types and calendars', () => {
+    const other = { ...MONDAY_WINDOW, ruleId: 'rule-gym', activityTypeId: 'cat-gym' };
 
     const report = computeCapacity({
       context: context({ windows: [MONDAY_WINDOW, other] }),
     });
 
-    expect(report.cells.map((cell) => cell.categoryId).sort()).toEqual(['cat-gym', 'cat-work']);
+    expect(report.cells.map((cell) => cell.activityTypeId).sort()).toEqual(['cat-gym', 'cat-work']);
   });
 
   it('returns cells in a stable order', () => {
@@ -498,12 +498,12 @@ describe('the report as a whole', () => {
       windows: [
         TUESDAY_WINDOW,
         MONDAY_WINDOW,
-        { ...MONDAY_WINDOW, ruleId: 'rule-gym', categoryId: 'cat-gym' },
+        { ...MONDAY_WINDOW, ruleId: 'rule-gym', activityTypeId: 'cat-gym' },
       ],
     });
 
     const keys = computeCapacity({ context: ctx }).cells.map(
-      (cell) => `${cell.weekStart} ${cell.calendarId} ${cell.categoryId}`,
+      (cell) => `${cell.weekStart} ${cell.calendarId} ${cell.activityTypeId}`,
     );
 
     expect(keys).toEqual([...keys].sort());

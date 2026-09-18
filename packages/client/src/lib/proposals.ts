@@ -46,7 +46,7 @@ function t(key: MessageKey, params?: Params): string {
 export interface Subject {
   taskTitles: ReadonlyMap<string, string>;
   blockTitles: ReadonlyMap<string, string>;
-  categoryNames: ReadonlyMap<string, string>;
+  activityTypeNames: ReadonlyMap<string, string>;
   weekNames: ReadonlyMap<string, string>;
   /**
    * Every availability window as it stands, so a replacement can be shown as
@@ -265,23 +265,23 @@ function headlineOf(request: CommandRequest, subject: Subject): string {
       return t('assistant.plan.BlockOutDay', { day: day(request.params.date, subject) });
     case 'ClearWeek':
       return t('assistant.plan.ClearWeek', { day: day(request.params.week, subject) });
-    case 'CreateCategory':
-      return t('assistant.plan.CreateCategory', { name: request.params.name });
-    case 'EditCategory':
-      return t('assistant.plan.EditCategory', {
-        what: named(request.params.categoryId, subject.categoryNames),
+    case 'CreateActivityType':
+      return t('assistant.plan.CreateActivityType', { name: request.params.name });
+    case 'EditActivityType':
+      return t('assistant.plan.EditActivityType', {
+        what: named(request.params.activityTypeId, subject.activityTypeNames),
       });
-    case 'DeleteCategory':
-      return t('assistant.plan.DeleteCategory', {
-        what: named(request.params.categoryId, subject.categoryNames),
+    case 'DeleteActivityType':
+      return t('assistant.plan.DeleteActivityType', {
+        what: named(request.params.activityTypeId, subject.activityTypeNames),
       });
     case 'SetAvailabilityWindows':
       return request.params.weekTypeOverrideId === undefined
         ? t('assistant.plan.SetAvailabilityWindows', {
-            what: named(request.params.categoryId, subject.categoryNames),
+            what: named(request.params.activityTypeId, subject.activityTypeNames),
           })
         : t('assistant.plan.SetAvailabilityWindowsIn', {
-            what: named(request.params.categoryId, subject.categoryNames),
+            what: named(request.params.activityTypeId, subject.activityTypeNames),
             week: named(request.params.weekTypeOverrideId, subject.weekNames),
           });
     case 'CreateWeekTypeOverride':
@@ -348,7 +348,7 @@ function detailsOf(request: CommandRequest, subject: Subject): string[] {
  */
 function replacement(
   params: {
-    categoryId: string;
+    activityTypeId: string;
     weekTypeOverrideId?: string | undefined;
     windows: readonly WindowRule[];
   },
@@ -357,7 +357,8 @@ function replacement(
   const address = params.weekTypeOverrideId ?? null;
   const current = subject.availability.filter(
     (window) =>
-      window.categoryId === params.categoryId && (window.weekTypeOverrideId ?? null) === address,
+      window.activityTypeId === params.activityTypeId &&
+      (window.weekTypeOverrideId ?? null) === address,
   );
 
   const proposed = new Set(params.windows.map(key));
@@ -440,8 +441,8 @@ const SILENT = new Set([
 function render(key: string, value: unknown, subject: Subject): string {
   if (value === null) return t('assistant.field.cleared');
 
-  if (key === 'categoryId' && typeof value === 'string') {
-    return subject.categoryNames.get(value) ?? value;
+  if (key === 'activityTypeId' && typeof value === 'string') {
+    return subject.activityTypeNames.get(value) ?? value;
   }
 
   if (key === 'dueDate' && isRecord(value) && typeof value['date'] === 'string') {

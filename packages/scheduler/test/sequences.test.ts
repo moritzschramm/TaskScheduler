@@ -196,10 +196,10 @@ describe('collapsing a sequence to a composite (spec §6.4)', () => {
     expect(unit.composite.focusLevel).toBe(4);
   });
 
-  it('refuses a sequence whose members are in different categories', () => {
-    // No window belongs to two categories, so no window can hold this block.
+  it('refuses a sequence whose members are in different activity types', () => {
+    // No window belongs to two activity types, so no window can hold this block.
     // Placing it anyway would put a member outside its own availability.
-    const unit = unitFor([member('a'), member('b', { categoryId: 'cat-other' })]);
+    const unit = unitFor([member('a'), member('b', { activityTypeId: 'cat-other' })]);
 
     expect(unit.blocked).toBe('sequence_members_incompatible');
   });
@@ -374,9 +374,9 @@ describe('placing a sequence (spec §6.2 rule 5)', () => {
     expect(result.backlog[0]?.reason).toBe('no_contiguous_span');
   });
 
-  it('backlogs a sequence whose members are in different categories', () => {
+  it('backlogs a sequence whose members are in different activity types', () => {
     const ctx = context({
-      schedulables: [member('a'), member('b', { categoryId: 'cat-other' })],
+      schedulables: [member('a'), member('b', { activityTypeId: 'cat-other' })],
       sequences: [sequence('seq-1')],
     });
 
@@ -449,7 +449,7 @@ describe('the validator agrees with the solver about sequences', () => {
   });
 
   it('accepts a block held by one of two overlapping windows', () => {
-    // Nothing in the schema stops a category having two overlapping
+    // Nothing in the schema stops an activity type having two overlapping
     // availability windows. Resolving each member to "the first window that
     // contains it" would split this block between the short window and the long
     // one, even though the long one comfortably holds the whole thing.

@@ -69,7 +69,7 @@ const CREATED_ENTITY: Readonly<Record<JournalTable, CreatedEntity['entity']>> = 
   appointments: 'appointment',
   calendars: 'calendar',
   calendar_windows: 'calendar_window',
-  categories: 'category',
+  activity_types: 'activity_type',
   availability_windows: 'availability_window',
   week_type_overrides: 'week_type_override',
   notifications: 'notification',

@@ -39,7 +39,7 @@ describe('the command endpoint', () => {
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         ...extra,
       },
@@ -147,7 +147,7 @@ describe('the command endpoint', () => {
   });
 
   it('reports a task nobody can schedule rather than dropping it', async () => {
-    // No category, so the solver was never offered it (§6.7). The distinction
+    // No activity type, so the solver was never offered it (§6.7). The distinction
     // matters to a user: this is a data problem, not a busy calendar.
     const result = await world.run({
       type: 'CreateTask',
@@ -155,7 +155,7 @@ describe('the command endpoint', () => {
     });
 
     expect(result.schedules[0]?.unschedulable).toEqual([
-      expect.objectContaining({ reason: 'no_category' }),
+      expect.objectContaining({ reason: 'no_activity_type' }),
     ]);
   });
 
@@ -167,7 +167,7 @@ describe('the command endpoint', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Once',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     };

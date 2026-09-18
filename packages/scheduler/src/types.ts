@@ -25,13 +25,13 @@ export interface Schedulable {
   occurrenceId: string;
   taskId: string;
   calendarId: string;
-  categoryId: string;
+  activityTypeId: string;
 
   /** Integer minutes. Must be positive to be placeable. */
   durationMin: number;
   /**
    * Non-compressible gap reserved *after* the task (spec §6.2 rule 3), already
-   * resolved from the task override or the category default.
+   * resolved from the task override or the activity type default.
    */
   cooldownMin: number;
 
@@ -67,7 +67,7 @@ export interface FixedBlock {
   /**
    * Non-compressible time reserved *after* the block, like a task's (rule 3).
    *
-   * The same idea §4.3 gives a category and §4.4 a task, for the same reason: a
+   * The same idea §4.3 gives an activity type and §4.4 a task, for the same reason: a
    * meeting you need twenty minutes to come back from occupies more of the
    * afternoon than the meeting. Absent is zero, so a caller that has never
    * heard of it gets exactly the old behaviour.
@@ -84,7 +84,7 @@ export interface FixedBlock {
 export interface AvailabilityRule {
   id: string;
   calendarId: string;
-  categoryId: string;
+  activityTypeId: string;
   /** NULL/absent = part of the default set; set = part of that override's set. */
   weekTypeOverrideId?: string;
   /** ISO-8601: 1 = Monday … 7 = Sunday. */
@@ -108,7 +108,7 @@ export interface ResolvedWindow {
   /** The rule this came from; several resolved windows share one rule id. */
   ruleId: string;
   calendarId: string;
-  categoryId: string;
+  activityTypeId: string;
   interval: Interval;
   focusLevel?: number;
 }
@@ -129,7 +129,7 @@ export interface CalendarSpec {
    * Spec §9.1 — "when the scheduler may place tasks for this calendar".
    *
    * A union of per-weekday ranges that clips every availability window: a
-   * category may say "exercise, Saturdays" and the working window still says
+   * activity type may say "exercise, Saturdays" and the working window still says
    * the calendar is not worked in on a Saturday, and the second wins.
    *
    * **Absent is not empty.** Absent means unrestricted, which is what a

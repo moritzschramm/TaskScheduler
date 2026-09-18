@@ -18,7 +18,7 @@ import {
 import {
   availabilityWindows,
   calendars,
-  categories,
+  activityTypes,
   placements,
   taskOccurrences,
   tasks,
@@ -38,7 +38,7 @@ import type { Task } from '../../src/db/schema/index.js';
  * claim about the database. A mocked one would assert nothing.
  *
  * The world is a single user, in a single tenant, with one calendar in
- * `Europe/Berlin` and a work category available on weekdays. Berlin rather than
+ * `Europe/Berlin` and a work activity type available on weekdays. Berlin rather than
  * UTC on purpose: local week boundaries and wall-clock windows are where the
  * off-by-one-hour mistakes live, and a UTC-only fixture would never find them.
  */
@@ -53,7 +53,7 @@ export interface World {
   tenantId: string;
   userId: string;
   calendarId: string;
-  categoryId: string;
+  activityTypeId: string;
   /** Applies a command as the world's user, at `MONDAY_0900` unless told otherwise. */
   run: (draft: WorldCommand, options?: RunOptions) => Promise<CommandOutcome>;
   /**
@@ -80,7 +80,7 @@ export interface RunOptions {
 }
 
 export interface WorldOptions {
-  /** Weekday availability for the work category, in local minutes. */
+  /** Weekday availability for the work activity type, in local minutes. */
   window?: { startMin: number; endMin: number; weekdays?: number[] };
   defaultCooldownMin?: number;
 }
@@ -94,35 +94,35 @@ export async function createWorld(
   const tenantId = await createTenant(db, 'Acme');
   await addMember(db, tenantId, user.userId, 'owner');
 
-  const { calendarId, categoryId } = await withSystemPrivileges(db, async (tx) => {
+  const { calendarId, activityTypeId } = await withSystemPrivileges(db, async (tx) => {
     const [calendar] = await tx
       .insert(calendars)
       .values({ tenantId, ownerId: user.userId, name: 'Primary', timezone: TIME_ZONE })
       .returning({ id: calendars.id });
-    const [category] = await tx
-      .insert(categories)
+    const [activityType] = await tx
+      .insert(activityTypes)
       .values({
         tenantId,
         name: 'Work',
         defaultCooldownMin: options.defaultCooldownMin ?? 0,
       })
-      .returning({ id: categories.id });
+      .returning({ id: activityTypes.id });
 
-    if (!calendar || !category) throw new Error('Failed to build the test world');
+    if (!calendar || !activityType) throw new Error('Failed to build the test world');
 
     const window = options.window ?? { startMin: 9 * 60, endMin: 17 * 60 };
     await tx.insert(availabilityWindows).values(
       (window.weekdays ?? [1, 2, 3, 4, 5]).map((weekday) => ({
         tenantId,
         calendarId: calendar.id,
-        categoryId: category.id,
+        activityTypeId: activityType.id,
         weekday,
         startMin: window.startMin,
         endMin: window.endMin,
       })),
     );
 
-    return { calendarId: calendar.id, categoryId: category.id };
+    return { calendarId: calendar.id, activityTypeId: activityType.id };
   });
 
   const runAs = (actorId: string, draft: WorldCommand, runOptions: RunOptions = {}) =>
@@ -140,7 +140,7 @@ export async function createWorld(
     tenantId,
     userId: user.userId,
     calendarId,
-    categoryId,
+    activityTypeId,
 
     run: (draft, runOptions = {}) => runAs(user.userId, draft, runOptions),
 
@@ -182,7 +182,7 @@ export async function seedTask(
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         ...params,
       },

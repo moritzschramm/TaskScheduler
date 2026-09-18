@@ -119,7 +119,7 @@ describe('stage-1 terms (spec §6.5)', () => {
     expect(priority(orderContext())).toBe(0);
   });
 
-  it('scores constrainedness as the share of the category’s window it needs', () => {
+  it('scores constrainedness as the share of the activity type’s window it needs', () => {
     // Most-constrained-first: 60 of 960 available minutes.
     expect(constrainedness(orderContext())).toBe(62_500);
     // A task needing more than exists clamps to 1 rather than exceeding it.

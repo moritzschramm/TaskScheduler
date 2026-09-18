@@ -27,13 +27,13 @@ export function at(iso: string): Instant {
 }
 
 export const CALENDAR: CalendarSpec = { id: 'cal-1', timeZone: 'Europe/Berlin' };
-export const CATEGORY = 'cat-work';
+export const ACTIVITY_TYPE = 'cat-work';
 
 /** Monday 2026-03-23, 09:00–17:00 Berlin time = 08:00–16:00 UTC (CET, UTC+1). */
 export const MONDAY_WINDOW: ResolvedWindow = {
   ruleId: 'rule-mon',
   calendarId: CALENDAR.id,
-  categoryId: CATEGORY,
+  activityTypeId: ACTIVITY_TYPE,
   interval: { start: at('2026-03-23T08:00:00Z'), end: at('2026-03-23T16:00:00Z') },
 };
 
@@ -41,7 +41,7 @@ export const MONDAY_WINDOW: ResolvedWindow = {
 export const TUESDAY_WINDOW: ResolvedWindow = {
   ruleId: 'rule-tue',
   calendarId: CALENDAR.id,
-  categoryId: CATEGORY,
+  activityTypeId: ACTIVITY_TYPE,
   interval: { start: at('2026-03-24T08:00:00Z'), end: at('2026-03-24T16:00:00Z') },
 };
 
@@ -53,7 +53,7 @@ export function schedulable(overrides: Partial<Schedulable> = {}): Schedulable {
   return {
     taskId: `task-${id}`,
     calendarId: CALENDAR.id,
-    categoryId: CATEGORY,
+    activityTypeId: ACTIVITY_TYPE,
     durationMin: 60,
     cooldownMin: 0,
     ...overrides,

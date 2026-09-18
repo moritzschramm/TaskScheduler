@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CATEGORY_COLORS } from './palette.js';
+import { ACTIVITY_TYPE_COLORS } from './palette.js';
 import { uuidv7 } from './uuid.js';
 
 /**
@@ -86,7 +86,7 @@ const recurrence = z.object({
 
 /** The inheritable properties of spec §4.4 a command may set on a task. */
 const taskAttributes = {
-  categoryId: uuid,
+  activityTypeId: uuid,
   estimatedDurationMin: z.int().positive(),
   priority: z.int(),
   dueDate,
@@ -104,7 +104,7 @@ export const createTaskParams = z.object({
   parentId: uuid.optional(),
   sequenceId: uuid.optional(),
   sequencePosition: z.int().optional(),
-  categoryId: taskAttributes.categoryId.optional(),
+  activityTypeId: taskAttributes.activityTypeId.optional(),
   estimatedDurationMin: taskAttributes.estimatedDurationMin.optional(),
   priority: taskAttributes.priority.optional(),
   dueDate: taskAttributes.dueDate.optional(),
@@ -126,7 +126,7 @@ export const editTaskParams = z.object({
   patch: z.object({
     title: z.string().min(1).optional(),
     notes: z.string().nullable().optional(),
-    categoryId: taskAttributes.categoryId.nullable().optional(),
+    activityTypeId: taskAttributes.activityTypeId.nullable().optional(),
     estimatedDurationMin: taskAttributes.estimatedDurationMin.nullable().optional(),
     priority: taskAttributes.priority.nullable().optional(),
     dueDate: taskAttributes.dueDate.nullable().optional(),
@@ -160,8 +160,8 @@ export const addAppointmentParams = z
     /**
      * Non-compressible minutes reserved after the block (§6.2 rule 3).
      *
-     * A property of *this* block rather than of a category, because a fixed
-     * block has no category: what a meeting costs afterwards is a fact about
+     * A property of *this* block rather than of an activity type, because a fixed
+     * block has no activity type: what a meeting costs afterwards is a fact about
      * that meeting — the one across town and the one on a call are the same
      * hour and not the same afternoon.
      */
@@ -355,7 +355,7 @@ export const addUnavailabilityParams = z
   });
 
 /**
- * Configuration — the calendars, categories and windows the engine schedules
+ * Configuration — the calendars, activity types and windows the engine schedules
  * *within* (spec §4.3, §9.1).
  *
  * §7 names no command for any of these, because it enumerates what a user does
@@ -365,7 +365,7 @@ export const addUnavailabilityParams = z
  * future parser. So they follow the `CreateTask` convention above, named for
  * what they do.
  *
- * **The window families replace sets, not rows.** §4.3 describes a category as
+ * **The window families replace sets, not rows.** §4.3 describes an activity type as
  * owning "the set of availability windows for its kind of activity" and a
  * week-type override as replacing "the default window set": the unit that means
  * something is the set, and a weekly editor submits one. Per-row commands would
@@ -446,21 +446,21 @@ export const setCalendarWindowsParams = z.object({
 });
 
 /** Spec §4.3. Tenant-scoped, and owns the default cooldown for its tasks. */
-export const createCategoryParams = z.object({
+export const createActivityTypeParams = z.object({
   name: z.string().min(1),
   defaultCooldownMin: z.int().nonnegative().optional(),
-  /** Omitted takes the next free slot in order; see `nextCategoryColor`. */
-  color: z.enum(CATEGORY_COLORS).optional(),
+  /** Omitted takes the next free slot in order; see `nextActivityTypeColor`. */
+  color: z.enum(ACTIVITY_TYPE_COLORS).optional(),
 });
 
 /**
  * No `null` anywhere in the patch: neither field is nullable in the domain — a
- * category always has a name, and its cooldown defaults to zero rather than to
+ * activity type always has a name, and its cooldown defaults to zero rather than to
  * absent — so there is nothing to clear back to (contrast `EditTask`, where
  * clearing means reverting to an inherited value).
  */
-export const editCategoryParams = z.object({
-  categoryId: uuid,
+export const editActivityTypeParams = z.object({
+  activityTypeId: uuid,
   patch: z.object({
     name: z.string().min(1).optional(),
     defaultCooldownMin: z.int().nonnegative().optional(),
@@ -469,24 +469,24 @@ export const editCategoryParams = z.object({
      * describes: `null` means "no colour", which is where a ninth activity type
      * starts and somewhere a user may deliberately go back to.
      */
-    color: z.enum(CATEGORY_COLORS).nullable().optional(),
+    color: z.enum(ACTIVITY_TYPE_COLORS).nullable().optional(),
   }),
 });
 
-export const deleteCategoryParams = z.object({ categoryId: uuid });
+export const deleteActivityTypeParams = z.object({ activityTypeId: uuid });
 
 /**
- * Replaces the whole set for one (calendar, category) pair.
+ * Replaces the whole set for one (calendar, activity type) pair.
  *
  * `weekTypeOverrideId` absent addresses the default set; present addresses that
  * override's replacement set (§4.3). It is part of the address rather than a
  * filter, which is why an empty `windows` array is meaningful: it says this
- * category is not available at all here, and during a holiday override that is
+ * activity type is not available at all here, and during a holiday override that is
  * exactly the intent.
  */
 export const setAvailabilityWindowsParams = z.object({
   calendarId: uuid,
-  categoryId: uuid,
+  activityTypeId: uuid,
   weekTypeOverrideId: uuid.optional(),
   windows: z.array(availabilityWindowRule),
 });
@@ -632,9 +632,9 @@ export const commandSchema = z.discriminatedUnion('type', [
   command('CreateCalendar', createCalendarParams),
   command('ConfigureCalendar', configureCalendarParams),
   command('SetCalendarWindows', setCalendarWindowsParams),
-  command('CreateCategory', createCategoryParams),
-  command('EditCategory', editCategoryParams),
-  command('DeleteCategory', deleteCategoryParams),
+  command('CreateActivityType', createActivityTypeParams),
+  command('EditActivityType', editActivityTypeParams),
+  command('DeleteActivityType', deleteActivityTypeParams),
   command('SetAvailabilityWindows', setAvailabilityWindowsParams),
   command('CreateWeekTypeOverride', createWeekTypeOverrideParams),
   command('EditWeekTypeOverride', editWeekTypeOverrideParams),
@@ -672,9 +672,9 @@ export type UpdateSettingsParams = z.infer<typeof updateSettingsParams>;
 export type CreateCalendarParams = z.infer<typeof createCalendarParams>;
 export type ConfigureCalendarParams = z.infer<typeof configureCalendarParams>;
 export type SetCalendarWindowsParams = z.infer<typeof setCalendarWindowsParams>;
-export type CreateCategoryParams = z.infer<typeof createCategoryParams>;
-export type EditCategoryParams = z.infer<typeof editCategoryParams>;
-export type DeleteCategoryParams = z.infer<typeof deleteCategoryParams>;
+export type CreateActivityTypeParams = z.infer<typeof createActivityTypeParams>;
+export type EditActivityTypeParams = z.infer<typeof editActivityTypeParams>;
+export type DeleteActivityTypeParams = z.infer<typeof deleteActivityTypeParams>;
 export type SetAvailabilityWindowsParams = z.infer<typeof setAvailabilityWindowsParams>;
 export type CreateWeekTypeOverrideParams = z.infer<typeof createWeekTypeOverrideParams>;
 export type EditWeekTypeOverrideParams = z.infer<typeof editWeekTypeOverrideParams>;

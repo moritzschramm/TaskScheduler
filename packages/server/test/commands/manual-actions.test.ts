@@ -46,7 +46,7 @@ describe('MoveTask — delayed, not fixed', () => {
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         ...params,
       },
@@ -159,7 +159,7 @@ describe('DeferTask — the user-initiated postponement (spec §7.3, §6.6)', ()
       params: {
         calendarId: world.calendarId,
         title: 'Dreaded',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     });
@@ -263,7 +263,7 @@ describe('CompleteTask (spec §7.3)', () => {
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 120,
       },
     });

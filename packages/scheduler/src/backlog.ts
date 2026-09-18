@@ -19,7 +19,7 @@ import type { ResolvedWindow, ScheduleContext } from './types.js';
  *
  * Capacity proper, with the contiguity check, is §6.6 and lives in
  * `capacity.ts`. What is used here is the simplest defensible supply estimate:
- * the window minutes a category has in a typical week.
+ * the window minutes an activity type has in a typical week.
  */
 
 export interface BacklogEntry {
@@ -69,14 +69,14 @@ export function assignBacklogWeeks(
 
   const timeZone = context.calendars[0]?.timeZone ?? 'UTC';
   const weeks = planningWeeksAfter(context.horizon, timeZone, config);
-  const weeklySupply = weeklySupplyByCategory(context.windows, context.horizon);
+  const weeklySupply = weeklySupplyByActivityType(context.windows, context.horizon);
 
-  // Remaining capacity per (category, week). A week starts with the category's
+  // Remaining capacity per (activity type, week). A week starts with the activity type's
   // typical weekly supply and is drawn down as units are assigned to it.
   const remaining = new Map<string, number>();
-  const capacityFor = (categoryKey: string, weekIndex: number): number => {
-    const key = `${categoryKey}@${weekIndex}`;
-    if (!remaining.has(key)) remaining.set(key, weeklySupply.get(categoryKey) ?? 0);
+  const capacityFor = (activityTypeKey: string, weekIndex: number): number => {
+    const key = `${activityTypeKey}@${weekIndex}`;
+    if (!remaining.has(key)) remaining.set(key, weeklySupply.get(activityTypeKey) ?? 0);
     return remaining.get(key)!;
   };
 
@@ -115,13 +115,13 @@ export function assignBacklogWeeks(
 function firstFittingWeek(
   entry: UnplacedUnit,
   weeks: readonly PlanningWeek[],
-  capacityFor: (categoryKey: string, weekIndex: number) => number,
+  capacityFor: (activityTypeKey: string, weekIndex: number) => number,
   remaining: Map<string, number>,
 ): string | null {
   if (UNESTIMABLE.has(entry.reason)) return null;
 
   const { composite } = entry.unit;
-  const categoryKey = `${composite.calendarId} ${composite.categoryId}`;
+  const activityTypeKey = `${composite.calendarId} ${composite.activityTypeId}`;
   const footprint = composite.durationMin + composite.cooldownMin;
 
   for (let index = 0; index < weeks.length; index += 1) {
@@ -139,8 +139,8 @@ function firstFittingWeek(
       break;
     }
 
-    if (capacityFor(categoryKey, index) >= footprint) {
-      remaining.set(`${categoryKey}@${index}`, capacityFor(categoryKey, index) - footprint);
+    if (capacityFor(activityTypeKey, index) >= footprint) {
+      remaining.set(`${activityTypeKey}@${index}`, capacityFor(activityTypeKey, index) - footprint);
       return formatCivilDate(week.startDate);
     }
   }
@@ -149,7 +149,7 @@ function firstFittingWeek(
 }
 
 /**
- * A category's window minutes in a typical week, averaged over the horizon.
+ * An activity type's window minutes in a typical week, averaged over the horizon.
  *
  * Availability rules recur weekly, so the horizon's supply divided by its own
  * length in weeks is a fair estimate of any future week — and it needs no
@@ -160,7 +160,7 @@ function firstFittingWeek(
  * caller may pass a horizon of its own, and dividing real supply by an assumed
  * number of weeks would understate every future week's capacity.
  */
-function weeklySupplyByCategory(
+function weeklySupplyByActivityType(
   windows: readonly ResolvedWindow[],
   horizon: { start: number; end: number },
 ): Map<string, number> {
@@ -169,7 +169,7 @@ function weeklySupplyByCategory(
 
   const totals = new Map<string, number>();
   for (const window of windows) {
-    const key = `${window.calendarId} ${window.categoryId}`;
+    const key = `${window.calendarId} ${window.activityTypeId}`;
     const minutes = window.interval.end - window.interval.start;
     totals.set(key, (totals.get(key) ?? 0) + minutes);
   }

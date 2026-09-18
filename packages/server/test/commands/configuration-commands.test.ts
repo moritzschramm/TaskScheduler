@@ -5,7 +5,7 @@ import {
   availabilityWindows,
   calendars,
   calendarWindows,
-  categories,
+  activityTypes,
   weekTypeOverrides,
 } from '../../src/db/schema/index.js';
 import { registerUser } from '../../src/identity/register-user.js';
@@ -113,7 +113,7 @@ describe('calendar configuration', () => {
 
   describe('SetCalendarWindows', () => {
     it('clips placement to the working window (spec §9.1)', async () => {
-      // The category is available 09:00–17:00. A working window of 13:00–17:00
+      // The activity type is available 09:00–17:00. A working window of 13:00–17:00
       // has to win, or the setting means nothing.
       await world.run({
         type: 'SetCalendarWindows',
@@ -199,10 +199,10 @@ describe('calendar configuration', () => {
     });
   });
 
-  describe('categories', () => {
+  describe('activity types', () => {
     it('creates one without deriving anything', async () => {
       const outcome = await world.run({
-        type: 'CreateCategory',
+        type: 'CreateActivityType',
         params: { name: 'Exercise', defaultCooldownMin: 15 },
       });
 
@@ -210,29 +210,29 @@ describe('calendar configuration', () => {
       expect(outcome.schedules).toEqual([]);
 
       const [row] = await world.read((tx) =>
-        tx.select().from(categories).where(eq(categories.name, 'Exercise')),
+        tx.select().from(activityTypes).where(eq(activityTypes.name, 'Exercise')),
       );
       expect(row?.defaultCooldownMin).toBe(15);
     });
 
     it('refuses a duplicate name in the tenant', async () => {
-      await expect(world.run({ type: 'CreateCategory', params: { name: 'Work' } })).rejects.toThrow(
-        PreconditionFailedError,
-      );
+      await expect(
+        world.run({ type: 'CreateActivityType', params: { name: 'Work' } }),
+      ).rejects.toThrow(PreconditionFailedError);
     });
 
     it('re-derives for a cooldown change but not for a rename', async () => {
       await seedTask(world, 'Report');
 
       const renamed = await world.run({
-        type: 'EditCategory',
-        params: { categoryId: world.categoryId, patch: { name: 'Deep work' } },
+        type: 'EditActivityType',
+        params: { activityTypeId: world.activityTypeId, patch: { name: 'Deep work' } },
       });
       expect(renamed.schedules).toEqual([]);
 
       const cooled = await world.run({
-        type: 'EditCategory',
-        params: { categoryId: world.categoryId, patch: { defaultCooldownMin: 30 } },
+        type: 'EditActivityType',
+        params: { activityTypeId: world.activityTypeId, patch: { defaultCooldownMin: 30 } },
       });
       expect(cooled.schedules.map((schedule) => schedule.calendarId)).toEqual([world.calendarId]);
 
@@ -240,27 +240,27 @@ describe('calendar configuration', () => {
       expect(placement?.cooldownMin).toBe(30);
     });
 
-    it('refuses to delete a category tasks still use', async () => {
+    it('refuses to delete an activity type tasks still use', async () => {
       await seedTask(world, 'Report');
 
       // The FK would `SET NULL` and leave a task matching no window at all —
       // silently unschedulable is worse than refused (§6.2 rule 1).
       await expect(
-        world.run({ type: 'DeleteCategory', params: { categoryId: world.categoryId } }),
+        world.run({ type: 'DeleteActivityType', params: { activityTypeId: world.activityTypeId } }),
       ).rejects.toThrow(PreconditionFailedError);
     });
 
     it('takes its availability windows with it when deleted', async () => {
       const outcome = await world.run({
-        type: 'DeleteCategory',
-        params: { categoryId: world.categoryId },
+        type: 'DeleteActivityType',
+        params: { activityTypeId: world.activityTypeId },
       });
 
       const windows = await world.read((tx) =>
         tx
           .select()
           .from(availabilityWindows)
-          .where(eq(availabilityWindows.categoryId, world.categoryId)),
+          .where(eq(availabilityWindows.activityTypeId, world.activityTypeId)),
       );
 
       expect(windows).toEqual([]);
@@ -270,12 +270,12 @@ describe('calendar configuration', () => {
   });
 
   describe('SetAvailabilityWindows', () => {
-    it('replaces the default set for one category', async () => {
+    it('replaces the default set for one activity type', async () => {
       await world.run({
         type: 'SetAvailabilityWindows',
         params: {
           calendarId: world.calendarId,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           windows: [{ weekday: 1, startMin: 14 * 60, endMin: 16 * 60, focusLevel: 4 }],
         },
       });
@@ -302,7 +302,7 @@ describe('calendar configuration', () => {
 
       await world.run({
         type: 'SetAvailabilityWindows',
-        params: { calendarId: world.calendarId, categoryId: world.categoryId, windows: [] },
+        params: { calendarId: world.calendarId, activityTypeId: world.activityTypeId, windows: [] },
       });
 
       // An empty array is an instruction, not a no-op: the task is now
@@ -328,7 +328,7 @@ describe('calendar configuration', () => {
         type: 'SetAvailabilityWindows',
         params: {
           calendarId: world.calendarId,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           weekTypeOverrideId: overrideId,
           windows: [{ weekday: 1, startMin: 18 * 60, endMin: 20 * 60 }],
         },
@@ -419,7 +419,7 @@ describe('calendar configuration', () => {
         type: 'SetAvailabilityWindows',
         params: {
           calendarId: world.calendarId,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           weekTypeOverrideId: overrideId,
           windows: [{ weekday: 1, startMin: 18 * 60, endMin: 20 * 60 }],
         },
@@ -459,7 +459,7 @@ describe('calendar configuration', () => {
         type: 'SetAvailabilityWindows',
         params: {
           calendarId: world.calendarId,
-          categoryId: world.categoryId,
+          activityTypeId: world.activityTypeId,
           windows: [{ weekday: 1, startMin: 14 * 60, endMin: 16 * 60 }],
         },
       });
@@ -481,24 +481,27 @@ describe('calendar configuration', () => {
       expect((await world.cachedPlacements())[0]?.interval.start).toBe(before[0]?.interval.start);
     });
 
-    it('restores a deleted category together with its windows', async () => {
-      await world.run({ type: 'DeleteCategory', params: { categoryId: world.categoryId } });
+    it('restores a deleted activity type together with its windows', async () => {
+      await world.run({
+        type: 'DeleteActivityType',
+        params: { activityTypeId: world.activityTypeId },
+      });
       await world.run({ type: 'Undo', params: {} });
 
-      const [category] = await world.read((tx) =>
-        tx.select().from(categories).where(eq(categories.id, world.categoryId)),
+      const [activityType] = await world.read((tx) =>
+        tx.select().from(activityTypes).where(eq(activityTypes.id, world.activityTypeId)),
       );
       const windows = await world.read((tx) =>
         tx
           .select()
           .from(availabilityWindows)
-          .where(eq(availabilityWindows.categoryId, world.categoryId)),
+          .where(eq(availabilityWindows.activityTypeId, world.activityTypeId)),
       );
 
       // The cascade is performed in the handler precisely so this works: a
       // database `ON DELETE CASCADE` happens where the journal cannot see it,
-      // and undo would have restored a category with no availability at all.
-      expect(category?.name).toBe('Work');
+      // and undo would have restored an activity type with no availability at all.
+      expect(activityType?.name).toBe('Work');
       expect(windows).toHaveLength(5);
     });
 

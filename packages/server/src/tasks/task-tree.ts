@@ -25,8 +25,8 @@ export interface TaskTreeNode extends Record<string, unknown> {
   version: number;
   estimatedDurationMin: number | null;
 
-  ownCategoryId: string | null;
-  effectiveCategoryId: string | null;
+  ownActivityTypeId: string | null;
+  effectiveActivityTypeId: string | null;
   ownPriority: number | null;
   effectivePriority: number | null;
   ownDueDate: string | null;
@@ -56,7 +56,7 @@ export interface TaskTreeNode extends Record<string, unknown> {
  * would produce a due date whose enforcement is undefined.
  */
 const inheritedColumns = sql`
-  coalesce(t.category_id, p.effective_category_id) as effective_category_id,
+  coalesce(t.activity_type_id, p.effective_activity_type_id) as effective_activity_type_id,
   coalesce(t.priority, p.effective_priority) as effective_priority,
   coalesce(t.due_date, p.effective_due_date) as effective_due_date,
   case when t.due_date is not null then t.due_kind else p.effective_due_kind end
@@ -82,8 +82,8 @@ const selectedColumns = sql`
   n.version,
   n.estimated_duration_min as "estimatedDurationMin",
   not exists (select 1 from tasks c where c.parent_id = n.id) as "isLeaf",
-  n.category_id          as "ownCategoryId",
-  n.effective_category_id as "effectiveCategoryId",
+  n.activity_type_id          as "ownActivityTypeId",
+  n.effective_activity_type_id as "effectiveActivityTypeId",
   n.priority             as "ownPriority",
   n.effective_priority   as "effectivePriority",
   n.due_date             as "ownDueDate",
@@ -128,10 +128,10 @@ export async function readCalendarTaskTree(
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
-        t.category_id, t.priority, t.due_date, t.due_kind,
+        t.activity_type_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
-        t.category_id           as effective_category_id,
+        t.activity_type_id           as effective_activity_type_id,
         t.priority              as effective_priority,
         t.due_date              as effective_due_date,
         t.due_kind              as effective_due_kind,
@@ -150,7 +150,7 @@ export async function readCalendarTaskTree(
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
-        t.category_id, t.priority, t.due_date, t.due_kind,
+        t.activity_type_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
         ${inheritedColumns},
@@ -184,13 +184,13 @@ export async function readTaskSubtree(
     -- steps counter orders them by proximity, which is what turns
     -- "nearest ancestor wins" into a LIMIT 1.
     ancestry as (
-      select t.id, t.parent_id, t.category_id, t.priority, t.due_date, t.due_kind,
+      select t.id, t.parent_id, t.activity_type_id, t.priority, t.due_date, t.due_kind,
              t.preferred_start_min, t.preferred_end_min, t.focus_level,
              t.cooldown_override_min, 0 as steps
         from tasks t
        where t.id = ${rootTaskId}
       union all
-      select a2.id, a2.parent_id, a2.category_id, a2.priority, a2.due_date, a2.due_kind,
+      select a2.id, a2.parent_id, a2.activity_type_id, a2.priority, a2.due_date, a2.due_kind,
              a2.preferred_start_min, a2.preferred_end_min, a2.focus_level,
              a2.cooldown_override_min, a.steps + 1
         from tasks a2
@@ -199,8 +199,8 @@ export async function readTaskSubtree(
     ),
     seed as (
       select
-        (select category_id from ancestry where category_id is not null
-          order by steps limit 1) as effective_category_id,
+        (select activity_type_id from ancestry where activity_type_id is not null
+          order by steps limit 1) as effective_activity_type_id,
         (select priority from ancestry where priority is not null
           order by steps limit 1) as effective_priority,
         (select due_date from ancestry where due_date is not null
@@ -224,10 +224,10 @@ export async function readTaskSubtree(
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
-        t.category_id, t.priority, t.due_date, t.due_kind,
+        t.activity_type_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
-        s.effective_category_id, s.effective_priority,
+        s.effective_activity_type_id, s.effective_priority,
         s.effective_due_date, s.effective_due_kind,
         s.effective_preferred_start_min, s.effective_preferred_end_min,
         s.effective_focus_level, s.effective_cooldown_override_min,
@@ -242,7 +242,7 @@ export async function readTaskSubtree(
         t.id, t.parent_id, t.calendar_id, t.title, t.notes, t.depth, t.status,
         t.version, t.estimated_duration_min, t.manual_floor, t.manual_bias,
         t.recurrence_period, t.recurrence_count, t.missed_occurrence_policy,
-        t.category_id, t.priority, t.due_date, t.due_kind,
+        t.activity_type_id, t.priority, t.due_date, t.due_kind,
         t.preferred_start_min, t.preferred_end_min, t.focus_level,
         t.cooldown_override_min,
         ${inheritedColumns},

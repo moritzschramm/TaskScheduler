@@ -63,7 +63,7 @@ describe('how often a request solves', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Write the report',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
       },
     } as never);
@@ -82,11 +82,11 @@ describe('how often a request solves', () => {
     // this one, which is also why they cannot disagree with it (§6.6).
     const body = (await response.json()) as {
       schedule: { blocks: unknown[]; backlog: unknown[] };
-      capacity: { categoryId: string }[];
+      capacity: { activityTypeId: string }[];
     };
     expect(body.schedule.blocks).toHaveLength(1);
     expect(body.schedule.backlog).toEqual([]);
-    expect(body.capacity.some((cell) => cell.categoryId === world.categoryId)).toBe(true);
+    expect(body.capacity.some((cell) => cell.activityTypeId === world.activityTypeId)).toBe(true);
   });
 
   it('solves once for a command, not once to apply and again to report', async () => {
@@ -98,7 +98,7 @@ describe('how often a request solves', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Second',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 30,
       },
     } as never);
@@ -114,7 +114,7 @@ describe('how often a request solves', () => {
       params: {
         calendarId: world.calendarId,
         title: 'Only',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 45,
       },
     } as never);
@@ -137,7 +137,7 @@ describe('how often a request solves', () => {
       params: {
         calendarId: secondId,
         title: 'Elsewhere',
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 30,
       },
     } as never);

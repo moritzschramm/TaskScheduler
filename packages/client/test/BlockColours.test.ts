@@ -2,9 +2,9 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
   BLOCK_INK,
-  CATEGORY_BLOCK_INK,
-  CATEGORY_BLOCK_STEPS,
-  CATEGORY_COLORS,
+  ACTIVITY_TYPE_BLOCK_INK,
+  ACTIVITY_TYPE_BLOCK_STEPS,
+  ACTIVITY_TYPE_COLORS,
 } from '@ambitime/shared';
 import type {
   CalendarConfiguration,
@@ -35,17 +35,17 @@ import type { ResolvedWindow } from '@ambitime/scheduler';
 const BERLIN = 'Europe/Berlin';
 const WEEK = weekDays(parseCivilDate('2026-03-23'), 1);
 
-const categories = [
+const activityTypes = [
   { id: 'cat-work', name: 'Work', defaultCooldownMin: 0, color: 'blue', version: 1 },
   { id: 'cat-gym', name: 'Exercise', defaultCooldownMin: 0, color: 'orange', version: 1 },
   { id: 'cat-old', name: 'Legacy', defaultCooldownMin: 0, color: null, version: 1 },
-] as CalendarConfiguration['categories'];
+] as CalendarConfiguration['activityTypes'];
 
 const report: ScheduledBlock = {
   occurrenceId: 'occ-1',
   taskId: 'task-1',
   title: 'Write the report',
-  categoryId: 'cat-work',
+  activityTypeId: 'cat-work',
   start: '2026-03-23T08:00:00.000Z',
   end: '2026-03-23T09:00:00.000Z',
   cooldownMin: 0,
@@ -70,7 +70,7 @@ const stretched: CompletedBlock = {
   occurrenceId: 'occ-2',
   taskId: 'task-2',
   title: 'Stretch',
-  categoryId: 'cat-gym',
+  activityTypeId: 'cat-gym',
   start: '2026-03-23T06:00:00.000Z',
   end: '2026-03-23T06:30:00.000Z',
   completedAt: '2026-03-23T06:30:00.000Z',
@@ -81,7 +81,7 @@ const windows: ResolvedWindow[] = [
   {
     ruleId: 'w-1',
     calendarId: 'cal',
-    categoryId: 'cat-work',
+    activityTypeId: 'cat-work',
     interval: { start: Date.UTC(2026, 2, 23, 8) / 60_000, end: Date.UTC(2026, 2, 23, 16) / 60_000 },
   },
 ];
@@ -98,7 +98,7 @@ function week(
       blocks,
       fixedBlocks,
       completedBlocks,
-      categories,
+      activityTypes,
       windows,
     },
   });
@@ -113,8 +113,8 @@ describe('a task on the week grid', () => {
   it('is filled with its own activity type, not with the application ink', () => {
     const style = styleOf(week(), 'task');
 
-    expect(style).toContain('--category-block-blue');
-    expect(style).toContain('var(--category-ink-blue)');
+    expect(style).toContain('--activity-type-block-blue');
+    expect(style).toContain('var(--activity-type-ink-blue)');
   });
 
   it('draws two types in two colours', () => {
@@ -122,7 +122,7 @@ describe('a task on the week grid', () => {
       ...report,
       occurrenceId: 'occ-3',
       title: 'Squats',
-      categoryId: 'cat-gym',
+      activityTypeId: 'cat-gym',
       start: '2026-03-23T16:00:00.000Z',
       end: '2026-03-23T17:00:00.000Z',
     };
@@ -132,17 +132,17 @@ describe('a task on the week grid', () => {
       .map((block) => block.attributes('style') ?? '');
 
     // In clock order, which is the order the grid builds a day in.
-    expect(styles[0]).toContain('--category-block-blue');
-    expect(styles[1]).toContain('--category-block-orange');
+    expect(styles[0]).toContain('--activity-type-block-blue');
+    expect(styles[1]).toContain('--activity-type-block-orange');
   });
 
   it('keeps the old neutral fill for a type that has no colour', () => {
     // A type made before migration 0018, or one an undo put back that way.
     // Three of these on a grid would be three greys; one is the honest answer.
-    const wrapper = week([{ ...report, categoryId: 'cat-old' }]);
+    const wrapper = week([{ ...report, activityTypeId: 'cat-old' }]);
     const block = wrapper.find('[data-testid="block-task"]');
 
-    expect(block.attributes('style')).not.toContain('--category-block');
+    expect(block.attributes('style')).not.toContain('--activity-type-block');
     expect(block.classes()).toContain('bg-primary');
   });
 
@@ -150,7 +150,7 @@ describe('a task on the week grid', () => {
     const wrapper = week([], [standup]);
     const block = wrapper.find('[data-testid="block-appointment"]');
 
-    expect(block.attributes('style')).not.toContain('--category-block');
+    expect(block.attributes('style')).not.toContain('--activity-type-block');
     expect(block.classes()).toContain('bg-secondary');
   });
 
@@ -161,8 +161,8 @@ describe('a task on the week grid', () => {
     // there to say which kind of work it was, not to compete with the week
     // still ahead.
     expect(style).toContain('color-mix');
-    expect(style).toContain('--category-block-orange');
-    expect(styleOf(week([], [], [stretched]), 'completed')).not.toContain('--category-ink');
+    expect(style).toContain('--activity-type-block-orange');
+    expect(styleOf(week([], [], [stretched]), 'completed')).not.toContain('--activity-type-ink');
   });
 
   it('does not fade the time under the title, which no hue can carry', () => {
@@ -179,7 +179,7 @@ describe('a task on the week grid', () => {
     // `--muted-foreground` measured 3.04:1 on a lane in today's column and
     // 4.00:1 on the dark surface. jsdom cannot compute that, so what is pinned
     // here is the token; the value behind it is derived in `main.css`.
-    const label = week().find('[data-testid="category-lane"] span');
+    const label = week().find('[data-testid="activity-type-lane"] span');
 
     expect(label.exists()).toBe(true);
     expect(label.classes()).toContain('text-(--ink-subtle)');
@@ -197,14 +197,14 @@ describe('a task on the week grid', () => {
         timeZone: BERLIN,
         blocks: [report],
         fixedBlocks: [],
-        categories,
+        activityTypes,
         windows,
         editable: true,
       },
     });
 
     expect(wrapper.find('[data-testid="complete-block"]').attributes('style')).toContain(
-      '--block-ink: var(--category-ink-blue)',
+      '--block-ink: var(--activity-type-ink-blue)',
     );
   });
 });
@@ -217,7 +217,7 @@ describe('the month view', () => {
         timeZone: BERLIN,
         firstDayOfWeek: 1,
         blocks,
-        categories,
+        activityTypes,
       },
     });
   }
@@ -255,7 +255,7 @@ describe('the two steps of a slot', () => {
   it('gives every colour a block step as well as a lane step', () => {
     // Or a block would fall back to the neutral fill for exactly the types
     // somebody had bothered to colour.
-    expect(Object.keys(CATEGORY_BLOCK_STEPS).sort()).toEqual([...CATEGORY_COLORS].sort());
+    expect(Object.keys(ACTIVITY_TYPE_BLOCK_STEPS).sort()).toEqual([...ACTIVITY_TYPE_COLORS].sort());
   });
 
   it('carries 12px text on every one of them, in both modes', () => {
@@ -263,9 +263,9 @@ describe('the two steps of a slot', () => {
     // text, which is 4.5:1 — and the *lane* steps do not clear it, which is the
     // reason the block column exists. Derived at 5:1 for headroom, asserted at
     // the standard so a deliberate re-step is a decision, not a failing test.
-    for (const color of CATEGORY_COLORS) {
-      const step = CATEGORY_BLOCK_STEPS[color];
-      const ink = CATEGORY_BLOCK_INK[color];
+    for (const color of ACTIVITY_TYPE_COLORS) {
+      const step = ACTIVITY_TYPE_BLOCK_STEPS[color];
+      const ink = ACTIVITY_TYPE_BLOCK_INK[color];
       expect(contrast(step.light, ink.light), `${color} light`).toBeGreaterThanOrEqual(4.5);
       expect(contrast(step.dark, ink.dark), `${color} dark`).toBeGreaterThanOrEqual(4.5);
     }
@@ -278,8 +278,8 @@ describe('the two steps of a slot', () => {
     // as a *fill* that is a dark green box on a dark grey page.
     const DAY_BODY = { light: '#f1f5f9', dark: '#1d293d' };
 
-    for (const color of CATEGORY_COLORS) {
-      const step = CATEGORY_BLOCK_STEPS[color];
+    for (const color of ACTIVITY_TYPE_COLORS) {
+      const step = ACTIVITY_TYPE_BLOCK_STEPS[color];
       expect(contrast(step.light, DAY_BODY.light), `${color} light`).toBeGreaterThanOrEqual(3);
       expect(contrast(step.dark, DAY_BODY.dark), `${color} dark`).toBeGreaterThanOrEqual(3);
     }
@@ -289,8 +289,8 @@ describe('the two steps of a slot', () => {
     // Not a rule of its own — a consequence of the two above. On a dark page a
     // block must be lighter than the page, and nothing light enough for that
     // carries white text.
-    for (const color of CATEGORY_COLORS) {
-      expect(CATEGORY_BLOCK_INK[color].dark, color).toBe(BLOCK_INK.dark);
+    for (const color of ACTIVITY_TYPE_COLORS) {
+      expect(ACTIVITY_TYPE_BLOCK_INK[color].dark, color).toBe(BLOCK_INK.dark);
     }
   });
 
@@ -299,7 +299,7 @@ describe('the two steps of a slot', () => {
     // white text, yellow has to darken to #976500 — the same hue angle, and
     // brown to anybody naming it, which is not a colour you connect to a pale
     // yellow lane. With the dark ink it barely moves.
-    expect(CATEGORY_BLOCK_INK.yellow.light).toBe(BLOCK_INK.dark);
-    expect(luminance(CATEGORY_BLOCK_STEPS.yellow.light)).toBeGreaterThan(luminance('#976500'));
+    expect(ACTIVITY_TYPE_BLOCK_INK.yellow.light).toBe(BLOCK_INK.dark);
+    expect(luminance(ACTIVITY_TYPE_BLOCK_STEPS.yellow.light)).toBeGreaterThan(luminance('#976500'));
   });
 });

@@ -35,7 +35,7 @@ export async function runCommand(request: CommandRequest): Promise<CommandResult
 /**
  * The id of the single entity of a kind the command created.
  *
- * Ids come from Postgres (§5.1), so a form that has just created a category and
+ * Ids come from Postgres (§5.1), so a form that has just created an activity type and
  * wants to attach windows to it learns the id here rather than by re-reading
  * and matching on a name — which two renames between two requests can defeat.
  */

@@ -10,7 +10,7 @@ This document is written to be handed to an implementation agent (e.g. Claude Co
 
 ## 1. Overview
 
-Ambitime (name might change) lets a user define, per weekday (with overrides for special weeks such as holidays), time windows for categories of activity (work, exercise, wellness, household, etc.). Tasks belong to a category, carry an estimated duration, and are placed automatically into that category's windows. Fixed appointments (e.g. a dentist visit) are immovable and tasks schedule around them. When the user is disrupted (sick, a task overruns, a preference changes), the affected part of the schedule is cleared and reflowed into the next fitting slots.
+Ambitime (name might change) lets a user define, per weekday (with overrides for special weeks such as holidays), time windows for **activity types** (work, exercise, wellness, household, etc.). Tasks belong to an activity type, carry an estimated duration, and are placed automatically into that type's windows. Fixed appointments (e.g. a dentist visit) are immovable and tasks schedule around them. When the user is disrupted (sick, a task overruns, a preference changes), the affected part of the schedule is cleared and reflowed into the next fitting slots.
 
 The core of the product is a deterministic scheduling engine operating over a bounded near-term horizon, with everything beyond that horizon held in a coarse weekly backlog.
 
@@ -22,11 +22,11 @@ The core of the product is a deterministic scheduling engine operating over a bo
 
 - Single-user experience, desktop web client.
 - **Multi-tenant data model from day one** (shared schema, `tenant_id`, row-level security), even though team/group UI is deferred. This avoids an expensive retrofit.
-- Categories, per-weekday **availability windows**, and week-type overrides for special periods.
+- Activity types, per-weekday **availability windows**, and week-type overrides for special periods.
 - Tasks: hierarchical (depth ≤ 5, leaf-only placement, inherited-editable properties), estimated duration, optional priority, optional due date (soft or hard), optional preferred time range / focus, per-task cooldown override, per-period recurrence, sequence membership, backlog placement with estimated week.
 - Appointments: fixed in time, RRULE recurrence, participant records and status (modeled now for future internal-appointment negotiation).
 - **Uninterruptible sequences** (task sets scheduled contiguously).
-- Cooldowns (per-category default, per-task override, non-compressible).
+- Cooldowns (per-activity-type default, per-task override, non-compressible).
 - Two-week hard horizon + coarse weekly planning beyond + backlog.
 - Capacity / overcommitment detection and deferral tracking.
 - Command layer as the single write path; undo, history, and a lightweight audit log built on it.
@@ -122,8 +122,8 @@ A manual edit modifies source constraints; it does **not** freeze an assignment.
 ### 4.3 Scheduling entities (tenant-scoped)
 
 - **Calendar** (a scheduling *context*) — owned by a User within a Tenant; a user may own several. Carries a **visibility scope** (`private` / `team` / `group`), a **working window**, and a **shareable window** (§9). The engine operates over the union of Calendars a user can access.
-- **Category** — e.g. work, exercise, wellness, household. Owns default cooldown and the set of availability windows for its kind of activity. Carries a **colour slot** (one of eight named hues, not free hex) which the calendar draws in two registers: its availability lanes as a 14% wash, and the blocks placed in it as a solid fill. The two are different steps of the same hue, each derived so the text on it clears WCAG 1.4.3 and the shape itself clears 1.4.11 against the column behind it. **Colour groups; the name identifies** — eight hues cannot all be told apart by every reader, so every lane and every block carries its own words. A block is outlined in its own fill stepped towards the page's deepest neutral, so two of one type that meet read as two things rather than one long one. **Unavailable time is a texture, not a ninth hue** (§7.2): the palette is spoken for, and a colour meaning "closed" is a colour that could not also mean an activity type.
-- **AvailabilityWindow** — a per-weekday time range for a Category within a Calendar (recurring availability).
+- **ActivityType** — e.g. work, exercise, wellness, household. Owns default cooldown and the set of availability windows for its kind of activity. Carries a **colour slot** (one of eight named hues, not free hex) which the calendar draws in two registers: its availability lanes as a 14% wash, and the blocks placed in it as a solid fill. The two are different steps of the same hue, each derived so the text on it clears WCAG 1.4.3 and the shape itself clears 1.4.11 against the column behind it. **Colour groups; the name identifies** — eight hues cannot all be told apart by every reader, so every lane and every block carries its own words. A block is outlined in its own fill stepped towards the page's deepest neutral, so two of one type that meet read as two things rather than one long one. **Unavailable time is a texture, not a ninth hue** (§7.2): the palette is spoken for, and a colour meaning "closed" is a colour that could not also mean an activity type.
+- **AvailabilityWindow** — a per-weekday time range for an ActivityType within a Calendar (recurring availability).
 - **WeekTypeOverride** — replaces the default window set for a date range (holidays, special weeks).
 - **Task** — schedulable unit (§4.4).
 - **Appointment** — fixed in time (§4.5).
@@ -138,13 +138,13 @@ A manual edit modifies source constraints; it does **not** freeze an assignment.
 
 | Property | Notes |
 |---|---|
-| `category_id` | Determines which windows are eligible. |
+| `activity_type_id` | Determines which windows are eligible. |
 | `parent_id` | Adjacency list; depth ≤ 5 (hard cap). |
 | `estimated_duration_min` | v1: user-estimated only. No actuals tracking yet. |
 | `priority` | Optional; soft constraint. |
 | `due_date` + `due_kind` | `due_kind ∈ {soft, hard}`. Hard is enforced (§6.2); soft warns (§6.5). |
 | `preferred_range` / `focus_level` | Optional; soft. Matched against slot / window focus profile. |
-| `cooldown_override_min` | Optional; overrides category default. Non-compressible. |
+| `cooldown_override_min` | Optional; overrides the activity type's default. Non-compressible. |
 | `sequence_id` | Optional membership in an uninterruptible block. |
 | `recurrence` | Optional per-period demand rule (§8.2). |
 | `manual_floor` | Set by a manual reposition; soft not-before (§7.3). |
@@ -154,7 +154,7 @@ A manual edit modifies source constraints; it does **not** freeze an assignment.
 | `status` | `active` / `completed` / `cancelled`. |
 | `version`, `updated_at` | Optimistic locking (§5.4). |
 
-**Inheritance.** Priority, due date, preferred range/focus, category, and cooldown may be set on any node and **inherited by descendants, nearest-ancestor-wins**. Setting a value locally creates an override; clearing it reverts to inherited. Only **leaf tasks are placed**; a parent's duration and completion roll up from its leaves.
+**Inheritance.** Priority, due date, preferred range/focus, activity type, and cooldown may be set on any node and **inherited by descendants, nearest-ancestor-wins**. Setting a value locally creates an override; clearing it reverts to inherited. Only **leaf tasks are placed**; a parent's duration and completion roll up from its leaves.
 
 **Due-date constraint.** A child's effective due date must be ≤ its inherited/effective parent due date (a subtask cannot be due after its container). Enforced as a data constraint.
 
@@ -205,7 +205,7 @@ Every mutable entity carries `version` (integer) and `updated_at`. Commands carr
 
 ### 6.2 Hard constraints (validator-enforced; a schedule violating any is invalid)
 
-1. A task is placed within an availability window of its category (respecting week-type overrides).
+1. A task is placed within an availability window of its activity type (respecting week-type overrides).
 2. No overlap between any two placements the user views as unified (task–task, task–appointment). Appointments are fixed.
 3. The task's cooldown (non-compressible) is reserved after it; treated as part of its footprint for overlap.
    Extended after v1 design: a **fixed block** may carry one too (migration 0017), reserved the same way and for
@@ -241,7 +241,7 @@ order_score = 0.5·U + 0.3·P + 0.2·C
 
 - `U` (urgency): from `slack = due − (now + duration)`; `U = 1 / (1 + max(0, slack_hours))`. Past/near-due → ≈1; ample slack → ≈0; no due date → 0.
 - `P` (priority): user value normalized to `[0,1]`.
-- `C` (constrainedness, most-constrained-first): `duration / feasible_window_minutes_in_category_over_horizon`, clamped `[0,1]`.
+- `C` (constrainedness, most-constrained-first): `duration / feasible_window_minutes_in_activity_type_over_horizon`, clamped `[0,1]`.
 - Tie-break: earlier due date → higher priority → smaller id.
 
 **Stage 2 — slot selection** (given a task, among slots passing all hard filters). Descending `slot_score`:
@@ -261,17 +261,17 @@ Weights and normalization constants are the tuning surface (§15).
 
 ### 6.6 Capacity, overcommitment, and deferral tracking
 
-**Capacity (draft, low priority).** Per `(category, week)`:
+**Capacity (draft, low priority).** Per `(activity_type, week)`:
 
 ```
 Supply = Σ window_minutes − Σ appointment_minutes_in_window − reserved_cooldown
-Demand = Σ estimated_durations + cooldowns   (tasks assigned or due in that category/week)
+Demand = Σ estimated_durations + cooldowns   (tasks assigned or due in that activity type/week)
 Utilization = Demand / Supply
 ```
 
 - `> 1.0` → overcommitted (some tasks will backlog); `0.85–1.0` → tight/fragile.
-- **Contiguity check** for uninterruptible sequences: `max_contiguous_span(category, week) ≥ longest sequence block` — a category may hold enough total minutes yet no single span large enough.
-- Surfaced as the backlog notification plus a per-category utilization indicator.
+- **Contiguity check** for uninterruptible sequences: `max_contiguous_span(activity_type, week) ≥ longest sequence block` — an activity type may hold enough total minutes yet no single span large enough.
+- Surfaced as the backlog notification plus a per-activity-type utilization indicator.
 
 **Deferral tracking (distinct signal).** Separate from bulk reflow (e.g. the sick-day action), a task repeatedly postponed **by the user** is a distinct signal. Each task carries `defer_count` / `last_defer_reason`. Chronic postponement (e.g. deferred ≥ N times, or aging past its estimated week repeatedly) is surfaced as its own notification ("this task keeps getting pushed"), separate from capacity overcommitment. User-initiated deferrals and involuntary reflows are tracked distinctly.
 
@@ -328,7 +328,7 @@ The server validates, applies to source, re-derives, persists the placement cach
 
 ### 7.6 Additional scenarios the design must handle
 
-These are consequences of the model, listed so implementation covers them: a task finishing early (`CompleteTask` with an earlier `actual_end`, pulling the day forward); an estimate proving wrong mid-day (`ExtendTask`); inserting an urgent same-day task (normal create → immediate re-derive within the horizon); changing a task's category (re-place within the new category's windows); and repeated small deferrals accumulating into the chronic-postponement signal (§6.6).
+These are consequences of the model, listed so implementation covers them: a task finishing early (`CompleteTask` with an earlier `actual_end`, pulling the day forward); an estimate proving wrong mid-day (`ExtendTask`); inserting an urgent same-day task (normal create → immediate re-derive within the horizon); changing a task's activity type (re-place within the new type's windows); and repeated small deferrals accumulating into the chronic-postponement signal (§6.6).
 
 ---
 
@@ -342,7 +342,7 @@ RRULE (RFC 5545) expansion with `EXDATE` and modified-occurrence exceptions. A r
 
 ### 8.2 Task recurrence — per-period demand generator
 
-A recurring task is a **demand rule** ("exercise 3× per week"), not a datetime rule. Each period, the generator spawns a `TaskOccurrence` placed **flexibly** within its category by the scheduler. Occurrences inherit the parent task's properties.
+A recurring task is a **demand rule** ("exercise 3× per week"), not a datetime rule. Each period, the generator spawns a `TaskOccurrence` placed **flexibly** within its activity type by the scheduler. Occurrences inherit the parent task's properties.
 
 **Missed-instance policy.** If a period's occurrence is not placed or not completed within the period: **default = rollover** as debt into the next period; **per-task configurable expiry**. (Example: a missed workout should not distort the next day's structure — configure expiry; a missed invoice should carry over — rollover.)
 
@@ -438,7 +438,7 @@ This is **not** full event-sourcing: mutable entity tables plus a reversible-cha
 
 ## 14. Cross-cutting / non-functional
 
-- **Scheduler testing:** the pure-function scheduler is covered by **property-based tests** (fast-check) asserting the invariants: no two placements overlap, every placement lies within its category window, cooldowns are respected, no hard due date is violated, sequence blocks are contiguous, and identical inputs yield identical output (determinism). Golden tests pin scoring outputs so weight changes are visible in diffs.
+- **Scheduler testing:** the pure-function scheduler is covered by **property-based tests** (fast-check) asserting the invariants: no two placements overlap, every placement lies within its activity type's window, cooldowns are respected, no hard due date is violated, sequence blocks are contiguous, and identical inputs yield identical output (determinism). Golden tests pin scoring outputs so weight changes are visible in diffs.
 - **Accessibility:** target WCAG 2.2 AA. The calendar grid must be keyboard-navigable; every drag-and-drop action needs a keyboard-accessible equivalent (drag-drop is among the hardest calendar interactions to make accessible — design for it from the start).
 - **Deployment:** Docker images for dev and prod; nginx reverse proxy; Drizzle Kit migrations; a defined Postgres backup strategy.
 - **Security baselines:** parameterized queries (via Drizzle), CORS, XSS prevention in the Vue layer, rate limiting, and no personal/sensitive data in URLs or query strings.
@@ -454,7 +454,7 @@ Parameters expected to change; centralize them in configuration:
 - Priority → `[0,1]` mapping (number of levels and their values).
 - Capacity thresholds (`>1.0`, `0.85–1.0`) and the capacity horizon (day / week / rolling).
 - Chronic-postponement threshold `N` (§6.6).
-- Default cooldown per category.
+- Default cooldown per activity type.
 - Hard-horizon length (default two weeks) and the promotion trigger timing.
 - The entire `ScoringPolicy` term structure is replaceable, not just its weights (§6.5).
 
@@ -462,7 +462,7 @@ Parameters expected to change; centralize them in configuration:
 
 ## 16. Glossary
 
-- **Availability window** — a per-weekday time range for a category within a calendar during which its tasks may be scheduled.
+- **Availability window** — a per-weekday time range for an activity type within a calendar during which its tasks may be scheduled.
 - **Backlog** — tasks beyond the hard horizon, held with an estimated week rather than a specific date.
 - **Calendar / context** — a scheduling context owned by a user within a tenant, with a visibility scope and working/shareable windows.
 - **Command** — a named, serializable intent object; the single write path.
@@ -489,7 +489,7 @@ cannot express anything the GUI could not, and everything it does lands in the l
 audit view and under undo like anything else.
 
 **A subset, and the line is a screen.** Everything the Schedule, Tasks and Activity types
-pages can do: tasks, fixed blocks, the bulk actions of §7.2, and §4.3's categories,
+pages can do: tasks, fixed blocks, the bulk actions of §7.2, and §4.3's activity types,
 availability windows and week-type overrides. Nothing the Settings page can do — no
 `CreateCalendar`, `ConfigureCalendar`, `SetCalendarWindows` or `UpdateSettings` — and not
 `Undo`/`Redo` or `MarkNotificationsRead`, which are the user's own gestures. The first three

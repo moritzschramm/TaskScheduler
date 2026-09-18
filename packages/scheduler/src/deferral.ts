@@ -7,7 +7,7 @@ import type { Instant } from './time.js';
  * Chronic postponement (spec §6.6).
  *
  * The spec is emphatic that this is a **distinct signal** from capacity: a
- * category being overcommitted is a fact about the calendar, while a task the
+ * activity type being overcommitted is a fact about the calendar, while a task the
  * user keeps pushing is a fact about the task. Conflating them buries the more
  * interesting one — "you are trying to do too much this week" is routine, "this
  * particular thing has been postponed five times" is a prompt to drop it,

@@ -93,7 +93,7 @@ export function validateSchedule(
 }
 
 /**
- * Rule 1 — a task is placed within an availability window of its category,
+ * Rule 1 — a task is placed within an availability window of its activity type,
  * week-type overrides already applied by `resolveWindows`.
  *
  * The window must contain the task's own interval. The cooldown that follows is
@@ -111,7 +111,7 @@ function checkWindowMembership(
     const candidates = eligibleWindows(
       context.windows,
       schedulable.calendarId,
-      schedulable.categoryId,
+      schedulable.activityTypeId,
     );
     const window = windowContaining(candidates, placement.interval);
 
@@ -122,8 +122,8 @@ function checkWindowMembership(
         interval: placement.interval,
         message:
           candidates.length === 0
-            ? `Task ${schedulable.taskId} is placed at ${formatInterval(placement.interval)} but category ${schedulable.categoryId} has no availability window in this horizon.`
-            : `Task ${schedulable.taskId} is placed at ${formatInterval(placement.interval)}, which is not contained by any availability window of category ${schedulable.categoryId}.`,
+            ? `Task ${schedulable.taskId} is placed at ${formatInterval(placement.interval)} but activity type ${schedulable.activityTypeId} has no availability window in this horizon.`
+            : `Task ${schedulable.taskId} is placed at ${formatInterval(placement.interval)}, which is not contained by any availability window of activity type ${schedulable.activityTypeId}.`,
       });
     }
   }
@@ -396,7 +396,7 @@ function checkSequenceWindow(
   // Every window that could hold each member, intersected across them.
   //
   // Asking whether *some* window holds them all is order-independent, which
-  // matters because nothing stops a category having two overlapping
+  // matters because nothing stops an activity type having two overlapping
   // availability windows. Resolving each member to "the first window in the
   // array that contains it" would report a split between two members that a
   // third, longer window comfortably contains.
@@ -405,7 +405,7 @@ function checkSequenceWindow(
     const candidates = eligibleWindows(
       context.windows,
       schedulable.calendarId,
-      schedulable.categoryId,
+      schedulable.activityTypeId,
     );
 
     return {

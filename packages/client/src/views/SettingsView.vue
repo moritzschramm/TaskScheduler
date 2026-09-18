@@ -87,7 +87,7 @@ async function submit(request: CommandRequest): Promise<boolean> {
     // every other screen would not.
     await loadSession();
     await load({ silent: true });
-    // Availability, categories and week types are all read by the three
+    // Availability, activity types and week types are all read by the three
     // schedule views. Leaving their copy alone would mean a window edited here
     // and a grid still drawn from the one before it.
     invalidateWorkspace();

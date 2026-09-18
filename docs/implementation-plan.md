@@ -105,7 +105,7 @@ A milestone is done only when: it builds clean; typecheck and lint pass; all tes
 **Goal:** All scheduling entities and DB-level invariants.
 **Depends on:** M1
 **In scope:**
-- Tables per spec §4.3–4.5: `Calendar` (visibility scope, working + shareable windows), `Category` (default cooldown), `AvailabilityWindow`, `WeekTypeOverride`, `Task` (all columns in spec §4.4, incl. `parent*id`, estimate, priority, `due*date`+`due*kind`, preferred/focus, `cooldown*override`, `sequence*id`, recurrence, `manual*floor`/`manual*bias`, `estimated*week`, defer fields, `status`, `version`), `Appointment` (`during tstzrange`, `is_internal`, status, recurrence), `AppointmentParticipant` (status), `Sequence`, `TaskOccurrence`, `Placement` (derived cache), `Command` (append-only), `Notification`.
+- Tables per spec §4.3–4.5: `Calendar` (visibility scope, working + shareable windows), `ActivityType` (default cooldown), `AvailabilityWindow`, `WeekTypeOverride`, `Task` (all columns in spec §4.4, incl. `parent*id`, estimate, priority, `due*date`+`due*kind`, preferred/focus, `cooldown*override`, `sequence*id`, recurrence, `manual*floor`/`manual*bias`, `estimated*week`, defer fields, `status`, `version`), `Appointment` (`during tstzrange`, `is_internal`, status, recurrence), `AppointmentParticipant` (status), `Sequence`, `TaskOccurrence`, `Placement` (derived cache), `Command` (append-only), `Notification`.
 - Constraints: GiST exclusion on appointment non-overlap per calendar (spec §5.3); depth ≤ 5 enforcement (trigger or maintained depth column); child effective due ≤ inherited parent due (trigger/check); version columns.
 - Recursive-CTE read query for the task tree.
 
@@ -154,7 +154,7 @@ A milestone is done only when: it builds clean; typecheck and lint pass; all tes
 **Depends on:** M4
 **In scope:**
 - Sequence placement: collapse a sequence to a composite of summed duration + internal cooldowns; place contiguously within one window; ordered/unordered; then expand (spec §6.4).
-- Capacity/utilization per `(category, week)` including the contiguous-span check (§6.6).
+- Capacity/utilization per `(activity_type, week)` including the contiguous-span check (§6.6).
 - Deferral-signal computation (chronic-postponement threshold `N`) as a pure function over task metadata.
 
 **Out of scope:** Wiring to commands/UI.
@@ -249,9 +249,9 @@ A milestone is done only when: it builds clean; typecheck and lint pass; all tes
 ### M11 — CRUD + hierarchy + configuration UI
 **Goal:** Create and manage domain objects through the UI.
 **Depends on:** M10
-**In scope:** Task create/edit (all properties); hierarchy UI (depth ≤ 5, indentation, inheritance display with a local-override affordance); appointment create/edit; category / availability-window / week-type-override configuration; two-window (working + shareable) config. Each action emits a command.
+**In scope:** Task create/edit (all properties); hierarchy UI (depth ≤ 5, indentation, inheritance display with a local-override affordance); appointment create/edit; activity-type / availability-window / week-type-override configuration; two-window (working + shareable) config. Each action emits a command.
 **Out of scope:** Manual scheduling gestures + optimistic compute (M12).
-**Acceptance (you verify):** A user can build categories, windows, a task tree with inherited-then-overridden properties, and appointments entirely via UI; child-due ≤ parent-due is enforced in the UI; changes persist and reschedule.
+**Acceptance (you verify):** A user can build activity types, windows, a task tree with inherited-then-overridden properties, and appointments entirely via UI; child-due ≤ parent-due is enforced in the UI; changes persist and reschedule.
 **Tests required:** Component + e2e for CRUD and inheritance override.
 **Review focus:** Hierarchy UX vs §4.4; inheritance/override correctness; command emission (no direct writes).
 → **STOP for review.**
@@ -273,7 +273,7 @@ A milestone is done only when: it builds clean; typecheck and lint pass; all tes
 ### M13 — Surfacing: capacity, backlog, alerts, divergence
 **Goal:** Make the engine's signals visible and actionable.
 **Depends on:** M12
-**In scope:** Backlog notifications; soft-due warnings vs hard-due/hard-constraint alerts; a per-category utilization indicator; the chronic-postponement signal; the working-window divergence notice (compare user vs team window); an in-app notification center.
+**In scope:** Backlog notifications; soft-due warnings vs hard-due/hard-constraint alerts; a per-activity-type utilization indicator; the chronic-postponement signal; the working-window divergence notice (compare user vs team window); an in-app notification center.
 **Out of scope:** Email/jobs (M15); team UI.
 **Acceptance (you verify):** Over-capacity and at-risk scenarios produce the correct in-app warnings/alerts; a repeatedly deferred task surfaces the postponement signal; a divergent working window triggers the notice.
 **Tests required:** e2e per signal type.

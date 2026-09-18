@@ -36,7 +36,7 @@ function task(overrides: Partial<ScheduledBlock> = {}): ScheduledBlock {
     occurrenceId: 'occ-1',
     taskId: 'task-1',
     title: 'Write the report',
-    categoryId: 'cat-1',
+    activityTypeId: 'cat-1',
     start: '2026-03-23T08:00:00.000Z',
     end: '2026-03-23T09:00:00.000Z',
     cooldownMin: 0,
@@ -235,11 +235,11 @@ describe('drag arithmetic', () => {
  * cannot tell you that it has nowhere to put anything, which is precisely the
  * state a new calendar is in and precisely the state that needs saying.
  */
-function window_(startIso: string, endIso: string, categoryId = 'cat-1'): ResolvedWindow {
+function window_(startIso: string, endIso: string, activityTypeId = 'cat-1'): ResolvedWindow {
   return {
-    ruleId: `rule-${categoryId}`,
+    ruleId: `rule-${activityTypeId}`,
     calendarId: 'cal-1',
-    categoryId,
+    activityTypeId,
     interval: { start: toInstant(startIso), end: toInstant(endIso) },
   };
 }
@@ -264,7 +264,7 @@ describe('the hours a day is open', () => {
     expect(bands).toEqual([]);
   });
 
-  it('merges two categories into one band where they overlap', () => {
+  it('merges two activity types into one band where they overlap', () => {
     // Otherwise the overlap is painted twice, and a translucent fill painted
     // twice is a different colour — a seam where the day is most available.
     const bands = openBandsForDay(MONDAY, BERLIN, [
@@ -338,11 +338,11 @@ function configuration(overrides: Partial<CalendarConfiguration> = {}): Calendar
       isOwner: true,
     },
     windows: [],
-    categories: [{ id: 'cat-1', name: 'Work', defaultCooldownMin: 0, color: null, version: 1 }],
+    activityTypes: [{ id: 'cat-1', name: 'Work', defaultCooldownMin: 0, color: null, version: 1 }],
     availability: [
       {
         id: 'win-1',
-        categoryId: 'cat-1',
+        activityTypeId: 'cat-1',
         weekTypeOverrideId: null,
         focusLevel: null,
         weekday: 1,
@@ -377,7 +377,7 @@ describe('the windows behind the week on screen', () => {
     ]);
   });
 
-  it('lets the working window clip the category window', () => {
+  it('lets the working window clip the activity type window', () => {
     // §9.1: the calendar says when tasks may be placed at all, and it wins.
     const resolved = windowsForWeek(
       THIS_WEEK,
@@ -439,7 +439,7 @@ describe('blocks that are already finished', () => {
     occurrenceId: 'occ-9',
     taskId: 'task-9',
     title: 'Wrote the report',
-    categoryId: 'cat-1',
+    activityTypeId: 'cat-1',
     start: '2026-03-23T08:00:00.000Z',
     end: '2026-03-23T09:30:00.000Z',
     completedAt: '2026-03-23T09:30:00.000Z',
@@ -481,7 +481,7 @@ describe('blocks that occupy the same minutes', () => {
       cooldownMin: 0,
       kind: 'appointment',
       label: '09:00–10:00',
-      categoryId: null,
+      activityTypeId: null,
       continuesBefore: false,
       continuesAfter: false,
       ...overrides,

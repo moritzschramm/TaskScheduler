@@ -8,20 +8,20 @@ import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  CATEGORY_COLORS,
+  ACTIVITY_TYPE_COLORS,
   type CalendarConfiguration,
-  type CategoryColor,
+  type ActivityTypeColor,
   type CommandRequest,
 } from '@ambitime/shared';
 
 const { t } = useI18n();
 
 /**
- * Categories — the kinds of activity a task can be (spec §4.3).
+ * Activity types — the kinds of activity a task can be (spec §4.3).
  *
  * Tenant-scoped rather than per-calendar, which the caption says out loud: a
- * category created here appears in every calendar in the context, and someone
- * who thought otherwise would build the same four categories four times.
+ * activity type created here appears in every calendar in the context, and someone
+ * who thought otherwise would build the same four activity types four times.
  *
  * Edited in place rather than in a dialog. There are two fields, and a modal
  * for two fields costs a user more attention than it saves them.
@@ -51,7 +51,7 @@ interface Draft {
    * it, because a type with no colour draws as a grey lane and grey already
    * means "unavailable" everywhere else on the grid.
    */
-  color: CategoryColor | '';
+  color: ActivityTypeColor | '';
 }
 
 const busy = ref(false);
@@ -70,17 +70,17 @@ const pending = useOptimisticRemoval();
  * somebody is still typing in, one round trip behind them.
  */
 watch(
-  () => props.configuration.categories,
-  (categories) => {
-    const live = new Set(categories.map((category) => category.id));
+  () => props.configuration.activityTypes,
+  (activityTypes) => {
+    const live = new Set(activityTypes.map((activityType) => activityType.id));
     for (const id of [...drafts.keys()]) if (!live.has(id)) drafts.delete(id);
 
-    for (const category of categories) {
-      if (drafts.has(category.id)) continue;
-      drafts.set(category.id, {
-        name: category.name,
-        defaultCooldownMin: category.defaultCooldownMin,
-        color: category.color ?? '',
+    for (const activityType of activityTypes) {
+      if (drafts.has(activityType.id)) continue;
+      drafts.set(activityType.id, {
+        name: activityType.name,
+        defaultCooldownMin: activityType.defaultCooldownMin,
+        color: activityType.color ?? '',
       });
     }
   },
@@ -91,7 +91,7 @@ async function create(): Promise<void> {
   busy.value = true;
   try {
     const ok = await props.submit({
-      type: 'CreateCategory',
+      type: 'CreateActivityType',
       params: {
         name: fresh.value.name,
         defaultCooldownMin: Number(fresh.value.defaultCooldownMin),
@@ -115,15 +115,15 @@ async function create(): Promise<void> {
  */
 function edited(id: string): void {
   autosave.save(id, async () => {
-    const category = props.configuration.categories.find((entry) => entry.id === id);
+    const activityType = props.configuration.activityTypes.find((entry) => entry.id === id);
     const draft = drafts.get(id);
-    if (category === undefined || draft === undefined || draft.name.trim() === '') return;
+    if (activityType === undefined || draft === undefined || draft.name.trim() === '') return;
 
     await props.submit({
-      type: 'EditCategory',
-      expectedVersion: category.version,
+      type: 'EditActivityType',
+      expectedVersion: activityType.version,
       params: {
-        categoryId: id,
+        activityTypeId: id,
         patch: {
           name: draft.name,
           defaultCooldownMin: Number(draft.defaultCooldownMin),
@@ -144,9 +144,9 @@ async function remove(id: string, version: number): Promise<void> {
       // asked here beforehand, because a confirmation dialog would be guessing
       // at an answer the server already knows — and a refusal puts the row back.
       return props.submit({
-        type: 'DeleteCategory',
+        type: 'DeleteActivityType',
         expectedVersion: version,
-        params: { categoryId: id },
+        params: { activityTypeId: id },
       });
     });
   } finally {
@@ -156,11 +156,11 @@ async function remove(id: string, version: number): Promise<void> {
 </script>
 
 <template>
-  <section class="space-y-4" data-testid="categories-section">
+  <section class="space-y-4" data-testid="activity-types-section">
     <header>
-      <h2 class="sr-only">{{ t('categories.title') }}</h2>
+      <h2 class="sr-only">{{ t('activityTypes.title') }}</h2>
       <p class="text-muted-foreground text-sm">
-        {{ t('categories.shared') }}
+        {{ t('activityTypes.shared') }}
       </p>
     </header>
 
@@ -168,8 +168,8 @@ async function remove(id: string, version: number): Promise<void> {
       <thead class="text-muted-foreground text-left text-xs">
         <tr>
           <th class="pb-2 font-medium">{{ t('common.name') }}</th>
-          <th class="pb-2 font-medium">{{ t('categories.cooldown') }}</th>
-          <th class="pb-2 font-medium">{{ t('categories.color') }}</th>
+          <th class="pb-2 font-medium">{{ t('activityTypes.cooldown') }}</th>
+          <th class="pb-2 font-medium">{{ t('activityTypes.color') }}</th>
           <th class="pb-2">
             <span class="sr-only">{{ t('tasks.column.actions') }}</span>
           </th>
@@ -177,33 +177,35 @@ async function remove(id: string, version: number): Promise<void> {
       </thead>
       <tbody>
         <tr
-          v-for="category in configuration.categories.filter((row) => !pending.isRemoved(row.id))"
-          :key="category.id"
+          v-for="activityType in configuration.activityTypes.filter(
+            (row) => !pending.isRemoved(row.id),
+          )"
+          :key="activityType.id"
           class="border-t"
-          data-testid="category-row"
+          data-testid="activity-type-row"
         >
           <td class="py-2 pr-3">
             <Input
-              v-if="drafts.get(category.id)"
-              v-model="drafts.get(category.id)!.name"
-              :aria-label="t('categories.nameOf', { name: category.name })"
-              data-testid="category-name"
-              @input="edited(category.id)"
+              v-if="drafts.get(activityType.id)"
+              v-model="drafts.get(activityType.id)!.name"
+              :aria-label="t('activityTypes.nameOf', { name: activityType.name })"
+              data-testid="activity-type-name"
+              @input="edited(activityType.id)"
             />
           </td>
           <td class="w-32 py-2 pr-3">
             <Input
-              v-if="drafts.get(category.id)"
-              v-model.number="drafts.get(category.id)!.defaultCooldownMin"
+              v-if="drafts.get(activityType.id)"
+              v-model.number="drafts.get(activityType.id)!.defaultCooldownMin"
               type="number"
               min="0"
-              :aria-label="t('categories.cooldownOf', { name: category.name })"
-              data-testid="category-cooldown"
-              @input="edited(category.id)"
+              :aria-label="t('activityTypes.cooldownOf', { name: activityType.name })"
+              data-testid="activity-type-cooldown"
+              @input="edited(activityType.id)"
             />
           </td>
           <td class="w-44 py-2 pr-3">
-            <div v-if="drafts.get(category.id)" class="flex items-center gap-2">
+            <div v-if="drafts.get(activityType.id)" class="flex items-center gap-2">
               <!--
                 A swatch beside the name of the colour, never instead of it.
                 Eight hues cannot all be told apart by every reader, so the
@@ -212,31 +214,33 @@ async function remove(id: string, version: number): Promise<void> {
               <span
                 class="size-4 shrink-0 rounded-sm border"
                 :style="
-                  drafts.get(category.id)!.color === ''
+                  drafts.get(activityType.id)!.color === ''
                     ? {}
-                    : { backgroundColor: `var(--category-${drafts.get(category.id)!.color})` }
+                    : {
+                        backgroundColor: `var(--activity-type-${drafts.get(activityType.id)!.color})`,
+                      }
                 "
-                data-testid="category-swatch"
-                :data-color="drafts.get(category.id)!.color"
+                data-testid="activity-type-swatch"
+                :data-color="drafts.get(activityType.id)!.color"
                 aria-hidden="true"
               />
               <Select
-                v-model="drafts.get(category.id)!.color"
+                v-model="drafts.get(activityType.id)!.color"
                 class="h-9"
-                :aria-label="t('categories.colorOf', { name: category.name })"
-                data-testid="category-color"
-                @update:model-value="edited(category.id)"
+                :aria-label="t('activityTypes.colorOf', { name: activityType.name })"
+                data-testid="activity-type-color"
+                @update:model-value="edited(activityType.id)"
               >
                 <!--
                   Present only when it is already the answer, and disabled, so
                   the select can show the state of a type made before every one
                   of them had a colour without offering to put another there.
                 -->
-                <option v-if="drafts.get(category.id)!.color === ''" value="" disabled>
-                  {{ t('categories.noColor') }}
+                <option v-if="drafts.get(activityType.id)!.color === ''" value="" disabled>
+                  {{ t('activityTypes.noColor') }}
                 </option>
-                <option v-for="hue in CATEGORY_COLORS" :key="hue" :value="hue">
-                  {{ t(`categories.hue.${hue}`) }}
+                <option v-for="hue in ACTIVITY_TYPE_COLORS" :key="hue" :value="hue">
+                  {{ t(`activityTypes.hue.${hue}`) }}
                 </option>
               </Select>
             </div>
@@ -247,9 +251,9 @@ async function remove(id: string, version: number): Promise<void> {
                 variant="ghost"
                 size="sm"
                 :disabled="busy || autosave.busy.value"
-                :aria-label="t('categories.deleteNamed', { name: category.name })"
-                data-testid="delete-category"
-                @click="remove(category.id, category.version)"
+                :aria-label="t('activityTypes.deleteNamed', { name: activityType.name })"
+                data-testid="delete-activity-type"
+                @click="remove(activityType.id, activityType.version)"
               >
                 {{ t('common.delete') }}
               </Button>
@@ -259,41 +263,43 @@ async function remove(id: string, version: number): Promise<void> {
 
         <tr class="border-t">
           <td class="py-2 pr-3">
-            <Label for="new-category-name" class="sr-only">{{ t('categories.newName') }}</Label>
+            <Label for="new-activity-type-name" class="sr-only">{{
+              t('activityTypes.newName')
+            }}</Label>
             <Input
-              id="new-category-name"
+              id="new-activity-type-name"
               v-model="fresh.name"
-              :placeholder="t('categories.namePlaceholder')"
-              data-testid="new-category-name"
+              :placeholder="t('activityTypes.namePlaceholder')"
+              data-testid="new-activity-type-name"
             />
           </td>
           <td class="py-2 pr-3">
-            <Label for="new-category-cooldown" class="sr-only">{{
-              t('categories.newCooldown')
+            <Label for="new-activity-type-cooldown" class="sr-only">{{
+              t('activityTypes.newCooldown')
             }}</Label>
             <Input
-              id="new-category-cooldown"
+              id="new-activity-type-cooldown"
               v-model.number="fresh.defaultCooldownMin"
               type="number"
               min="0"
-              data-testid="new-category-cooldown"
+              data-testid="new-activity-type-cooldown"
             />
           </td>
           <td class="py-2 pr-3">
             <Select
               v-model="fresh.color"
               class="h-9"
-              :aria-label="t('categories.color')"
-              data-testid="new-category-color"
+              :aria-label="t('activityTypes.color')"
+              data-testid="new-activity-type-color"
             >
               <!--
                 The default, and it does not mean "none": the server takes the
                 next free slot, which is how the first three activity types end
                 up in the three hues that separate for every reader.
               -->
-              <option value="">{{ t('categories.autoColor') }}</option>
-              <option v-for="hue in CATEGORY_COLORS" :key="hue" :value="hue">
-                {{ t(`categories.hue.${hue}`) }}
+              <option value="">{{ t('activityTypes.autoColor') }}</option>
+              <option v-for="hue in ACTIVITY_TYPE_COLORS" :key="hue" :value="hue">
+                {{ t(`activityTypes.hue.${hue}`) }}
               </option>
             </Select>
           </td>
@@ -301,7 +307,7 @@ async function remove(id: string, version: number): Promise<void> {
             <Button
               size="sm"
               :disabled="busy || fresh.name.trim() === ''"
-              data-testid="add-category"
+              data-testid="add-activity-type"
               @click="create"
             >
               {{ t('common.add') }}

@@ -18,7 +18,7 @@ import { loadSession, RESET_PASSWORD_PATH, session, VERIFY_EMAIL_PATH } from '@/
  * whether the application works.
  */
 const TasksView = () => import('@/views/TasksView.vue');
-const CategoriesView = () => import('@/views/CategoriesView.vue');
+const ActivityTypesView = () => import('@/views/ActivityTypesView.vue');
 const AuditView = () => import('@/views/AuditView.vue');
 const SettingsView = () => import('@/views/SettingsView.vue');
 const SignUpView = () => import('@/views/SignUpView.vue');
@@ -58,9 +58,9 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
       { path: '/', name: 'schedule', component: ScheduleView, meta: { requiresAuth: true } },
       { path: '/tasks', name: 'tasks', component: TasksView, meta: { requiresAuth: true } },
       {
-        path: '/categories',
-        name: 'categories',
-        component: CategoriesView,
+        path: '/activity-types',
+        name: 'activity-types',
+        component: ActivityTypesView,
         meta: { requiresAuth: true },
       },
       {

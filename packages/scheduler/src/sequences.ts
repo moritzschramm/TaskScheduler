@@ -167,17 +167,18 @@ function sequenceUnit(
 /**
  * Reasons a sequence can never be placed, whatever the calendar holds.
  *
- * Members in different categories are the important one: rule 5 requires a
- * single window, and windows belong to exactly one category, so no window can
+ * Members in different activity types are the important one: rule 5 requires a
+ * single window, and windows belong to exactly one activity type, so no window can
  * hold the block. Left undetected the composite would be placed in the *first*
- * member's window and every other member would land outside its own category's
+ * member's window and every other member would land outside its own activity type's
  * availability — a hard-constraint violation the solver itself created.
  */
 function structuralBlock(members: readonly SequenceMember[]): InfeasibilityReason | undefined {
   const first = members[0]!.schedulable;
   const mixed = members.some(
     ({ schedulable }) =>
-      schedulable.calendarId !== first.calendarId || schedulable.categoryId !== first.categoryId,
+      schedulable.calendarId !== first.calendarId ||
+      schedulable.activityTypeId !== first.activityTypeId,
   );
 
   return mixed ? 'sequence_members_incompatible' : undefined;
@@ -254,7 +255,7 @@ function compositeSchedulable(
     occurrenceId: `${SEQUENCE_ID_PREFIX}${sequenceId}`,
     taskId: `${SEQUENCE_ID_PREFIX}${sequenceId}`,
     calendarId: first.calendarId,
-    categoryId: first.categoryId,
+    activityTypeId: first.activityTypeId,
     durationMin,
     cooldownMin,
     sequenceId,

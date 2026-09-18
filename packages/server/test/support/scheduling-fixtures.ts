@@ -3,7 +3,7 @@ import {
   appointments,
   availabilityWindows,
   calendars,
-  categories,
+  activityTypes,
   taskOccurrences,
   tasks,
 } from '../../src/db/schema/index.js';
@@ -31,7 +31,7 @@ export async function createCalendar(
   });
 }
 
-export async function createCategory(
+export async function createActivityType(
   db: Database,
   tenantId: string,
   name: string,
@@ -39,10 +39,10 @@ export async function createCategory(
 ): Promise<string> {
   return withSystemPrivileges(db, async (tx) => {
     const [row] = await tx
-      .insert(categories)
+      .insert(activityTypes)
       .values({ tenantId, name, defaultCooldownMin })
-      .returning({ id: categories.id });
-    if (!row) throw new Error('Failed to create category');
+      .returning({ id: activityTypes.id });
+    if (!row) throw new Error('Failed to create activity type');
     return row.id;
   });
 }
@@ -52,7 +52,7 @@ export async function createAvailabilityWindow(
   values: {
     tenantId: string;
     calendarId: string;
-    categoryId: string;
+    activityTypeId: string;
     weekday: number;
     startMin: number;
     endMin: number;

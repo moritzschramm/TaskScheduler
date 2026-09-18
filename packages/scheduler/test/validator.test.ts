@@ -41,7 +41,7 @@ describe('hard-constraint validator (spec §6.2)', () => {
     });
   });
 
-  describe('rule 1 — within an availability window of its category', () => {
+  describe('rule 1 — within an availability window of its activity type', () => {
     it('rejects a placement outside every window', () => {
       const task = schedulable({ occurrenceId: 'a' });
 
@@ -65,8 +65,8 @@ describe('hard-constraint validator (spec §6.2)', () => {
       expect(codes(result.violations)).toContain('outside_availability_window');
     });
 
-    it('rejects a placement in another category’s window', () => {
-      const task = schedulable({ occurrenceId: 'a', categoryId: 'cat-exercise' });
+    it('rejects a placement in another activity type’s window', () => {
+      const task = schedulable({ occurrenceId: 'a', activityTypeId: 'cat-exercise' });
 
       const result = validateSchedule(context({ schedulables: [task] }), [
         placement('a', '2026-03-23T09:00:00Z', 60),
@@ -536,7 +536,7 @@ describe('hard-constraint validator (spec §6.2)', () => {
 
   it('checks the window a task is actually eligible for', () => {
     // Guards against the validator matching any window in the horizon rather
-    // than one belonging to the task's own calendar and category.
+    // than one belonging to the task's own calendar and activity type.
     const a = schedulable({ occurrenceId: 'a', calendarId: 'cal-other' });
 
     const result = validateSchedule(

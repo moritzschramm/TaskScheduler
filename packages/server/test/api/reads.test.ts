@@ -44,7 +44,7 @@ describe('the read endpoints', () => {
       params: {
         calendarId: world.calendarId,
         title,
-        categoryId: world.categoryId,
+        activityTypeId: world.activityTypeId,
         estimatedDurationMin: 60,
         ...extra,
       },
@@ -120,7 +120,7 @@ describe('the read endpoints', () => {
     expect(body.entries[0]?.estimatedWeek).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it('reports capacity as a plain ratio, per category and week', async () => {
+  it('reports capacity as a plain ratio, per activity type and week', async () => {
     await createTask('One');
     await createTask('Two');
 
@@ -130,7 +130,7 @@ describe('the read endpoints', () => {
 
     expect(body.cells.length).toBeGreaterThan(0);
     const [cell] = body.cells;
-    expect(cell?.categoryId).toBe(world.categoryId);
+    expect(cell?.activityTypeId).toBe(world.activityTypeId);
     // Fixed point is the engine's business (§6.3); an API that shipped
     // 1_250_000 would be asking every consumer to know the same secret.
     expect(cell?.utilization).toBeLessThan(1);
@@ -202,7 +202,7 @@ describe('the read endpoints', () => {
       visibilityScope: 'private',
       isOwner: true,
     });
-    expect(body.categories.map((category) => category.name)).toEqual(['Work']);
+    expect(body.activityTypes.map((activityType) => activityType.name)).toEqual(['Work']);
     expect(body.windows).toEqual([
       expect.objectContaining({ kind: 'working', weekday: 1, startMin: 480, endMin: 1080 }),
     ]);

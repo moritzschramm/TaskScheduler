@@ -11,7 +11,7 @@ const { t } = useI18n();
 
 /**
  * A week of wall-clock ranges — the shape shared by §9.1's two calendar windows
- * and §4.3's per-category availability.
+ * and §4.3's per-activity-type availability.
  *
  * **A weekday holds several ranges, not one.** "09:00–12:00 and 13:00–17:00" is
  * an ordinary working day, and the scheduler already resolves a weekday's
@@ -46,7 +46,7 @@ const props = withDefaults(
      * Clashes with other activity types, to mark on the ranges they belong to.
      *
      * Passed in rather than computed here: this editor is also used for the
-     * calendar windows of §9.1, which have no categories to clash with.
+     * calendar windows of §9.1, which have no activity types to clash with.
      */
     overlaps?: readonly RuleOverlap[];
     disabled?: boolean;
