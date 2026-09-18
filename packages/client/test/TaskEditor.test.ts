@@ -58,6 +58,8 @@ function task(overrides: Partial<TaskNode> = {}): TaskNode {
     effectivePreferredStartMin: null,
     ownPreferredEndMin: null,
     effectivePreferredEndMin: null,
+    ownPreferredWeekdays: null,
+    effectivePreferredWeekdays: null,
     ownFocusLevel: null,
     effectiveFocusLevel: null,
     ownCooldownOverrideMin: null,
@@ -529,5 +531,75 @@ describe('with nothing to inherit from', () => {
     expect(lines.length).toBeGreaterThan(0);
     expect(lines.every((line) => line === 'Not set')).toBe(true);
     expect(wrapper.text()).not.toContain('undefined');
+  });
+});
+
+describe('the days half of a preferred time (§4.4, migration 0021)', () => {
+  const field = '[data-testid="field-preferred-weekdays"]';
+
+  it('sends the days it was given, sorted', async () => {
+    const { wrapper, submit } = editor({ task: task() });
+
+    await wrapper.find(`${field} [data-testid="override-toggle"]`).trigger('click');
+    await wrapper.find('[data-testid="task-weekday-4"]').trigger('click');
+    await wrapper.find('[data-testid="task-weekday-2"]').trigger('click');
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+
+    expect(patchOf(submit)['preferredWeekdays']).toEqual([2, 4]);
+  });
+
+  it('is independent of the hours, which it does not disturb', async () => {
+    // "Tuesdays" says nothing about when on a Tuesday, and "afternoons" says
+    // nothing about which day: two fields, two switches.
+    const { wrapper, submit } = editor({
+      task: task({ ownPreferredStartMin: 13 * 60, ownPreferredEndMin: 17 * 60 }),
+    });
+
+    await wrapper.find(`${field} [data-testid="override-toggle"]`).trigger('click');
+    await wrapper.find('[data-testid="task-weekday-2"]').trigger('click');
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+
+    const patch = patchOf(submit);
+    expect(patch['preferredWeekdays']).toEqual([2]);
+    expect(patch['preferredRange']).toEqual({ startMin: 13 * 60, endMin: 17 * 60 });
+  });
+
+  it('clears back to inherited without touching the hours', async () => {
+    const { wrapper, submit } = editor({
+      task: task({
+        ownPreferredWeekdays: [2],
+        effectivePreferredWeekdays: [2],
+        ownPreferredStartMin: 13 * 60,
+        ownPreferredEndMin: 17 * 60,
+      }),
+    });
+
+    await wrapper.find(`${field} [data-testid="override-toggle"]`).trigger('click');
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+
+    const patch = patchOf(submit);
+    expect(patch['preferredWeekdays']).toBeNull();
+    expect(patch['preferredRange']).toEqual({ startMin: 13 * 60, endMin: 17 * 60 });
+  });
+
+  it('shows a container’s days as inherited rather than as its own', () => {
+    // Said once on a project and true of everything in it — which is the whole
+    // reason the field is worth having.
+    const { wrapper } = editor({
+      task: task({ depth: 2, ownPreferredWeekdays: null, effectivePreferredWeekdays: [2, 4] }),
+    });
+
+    expect(wrapper.find(`${field} [data-testid="inherited-value"]`).text()).toContain('Tue, Thu');
+  });
+
+  it('treats no day chosen as no preference rather than as a refusal', async () => {
+    // An empty set is what NULL already says, and the column's own constraint
+    // rejects it — so the switch alone is not an instruction.
+    const { wrapper, submit } = editor({ task: task() });
+
+    await wrapper.find(`${field} [data-testid="override-toggle"]`).trigger('click');
+    await wrapper.find('[data-testid="save-task"]').trigger('click');
+
+    expect(patchOf(submit)['preferredWeekdays']).toBeNull();
   });
 });

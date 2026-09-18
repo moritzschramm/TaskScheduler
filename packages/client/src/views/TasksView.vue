@@ -9,7 +9,7 @@ import WorkspaceStatus from '@/components/WorkspaceStatus.vue';
 import { Dialog } from '@/components/ui/dialog';
 import { useWorkspace } from '@/lib/workspace';
 import { fromLocalInput } from '@/lib/time';
-import type { ScheduledBlock } from '@ambitime/shared';
+import { uuidv7, type ScheduledBlock } from '@ambitime/shared';
 
 const { t, plural } = useI18n();
 
@@ -38,6 +38,7 @@ const {
   unschedulable,
   ensureLoaded,
   submit,
+  runBatch,
   parentOf,
   openTask,
 } = useWorkspace();
@@ -84,11 +85,34 @@ async function quickAdd(draft: QuickAddDraft): Promise<boolean> {
       calendarId,
       title: draft.title,
       estimatedDurationMin: draft.estimatedDurationMin,
+      ...(draft.parentId === null ? {} : { parentId: draft.parentId }),
       ...(draft.activityTypeId === null ? {} : { activityTypeId: draft.activityTypeId }),
       ...(draft.priority === null ? {} : { priority: draft.priority }),
       ...(due === null ? {} : { dueDate: { date: due, kind: 'soft' as const } }),
     },
   });
+}
+
+/**
+ * Grouping several tasks under one, as a single act (§4.4, §7.5).
+ *
+ * One `groupId` across the batch, so §7.5 folds them into one unit of history:
+ * grouping three tasks was one decision and one press of undo takes it back,
+ * rather than three presses that leave the tree half-moved in between.
+ */
+async function moveTasks({
+  taskIds,
+  parentId,
+}: {
+  taskIds: string[];
+  parentId: string | null;
+}): Promise<void> {
+  if (taskIds.length === 0) return;
+
+  await runBatch(
+    taskIds.map((taskId) => ({ type: 'SetTaskParent' as const, params: { taskId, parentId } })),
+    uuidv7(),
+  );
 }
 </script>
 
@@ -150,6 +174,7 @@ async function quickAdd(draft: QuickAddDraft): Promise<boolean> {
           @select="(task) => (editing = { kind: 'task', task, parent: parentOf(task) })"
           @add-child="(parent) => (editing = { kind: 'task', task: null, parent })"
           @add-root="editing = { kind: 'task', task: null, parent: null }"
+          @move="moveTasks"
         />
         <BacklogPanel :entries="backlog" />
       </div>

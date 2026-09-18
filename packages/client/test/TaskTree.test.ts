@@ -36,6 +36,8 @@ function node(id: string, depth: number, overrides: Partial<TaskNode> = {}): Tas
     effectivePreferredStartMin: null,
     ownPreferredEndMin: null,
     effectivePreferredEndMin: null,
+    ownPreferredWeekdays: null,
+    effectivePreferredWeekdays: null,
     ownFocusLevel: null,
     effectiveFocusLevel: null,
     ownCooldownOverrideMin: null,
@@ -74,10 +76,10 @@ describe('the task tree', () => {
     const indents = rows.map((row) => row.find('td span').attributes('style')?.replace(/\s/g, ''));
     expect(indents).toEqual([
       'padding-left:0px;',
-      'padding-left:16px;',
-      'padding-left:32px;',
-      'padding-left:48px;',
-      'padding-left:64px;',
+      'padding-left:18px;',
+      'padding-left:36px;',
+      'padding-left:54px;',
+      'padding-left:72px;',
     ]);
   });
 
@@ -182,6 +184,7 @@ describe('the quick-add row', () => {
     // which is the field §6.2 rule 1 makes mandatory.
     expect(quickAdd).toHaveBeenCalledWith({
       activityTypeId: 'cat-work',
+      parentId: null,
       title: 'Invoices',
       estimatedDurationMin: 30,
       priority: null,

@@ -8,7 +8,14 @@ import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import InheritedField from './InheritedField.vue';
 import { FOCUS_LEVELS, focusLabel } from '@/lib/focus';
-import { formatMinuteOfDay, fromLocalInput, parseMinuteOfDay, toLocalInput } from '@/lib/time';
+import { displayLocale } from '@/lib/session';
+import {
+  formatMinuteOfDay,
+  fromLocalInput,
+  parseMinuteOfDay,
+  toLocalInput,
+  weekdayNames,
+} from '@/lib/time';
 import type { ActivityType, CommandRequest, TaskNode } from '@ambitime/shared';
 
 const { t } = useI18n();
@@ -73,6 +80,16 @@ interface Draft {
   priority: { overridden: boolean; value: string };
   due: { overridden: boolean; value: string; kind: 'soft' | 'hard' };
   preferred: { overridden: boolean; start: string; end: string };
+  /**
+   * The days half of the same preference, with its own switch (§4.4).
+   *
+   * A separate field rather than a third control inside "preferred time",
+   * because the two really are independent underneath: "Tuesdays" says nothing
+   * about hours and "afternoons" says nothing about days, and either can be
+   * inherited while the other is set here. One switch over both would have to
+   * lie about one of them.
+   */
+  weekdays: { overridden: boolean; value: number[] };
   focus: { overridden: boolean; value: string };
   cooldown: { overridden: boolean; value: string };
   recurrence: {
@@ -107,6 +124,7 @@ function emptyDraft(): Draft {
       start: formatMinuteOfDay(props.defaultPreferred?.startMin ?? 9 * 60),
       end: formatMinuteOfDay(props.defaultPreferred?.endMin ?? 17 * 60),
     },
+    weekdays: { overridden: false, value: [] },
     focus: { overridden: false, value: '3' },
     cooldown: { overridden: false, value: '0' },
     recurrence: { on: false, period: 'week', count: '1', missedPolicy: 'rollover' },
@@ -150,6 +168,10 @@ watch(
         start: formatMinuteOfDay(task.ownPreferredStartMin ?? 9 * 60),
         end: formatMinuteOfDay(task.ownPreferredEndMin ?? 17 * 60),
       },
+      weekdays: {
+        overridden: task.ownPreferredWeekdays !== null,
+        value: [...(task.ownPreferredWeekdays ?? [])],
+      },
       focus: {
         overridden: task.ownFocusLevel !== null,
         value: String(task.ownFocusLevel ?? task.effectiveFocusLevel ?? 3),
@@ -192,6 +214,7 @@ const inherited = computed(() => {
     cooldown: from(source.ownCooldownOverrideMin, source.effectiveCooldownOverrideMin),
     preferredStart: from(source.ownPreferredStartMin, source.effectivePreferredStartMin),
     preferredEnd: from(source.ownPreferredEndMin, source.effectivePreferredEndMin),
+    weekdays: from(source.ownPreferredWeekdays, source.effectivePreferredWeekdays),
   };
 });
 
@@ -202,6 +225,33 @@ function displayDue(iso: string | null): string | null {
 function displayRange(start: number | null, end: number | null): string | null {
   if (start === null || end === null) return null;
   return `${formatMinuteOfDay(start)}–${formatMinuteOfDay(end)}`;
+}
+
+/** ISO 1–7 in the reader's locale, short, in week order. */
+const dayNames = computed(() => weekdayNames(displayLocale(), 'short'));
+
+function displayWeekdays(days: number[] | null): string | null {
+  if (days === null || days.length === 0) return null;
+  return days.map((day) => dayNames.value[day - 1] ?? String(day)).join(', ');
+}
+
+function toggleWeekday(day: number): void {
+  const chosen = draft.value.weekdays.value;
+  draft.value.weekdays.value = chosen.includes(day)
+    ? chosen.filter((entry) => entry !== day)
+    : [...chosen, day].sort((a, b) => a - b);
+}
+
+/**
+ * The days, or null when the field is inheriting or says nothing.
+ *
+ * An empty set with the switch on is treated as no preference rather than as a
+ * refused command: "prefer no day at all" is not a thing anybody means, and the
+ * column's own constraint rejects it (migration 0021).
+ */
+function weekdaysValue(): number[] | null {
+  if (!draft.value.weekdays.overridden) return null;
+  return draft.value.weekdays.value.length === 0 ? null : draft.value.weekdays.value;
 }
 
 /**
@@ -323,6 +373,7 @@ function createRequest(): CommandRequest {
   const estimate = draft.value.estimate === '' ? null : Number(draft.value.estimate);
   const due = dueValue();
   const preferred = preferredValue();
+  const weekdays = weekdaysValue();
 
   // A create takes no nulls: an absent property simply is not set, and there is
   // no prior override to clear.
@@ -340,6 +391,7 @@ function createRequest(): CommandRequest {
         : { priority: numberOrNull(draft.value.priority)! }),
       ...(due === null ? {} : { dueDate: due }),
       ...(preferred === null ? {} : { preferredRange: preferred }),
+      ...(weekdays === null ? {} : { preferredWeekdays: weekdays }),
       ...(numberOrNull(draft.value.focus) === null
         ? {}
         : { focusLevel: numberOrNull(draft.value.focus)! }),
@@ -366,6 +418,7 @@ function editRequest(): CommandRequest {
         priority: numberOrNull(draft.value.priority),
         dueDate: dueValue(),
         preferredRange: preferredValue(),
+        preferredWeekdays: weekdaysValue(),
         focusLevel: numberOrNull(draft.value.focus),
         cooldownOverrideMin: numberOrNull(draft.value.cooldown),
         recurrence: recurrenceValue(),
@@ -596,6 +649,39 @@ async function complete(): Promise<void> {
             :aria-label="t('editor.preferredEnd')"
             data-testid="task-preferred-end"
           />
+        </div>
+      </InheritedField>
+
+      <!--
+        Seven toggles rather than a multi-select. The whole set is three words
+        wide, every option is visible without opening anything, and each one is
+        a button a keyboard reaches in order (WCAG 2.1.1) — which none of the
+        alternatives that fit in the same space can say.
+      -->
+      <InheritedField
+        v-model:overridden="draft.weekdays.overridden"
+        field="preferred-weekdays"
+        :label="t('editor.weekdaysLabel')"
+        :hint="t('editor.weekdaysHint')"
+        :inherited="displayWeekdays(inherited?.weekdays ?? null)"
+      >
+        <div class="flex flex-wrap gap-1" role="group" :aria-label="t('editor.weekdaysLabel')">
+          <button
+            v-for="(name, index) in dayNames"
+            :key="name"
+            type="button"
+            class="rounded-md border px-2 py-1 text-xs"
+            :class="
+              draft.weekdays.value.includes(index + 1)
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground'
+            "
+            :aria-pressed="draft.weekdays.value.includes(index + 1)"
+            :data-testid="`task-weekday-${index + 1}`"
+            @click="toggleWeekday(index + 1)"
+          >
+            {{ name }}
+          </button>
         </div>
       </InheritedField>
     </div>

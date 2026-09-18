@@ -1358,6 +1358,13 @@ describe('seed via the API, render the client', () => {
       await wrapper.find('[data-testid="begin"]').trigger('click');
       await settle();
 
+      // The second question, about shape rather than hours — the only moment
+      // the application has their attention on how work is arranged. Skipping
+      // is a button, so it is answerable by not answering.
+      expect(wrapper.find('[data-testid="first-project-name"]').exists()).toBe(true);
+      await wrapper.find('[data-testid="skip"]').trigger('click');
+      await settle();
+
       // One gesture, three commands, and a week that is open for business:
       // Monday through Friday lit, the weekend closed.
       await waitFor(() => wrapper.findAll('[data-testid="day-column"]').length === 7);

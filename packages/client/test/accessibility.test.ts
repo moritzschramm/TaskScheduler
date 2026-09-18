@@ -215,6 +215,8 @@ describe('the panels', () => {
     effectivePreferredStartMin: null,
     ownPreferredEndMin: null,
     effectivePreferredEndMin: null,
+    ownPreferredWeekdays: null,
+    effectivePreferredWeekdays: null,
     ownFocusLevel: null,
     effectiveFocusLevel: null,
     ownCooldownOverrideMin: null,

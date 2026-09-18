@@ -15,7 +15,7 @@ import { Plus } from 'lucide-vue-next';
 
 // Read during setup as well as during render — the quick-add drafts are
 // seeded from the group names — so it is destructured before anything uses it.
-const { t } = useI18n();
+const { t, plural } = useI18n();
 
 /**
  * What the quick-add row can say about a task: the four fields §4.4 needs to
@@ -29,6 +29,15 @@ const { t } = useI18n();
 export interface QuickAddDraft {
   /** The group the row belongs to; `null` is the ungrouped one. */
   activityTypeId: string | null;
+  /**
+   * The task to hang it under, when the row is inside one (§4.4).
+   *
+   * Set means the new task inherits — its activity type comes from the parent,
+   * so the group's own id is deliberately not sent as well. An override
+   * identical to what would be inherited is still an override, and clearing it
+   * later would look like it did nothing.
+   */
+  parentId: string | null;
   title: string;
   estimatedDurationMin: number;
   priority: number | null;
@@ -56,7 +65,13 @@ const props = withDefaults(
   { activityTypes: () => [], selectedId: null, editable: false, quickAdd: undefined },
 );
 
-const emit = defineEmits<{ select: [task: TaskNode]; addChild: [parent: TaskNode]; addRoot: [] }>();
+const emit = defineEmits<{
+  select: [task: TaskNode];
+  addChild: [parent: TaskNode];
+  addRoot: [];
+  /** Re-parent several tasks at once; `null` takes them back to the top. */
+  move: [{ taskIds: string[]; parentId: string | null }];
+}>();
 
 /**
  * Spec §4.4's hard cap. A task at depth 5 can have no children, and the button
@@ -152,10 +167,115 @@ function indentOf(task: TaskNode, groupKey: string): number {
   return indent;
 }
 
+/**
+ * What a container is worth, and how far through it somebody is.
+ *
+ * §4.4 says a parent's duration and completion "roll up from its leaves", and
+ * until now nothing computed it: the Estimate column showed a container's own
+ * `estimated_duration_min`, which is a number that is never scheduled, in the
+ * same type as the leaves' numbers that are. A reader had no way to tell the
+ * two apart, and the one honest figure for a container — what the work under it
+ * actually costs — was not on the page at all.
+ *
+ * Cancelled leaves are in neither total. They are not work outstanding, and
+ * counting them would make a project that somebody pruned look further from
+ * done than before they pruned it.
+ *
+ * One reverse pass. Tasks arrive depth-first, so every child is visited before
+ * the parent it contributes to, and no recursion or memo is needed.
+ */
+interface Rollup {
+  /** Direct children, which is what makes a task a container. */
+  children: number;
+  /** Σ of the leaves' estimates, in minutes. */
+  minutes: number;
+  leaves: number;
+  done: number;
+}
+
+const EMPTY_ROLLUP: Rollup = { children: 0, minutes: 0, leaves: 0, done: 0 };
+
+const rollups = computed<Map<string, Rollup>>(() => {
+  const acc = new Map<string, Rollup>();
+  for (const task of props.tasks) acc.set(task.id, { ...EMPTY_ROLLUP });
+
+  for (let index = props.tasks.length - 1; index >= 0; index -= 1) {
+    const task = props.tasks[index]!;
+    const own = acc.get(task.id)!;
+
+    if (task.isLeaf && task.status !== 'cancelled') {
+      own.minutes = task.estimatedDurationMin ?? 0;
+      own.leaves = 1;
+      own.done = task.status === 'completed' ? 1 : 0;
+    }
+
+    const parent = task.parentId === null ? undefined : acc.get(task.parentId);
+    if (parent === undefined) continue;
+
+    parent.children += 1;
+    parent.minutes += own.minutes;
+    parent.leaves += own.leaves;
+    parent.done += own.done;
+  }
+
+  return acc;
+});
+
+const rollupOf = (task: TaskNode): Rollup => rollups.value.get(task.id) ?? EMPTY_ROLLUP;
+
+/**
+ * Containers the user has folded away — the same gesture the groups have.
+ *
+ * A container had no affordance of its own: the activity-type headings above it
+ * got a triangle and a count, and a task holding three others got sixteen
+ * pixels of indent on the rows beneath it and nothing else. Folding is what
+ * makes a project a thing you can put away, which is most of what makes it read
+ * as a thing at all.
+ */
+const foldedTasks = ref(new Set<string>());
+
+function foldTask(id: string): void {
+  const next = new Set(foldedTasks.value);
+  if (!next.delete(id)) next.add(id);
+  foldedTasks.value = next;
+}
+
+function foldedAbove(task: TaskNode): boolean {
+  let current = task.parentId === null ? undefined : byId.value.get(task.parentId);
+
+  while (current !== undefined) {
+    if (foldedTasks.value.has(current.id)) return true;
+    current = current.parentId === null ? undefined : byId.value.get(current.parentId);
+  }
+
+  return false;
+}
+
+interface Entry {
+  row: (typeof rows.value)[number];
+  task: TaskNode;
+  indent: number;
+  rollup: Rollup;
+  container: boolean;
+}
+
+/**
+ * A row, or the empty row that writes one.
+ *
+ * The quick-add row used to exist once per group, so the cheap way to write a
+ * task down always made a root: getting it under a project cost a button and a
+ * modal, which made structuring more expensive than not structuring. There is
+ * now one at the foot of every open container too, and it is the same row.
+ */
+type Item =
+  | { kind: 'task'; key: string; entry: Entry }
+  | { kind: 'add'; key: string; parent: TaskNode | null };
+
 interface Group {
   key: string;
   name: string;
-  rows: { row: (typeof rows.value)[number]; indent: number }[];
+  count: number;
+  items: Item[];
 }
 
 /**
@@ -166,19 +286,64 @@ interface Group {
  * every time you renamed an activity type.
  */
 const groups = computed<Group[]>(() => {
-  const found = new Map<string, Group>();
+  const collected = new Map<string, Entry[]>();
 
   for (const row of rows.value) {
-    const key = row.original.effectiveActivityTypeId ?? NO_ACTIVITY_TYPE;
-    const existing = found.get(key);
-    const entry = { row, indent: indentOf(row.original, key) };
+    const task = row.original;
+    const key = task.effectiveActivityTypeId ?? NO_ACTIVITY_TYPE;
+    const rollup = rollupOf(task);
+    const entry: Entry = {
+      row,
+      task,
+      indent: indentOf(task, key),
+      rollup,
+      container: rollup.children > 0,
+    };
 
-    if (existing === undefined) found.set(key, { key, name: nameOf(key), rows: [entry] });
-    else existing.rows.push(entry);
+    const existing = collected.get(key);
+    if (existing === undefined) collected.set(key, [entry]);
+    else existing.push(entry);
   }
 
-  return [...found.values()];
+  return [...collected.entries()].map(([key, entries]) => ({
+    key,
+    name: nameOf(key),
+    count: entries.length,
+    items: [...itemsOf(entries), { kind: 'add' as const, key: `group:${key}`, parent: null }],
+  }));
 });
+
+/**
+ * The rows of a group, with an empty row closing every open container.
+ *
+ * Entries arrive depth-first, so a container's block ends at the first entry
+ * indented no further than it — which is exactly when its empty row belongs,
+ * beneath the last thing in it rather than at the bottom of the whole group.
+ * The stack is what turns "indentation went back out" into "these containers
+ * just closed", innermost first.
+ */
+function itemsOf(entries: Entry[]): Item[] {
+  const items: Item[] = [];
+  const open: Entry[] = [];
+
+  const close = (toIndent: number): void => {
+    while ((open[open.length - 1]?.indent ?? -1) >= toIndent) {
+      const container = open.pop()!;
+      items.push({ kind: 'add', key: `sub:${container.task.id}`, parent: container.task });
+    }
+  };
+
+  for (const entry of entries) {
+    if (foldedAbove(entry.task)) continue;
+
+    close(entry.indent);
+    items.push({ kind: 'task', key: entry.task.id, entry });
+    if (entry.container && !foldedTasks.value.has(entry.task.id)) open.push(entry);
+  }
+
+  close(0);
+  return items;
+}
 
 function nameOf(key: string): string {
   if (key === NO_ACTIVITY_TYPE) return t('tasks.ungrouped');
@@ -211,12 +376,123 @@ function canHaveChildren(task: TaskNode): boolean {
 }
 
 /**
- * One unsent task per group, held while it is being typed.
+ * Grouping work that was written down flat (spec §4.4).
  *
- * Per group rather than one shared row, because the group *is* the activity
- * type: the row is already the answer to "what kind of thing is this", which is
- * the field a person is least likely to volunteer and the one §6.2 rule 1 makes
- * mandatory. A single row at the bottom of the table would have to ask.
+ * The motion this exists for is the ordinary one: jot five things, notice three
+ * of them are one job, put them together. Until `SetTaskParent` there was no
+ * way to do it — `parent_id` was settable at creation and never after — so the
+ * only route was to delete and retype, losing the task's id, its history and
+ * wherever it had been placed.
+ *
+ * Ticking rather than dragging. Three tasks that belong together are rarely
+ * adjacent, and a drag that has to scroll is a drag that goes wrong; a tick is
+ * also the only version of this a keyboard can do at all (WCAG 2.1.1).
+ */
+const chosen = ref(new Set<string>());
+const target = ref('');
+
+/** `null` means the top level, which is a real destination and not "none". */
+const TO_TOP_LEVEL = 'top';
+
+function choose(id: string): void {
+  const next = new Set(chosen.value);
+  if (!next.delete(id)) next.add(id);
+  chosen.value = next;
+}
+
+function clearChosen(): void {
+  chosen.value = new Set();
+  target.value = '';
+}
+
+// A task that is deleted, or filtered away, must not go on counting.
+watch(
+  () => props.tasks.map((task) => task.id).join(','),
+  () => {
+    const live = new Set(props.tasks.map((task) => task.id));
+    const kept = [...chosen.value].filter((id) => live.has(id));
+    if (kept.length !== chosen.value.size) chosen.value = new Set(kept);
+  },
+);
+
+/**
+ * Every task travelling, mapped to the chosen task it travels under.
+ *
+ * A subtree moves with its root, so choosing a container and something inside
+ * it is choosing the container twice. This is what collapses that, and what
+ * keeps the destinations below from offering somewhere inside the very thing
+ * being moved.
+ */
+const travelling = computed<Map<string, string>>(() => {
+  const roots = new Map<string, string>();
+
+  for (const task of props.tasks) {
+    if (chosen.value.has(task.id)) roots.set(task.id, task.id);
+    else if (task.parentId !== null && roots.has(task.parentId)) {
+      roots.set(task.id, roots.get(task.parentId)!);
+    }
+  }
+
+  return roots;
+});
+
+/** The chosen tasks that are not already inside another chosen task. */
+const movingRoots = computed<string[]>(() =>
+  [...chosen.value].filter((id) => {
+    const task = byId.value.get(id);
+    return task?.parentId == null || travelling.value.get(task.parentId) === undefined;
+  }),
+);
+
+/**
+ * How many levels the deepest thing being moved sits below its own root.
+ *
+ * Depth is capped at 5 (§4.4) and the cap is enforced over the whole subtree, so
+ * a destination that would push a grandchild to six is a command the server
+ * refuses. Working it out here means offering only the destinations that work,
+ * rather than a list where some of the entries are errors.
+ */
+const movingSpan = computed<number>(() => {
+  let span = 0;
+
+  for (const [id, rootId] of travelling.value) {
+    const task = byId.value.get(id);
+    const root = byId.value.get(rootId);
+    if (task !== undefined && root !== undefined) span = Math.max(span, task.depth - root.depth);
+  }
+
+  return span;
+});
+
+const destinations = computed<TaskNode[]>(() => {
+  if (chosen.value.size === 0) return [];
+
+  return props.tasks.filter(
+    (task) =>
+      task.status === 'active' &&
+      travelling.value.get(task.id) === undefined &&
+      task.depth + 1 + movingSpan.value <= MAX_DEPTH,
+  );
+});
+
+function applyMove(): void {
+  if (target.value === '' || movingRoots.value.length === 0) return;
+
+  emit('move', {
+    taskIds: movingRoots.value,
+    parentId: target.value === TO_TOP_LEVEL ? null : target.value,
+  });
+  clearChosen();
+}
+
+/**
+ * One unsent task per empty row, held while it is being typed.
+ *
+ * Per row rather than one shared draft, because each row already answers a
+ * question the form would otherwise have to ask. A group's row knows the
+ * activity type — the field §6.2 rule 1 makes mandatory and the one a person is
+ * least likely to volunteer — and a container's row knows the parent, from
+ * which the type is inherited anyway.
  */
 interface QuickDraft {
   title: string;
@@ -245,10 +521,13 @@ function numberIn(value: string | number): number | null {
   return parsed;
 }
 
-// Seeded from the groups rather than created on demand in the template: a
-// render that writes to reactive state is a render that schedules another one.
+// Seeded from the rendered rows rather than created on demand in the template:
+// a render that writes to reactive state is a render that schedules another one.
 watch(
-  () => groups.value.map((group) => group.key),
+  () =>
+    groups.value.flatMap((group) =>
+      group.items.filter((item) => item.kind === 'add').map((item) => item.key),
+    ),
   (keys) => {
     for (const key of keys) if (!drafts.has(key)) drafts.set(key, emptyDraft());
     const live = new Set(keys);
@@ -273,7 +552,7 @@ function ready(key: string): boolean {
   return draft.title.trim() !== '' && estimate !== null && estimate > 0;
 }
 
-async function add(key: string): Promise<void> {
+async function add(key: string, group: string, parent: TaskNode | null): Promise<void> {
   const draft = drafts.get(key);
   if (props.quickAdd === undefined || draft === undefined || !ready(key) || adding.value !== null) {
     return;
@@ -282,7 +561,9 @@ async function add(key: string): Promise<void> {
   adding.value = key;
   try {
     const landed = await props.quickAdd({
-      activityTypeId: key === NO_ACTIVITY_TYPE ? null : key,
+      // Inside a container the type is inherited, so it is not sent (§4.4).
+      activityTypeId: parent !== null || group === NO_ACTIVITY_TYPE ? null : group,
+      parentId: parent?.id ?? null,
       title: draft.title.trim(),
       estimatedDurationMin: numberIn(draft.estimate)!,
       priority: numberIn(draft.priority),
@@ -311,6 +592,41 @@ async function add(key: string): Promise<void> {
         </Button>
       </div>
     </header>
+
+    <!--
+      Only while something is ticked, and directly above the thing it acts on.
+      A toolbar that is present and disabled most of the time teaches the reader
+      to stop looking at it.
+    -->
+    <div
+      v-if="editable && chosen.size > 0"
+      class="bg-muted/60 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
+      role="group"
+      :aria-label="t('tasks.moveChosen')"
+      data-testid="chosen-bar"
+    >
+      <span class="text-sm font-medium" data-testid="chosen-count">
+        {{ plural('tasks.chosen', chosen.size) }}
+      </span>
+      <select
+        v-model="target"
+        class="border-input bg-background rounded-md border px-2 py-1 text-sm"
+        :aria-label="t('tasks.moveChosen')"
+        data-testid="move-target"
+      >
+        <option value="">{{ t('tasks.chooseDestination') }}</option>
+        <option :value="TO_TOP_LEVEL">{{ t('tasks.topLevel') }}</option>
+        <option v-for="option in destinations" :key="option.id" :value="option.id">
+          {{ option.title }}
+        </option>
+      </select>
+      <Button size="sm" :disabled="target === ''" data-testid="move-apply" @click="applyMove">
+        {{ t('tasks.move') }}
+      </Button>
+      <Button variant="ghost" size="sm" data-testid="move-clear" @click="clearChosen">
+        {{ t('common.cancel') }}
+      </Button>
+    </div>
 
     <p v-if="tasks.length === 0" class="text-muted-foreground text-sm">{{ t('tasks.empty') }}</p>
 
@@ -354,152 +670,238 @@ async function add(key: string): Promise<void> {
                 {{ collapsed.has(group.key) ? '▸' : '▾' }}
               </span>
               <span class="text-sm font-semibold">{{ group.name }}</span>
-              <span class="text-muted-foreground text-xs font-normal">{{ group.rows.length }}</span>
+              <span class="text-muted-foreground text-xs font-normal">{{ group.count }}</span>
             </button>
           </th>
         </tr>
 
-        <tr
-          v-for="entry in collapsed.has(group.key) ? [] : group.rows"
-          :key="entry.row.id"
-          class="border-b last:border-0"
-          :class="entry.row.original.id === selectedId ? 'bg-accent/50' : ''"
-          data-testid="task-row"
-          :data-task-id="entry.row.original.id"
-          :data-depth="entry.row.original.depth"
-          :data-selected="entry.row.original.id === selectedId ? 'true' : 'false'"
-        >
-          <td class="py-1.5 pr-3">
-            <span :style="{ paddingLeft: `${entry.indent * 16}px` }">
+        <template v-for="item in collapsed.has(group.key) ? [] : group.items" :key="item.key">
+          <tr
+            v-if="item.kind === 'task'"
+            class="border-b last:border-0"
+            :class="item.entry.task.id === selectedId ? 'bg-accent/50' : ''"
+            data-testid="task-row"
+            :data-task-id="item.entry.task.id"
+            :data-depth="item.entry.task.depth"
+            :data-container="item.entry.container ? 'true' : 'false'"
+            :data-selected="item.entry.task.id === selectedId ? 'true' : 'false'"
+          >
+            <td class="py-1.5 pr-3">
               <!--
-                Struck through and dimmed where the status column used to say
-                so: a completed or cancelled task is still part of the tree and
-                still worth reading, and it must not read as work outstanding.
+                A container's own row is the affordance: the triangle that folds
+                it, the count of what is in it, and — on the rows beneath — a
+                rule at the start of the indent, so the offset reads as
+                containment rather than as an accident of spacing. On the inner
+                span rather than this one: a border here would draw at the left
+                of the *padding*, which is the same x for every depth.
               -->
-              <button
-                v-if="editable"
-                type="button"
-                class="hover:underline"
-                :class="
-                  entry.row.original.status === 'active' ? '' : 'text-muted-foreground line-through'
-                "
-                data-testid="select-task"
-                @click="emit('select', entry.row.original)"
-              >
-                {{ entry.row.original.title }}
-              </button>
               <span
-                v-else
-                :class="
-                  entry.row.original.status === 'active' ? '' : 'text-muted-foreground line-through'
-                "
-                >{{ entry.row.original.title }}</span
+                class="flex items-stretch"
+                :style="{ paddingLeft: `${item.entry.indent * 18}px` }"
               >
-            </span>
-          </td>
-          <td class="py-1.5 pr-3 tabular-nums">
-            {{ entry.row.original.estimatedDurationMin ?? '—' }}
-          </td>
-          <td class="py-1.5 pr-3 tabular-nums">
-            <span
-              :class="inheritedPriority(entry.row.original) ? 'text-muted-foreground italic' : ''"
-            >
-              {{ entry.row.original.effectivePriority ?? '—' }}
-            </span>
-          </td>
-          <td class="py-1.5 pr-3 tabular-nums">
-            <span :class="inheritedDue(entry.row.original) ? 'text-muted-foreground italic' : ''">
-              {{ formatDue(entry.row.original.effectiveDueDate) }}
-            </span>
-          </td>
-          <td class="py-1.5 text-right">
-            <Button
-              v-if="editable"
-              variant="ghost"
-              size="sm"
-              :disabled="!canHaveChildren(entry.row.original)"
-              :title="
-                entry.row.original.depth >= MAX_DEPTH
-                  ? t('tasks.depthCapped')
-                  : t('tasks.addSubtask')
-              "
-              :aria-label="t('tasks.addSubtaskTo', { title: entry.row.original.title })"
-              data-testid="add-subtask"
-              @click="emit('addChild', entry.row.original)"
-            >
-              {{ t('tasks.subtask') }}
-            </Button>
-          </td>
-        </tr>
+                <span
+                  v-if="item.entry.indent > 0"
+                  class="border-border mr-2 border-l"
+                  aria-hidden="true"
+                ></span>
+                <span class="flex items-center gap-1.5">
+                  <input
+                    v-if="editable"
+                    type="checkbox"
+                    class="size-3.5 shrink-0 accent-current"
+                    :checked="chosen.has(item.entry.task.id)"
+                    :aria-label="t('tasks.choose', { title: item.entry.task.title })"
+                    data-testid="choose-task"
+                    @change="choose(item.entry.task.id)"
+                  />
 
-        <!--
-          The empty row at the foot of every group: a task written down without
-          opening anything. One per group because the group is the activity
-          type, which is the field §6.2 rule 1 makes mandatory and the one a
-          person is least likely to volunteer — a single row under the whole
-          table would have to ask for it.
+                  <button
+                    v-if="item.entry.container"
+                    type="button"
+                    class="text-muted-foreground w-3 shrink-0 text-xs"
+                    :aria-expanded="!foldedTasks.has(item.entry.task.id)"
+                    :aria-label="t('tasks.foldProject', { title: item.entry.task.title })"
+                    data-testid="fold-task"
+                    @click="foldTask(item.entry.task.id)"
+                  >
+                    {{ foldedTasks.has(item.entry.task.id) ? '▸' : '▾' }}
+                  </button>
+                  <span v-else class="w-3 shrink-0" aria-hidden="true"></span>
 
-          Enter sends from any of the four fields. The modal is still there for
-          everything this row cannot say, and the title links to it.
-        -->
-        <tr
-          v-if="editable && quickAdd && !collapsed.has(group.key) && drafts.get(group.key)"
-          class="border-b last:border-0"
-          data-testid="quick-add"
-          :data-group="group.key"
-        >
-          <td class="py-1.5 pr-3">
-            <Input
-              v-model="drafts.get(group.key)!.title"
-              :placeholder="t('tasks.quickAdd')"
-              :aria-label="t('tasks.quickAddIn', { group: group.name })"
-              data-testid="quick-add-title"
-              @keydown.enter="add(group.key)"
-            />
-          </td>
-          <td class="py-1.5 pr-3">
-            <Input
-              v-model="drafts.get(group.key)!.estimate"
-              type="number"
-              min="1"
-              class="w-20"
-              :placeholder="t('tasks.quickAddMinutes')"
-              :aria-label="t('tasks.column.estimate')"
-              data-testid="quick-add-estimate"
-              @keydown.enter="add(group.key)"
-            />
-          </td>
-          <td class="py-1.5 pr-3">
-            <Input
-              v-model="drafts.get(group.key)!.priority"
-              type="number"
-              class="w-20"
-              :aria-label="t('tasks.column.priority')"
-              data-testid="quick-add-priority"
-              @keydown.enter="add(group.key)"
-            />
-          </td>
-          <td class="py-1.5 pr-3">
-            <input
-              v-model="drafts.get(group.key)!.due"
-              type="date"
-              class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-              :aria-label="t('tasks.column.due')"
-              data-testid="quick-add-due"
-              @keydown.enter="add(group.key)"
-            />
-          </td>
-          <td class="py-1.5 text-right">
-            <Button
-              size="sm"
-              :disabled="!ready(group.key) || adding !== null"
-              data-testid="quick-add-save"
-              @click="add(group.key)"
-            >
-              {{ t('common.add') }}
-            </Button>
-          </td>
-        </tr>
+                  <!--
+                  Struck through and dimmed where the status column used to say
+                  so: a completed or cancelled task is still part of the tree and
+                  still worth reading, and it must not read as work outstanding.
+                -->
+                  <button
+                    v-if="editable"
+                    type="button"
+                    class="hover:underline"
+                    :class="[
+                      item.entry.task.status === 'active'
+                        ? ''
+                        : 'text-muted-foreground line-through',
+                      item.entry.container ? 'font-medium' : '',
+                    ]"
+                    data-testid="select-task"
+                    @click="emit('select', item.entry.task)"
+                  >
+                    {{ item.entry.task.title }}
+                  </button>
+                  <span
+                    v-else
+                    :class="
+                      item.entry.task.status === 'active'
+                        ? ''
+                        : 'text-muted-foreground line-through'
+                    "
+                    >{{ item.entry.task.title }}</span
+                  >
+
+                  <!--
+                  How far through it somebody is, which is the question a
+                  container is actually asked. Nothing for a leaf: "0/1 done" is
+                  a progress bar over a single task.
+                -->
+                  <span
+                    v-if="item.entry.container && item.entry.rollup.leaves > 0"
+                    class="text-muted-foreground text-xs tabular-nums"
+                    data-testid="project-progress"
+                  >
+                    {{
+                      t('tasks.progress', {
+                        done: item.entry.rollup.done,
+                        total: item.entry.rollup.leaves,
+                      })
+                    }}
+                  </span>
+                </span>
+              </span>
+            </td>
+            <td class="py-1.5 pr-3 tabular-nums">
+              <!--
+                A container is not scheduled, so its own estimate is a number
+                that never becomes time on the grid. What is true of it is what
+                the work inside it costs, and it is marked as derived in the
+                same italic the inherited values use.
+              -->
+              <span
+                v-if="item.entry.container"
+                class="text-muted-foreground italic"
+                data-testid="rolled-up-estimate"
+              >
+                {{ item.entry.rollup.minutes }}
+              </span>
+              <span v-else>{{ item.entry.task.estimatedDurationMin ?? '—' }}</span>
+            </td>
+            <td class="py-1.5 pr-3 tabular-nums">
+              <span
+                :class="inheritedPriority(item.entry.task) ? 'text-muted-foreground italic' : ''"
+              >
+                {{ item.entry.task.effectivePriority ?? '—' }}
+              </span>
+            </td>
+            <td class="py-1.5 pr-3 tabular-nums">
+              <span :class="inheritedDue(item.entry.task) ? 'text-muted-foreground italic' : ''">
+                {{ formatDue(item.entry.task.effectiveDueDate) }}
+              </span>
+            </td>
+            <td class="py-1.5 text-right">
+              <Button
+                v-if="editable"
+                variant="ghost"
+                size="sm"
+                :disabled="!canHaveChildren(item.entry.task)"
+                :title="
+                  item.entry.task.depth >= MAX_DEPTH
+                    ? t('tasks.depthCapped')
+                    : t('tasks.addSubtask')
+                "
+                :aria-label="t('tasks.addSubtaskTo', { title: item.entry.task.title })"
+                data-testid="add-subtask"
+                @click="emit('addChild', item.entry.task)"
+              >
+                {{ item.entry.container ? t('tasks.addTask') : t('tasks.breakUp') }}
+              </Button>
+            </td>
+          </tr>
+
+          <!--
+            The empty row: a task written down without opening anything. One at
+            the foot of every group, where it makes a root, and one at the foot
+            of every open container, where it makes something inside it. The
+            second is the whole point — while the cheap way to write a task down
+            could only ever make a root, structuring cost more than not
+            structuring, and people do the cheaper thing.
+
+            Enter sends from any of the four fields. The modal is still there
+            for everything this row cannot say, and the title opens it.
+          -->
+          <tr
+            v-else-if="editable && quickAdd && drafts.get(item.key)"
+            class="border-b last:border-0"
+            data-testid="quick-add"
+            :data-group="group.key"
+            :data-parent="item.parent?.id ?? ''"
+          >
+            <td class="py-1.5 pr-3">
+              <Input
+                v-model="drafts.get(item.key)!.title"
+                :class="item.parent ? 'ml-5' : ''"
+                :placeholder="item.parent ? t('tasks.quickAddUnder') : t('tasks.quickAdd')"
+                :aria-label="
+                  item.parent
+                    ? t('tasks.quickAddIn', { group: item.parent.title })
+                    : t('tasks.quickAddIn', { group: group.name })
+                "
+                data-testid="quick-add-title"
+                @keydown.enter="add(item.key, group.key, item.parent)"
+              />
+            </td>
+            <td class="py-1.5 pr-3">
+              <Input
+                v-model="drafts.get(item.key)!.estimate"
+                type="number"
+                min="1"
+                class="w-20"
+                :placeholder="t('tasks.quickAddMinutes')"
+                :aria-label="t('tasks.column.estimate')"
+                data-testid="quick-add-estimate"
+                @keydown.enter="add(item.key, group.key, item.parent)"
+              />
+            </td>
+            <td class="py-1.5 pr-3">
+              <Input
+                v-model="drafts.get(item.key)!.priority"
+                type="number"
+                class="w-20"
+                :aria-label="t('tasks.column.priority')"
+                data-testid="quick-add-priority"
+                @keydown.enter="add(item.key, group.key, item.parent)"
+              />
+            </td>
+            <td class="py-1.5 pr-3">
+              <input
+                v-model="drafts.get(item.key)!.due"
+                type="date"
+                class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                :aria-label="t('tasks.column.due')"
+                data-testid="quick-add-due"
+                @keydown.enter="add(item.key, group.key, item.parent)"
+              />
+            </td>
+            <td class="py-1.5 text-right">
+              <Button
+                size="sm"
+                :disabled="!ready(item.key) || adding !== null"
+                data-testid="quick-add-save"
+                @click="add(item.key, group.key, item.parent)"
+              >
+                {{ t('common.add') }}
+              </Button>
+            </td>
+          </tr>
+        </template>
       </tbody>
     </table>
 

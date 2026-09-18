@@ -144,6 +144,7 @@ A manual edit modifies source constraints; it does **not** freeze an assignment.
 | `priority` | Optional; soft constraint. |
 | `due_date` + `due_kind` | `due_kind ∈ {soft, hard}`. Hard is enforced (§6.2); soft warns (§6.5). |
 | `preferred_range` / `focus_level` | Optional; soft. Matched against slot / window focus profile. |
+| `preferred_weekdays` | Optional; soft. ISO 1–7. Independent of `preferred_range`, and intersected with it: the two together are "Tuesdays in the afternoon". |
 | `cooldown_override_min` | Optional; overrides the activity type's default. Non-compressible. |
 | `sequence_id` | Optional membership in an uninterruptible block. |
 | `recurrence` | Optional per-period demand rule (§8.2). |
@@ -154,7 +155,7 @@ A manual edit modifies source constraints; it does **not** freeze an assignment.
 | `status` | `active` / `completed` / `cancelled`. |
 | `version`, `updated_at` | Optimistic locking (§5.4). |
 
-**Inheritance.** Priority, due date, preferred range/focus, activity type, and cooldown may be set on any node and **inherited by descendants, nearest-ancestor-wins**. Setting a value locally creates an override; clearing it reverts to inherited. Only **leaf tasks are placed**; a parent's duration and completion roll up from its leaves.
+**Inheritance.** Priority, due date, preferred range/weekdays/focus, activity type, and cooldown may be set on any node and **inherited by descendants, nearest-ancestor-wins**. Setting a value locally creates an override; clearing it reverts to inherited. Only **leaf tasks are placed**; a parent's duration and completion roll up from its leaves.
 
 **Due-date constraint.** A child's effective due date must be ≤ its inherited/effective parent due date (a subtask cannot be due after its container). Enforced as a data constraint.
 
@@ -250,7 +251,7 @@ order_score = 0.5·U + 0.3·P + 0.2·C
 slot_score = 0.5·Pr + 0.2·E − 0.3·F
 ```
 
-- `Pr` (preferred match): fraction of the placement within the preferred range / focus profile; 0 if no preference.
+- `Pr` (preferred match): fraction of the placement within the preferred time — the range and the weekday set intersected, each absent half meaning "the whole of that axis" — modulated by the focus profile; 0 if no preference.
 - `E` (earliness): `1 − (slot_start − horizon_start) / horizon_length`; a mild pull toward buffer.
 - `F` (fragmentation): penalty for leaving small unusable gaps; slots flush to a window edge or an existing block score higher (tight packing).
 - Tie-break: earliest start → smallest id.
@@ -316,6 +317,7 @@ The server validates, applies to source, re-derives, persists the placement cach
 - **`ExtendTask(task, new_estimate)`** — a task overran or the estimate changed; adjust duration; downstream reflows.
 - **`PromoteFromBacklog(task)` / `MoveToBacklog(task)`** — cross the horizon boundary explicitly.
 - **`CancelTask(task)`** — set `cancelled`; free its footprint; re-derive.
+- **`SetTaskParent(task, parent)`** — move a task and its subtree under another, or to the top level with `null`. Structure is a thing people find after the fact, so it must be changeable after the fact: the depth cap, the cycle check and the child-due ≤ parent-due rule are the data constraints of §4.4 and apply to a move as they do to a create. A task is demand only while it is a leaf, so the new parent's pending occurrence is retired and the old parent's is restored if the last child left. Within one calendar.
 
 ### 7.4 Ad-hoc blocks
 
